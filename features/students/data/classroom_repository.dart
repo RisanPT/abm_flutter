@@ -10,9 +10,14 @@ class ClassroomRepository {
 
   ClassroomRepository(this._dio);
 
-  Future<List<ClassroomModel>> getClassrooms() async {
+  Future<List<ClassroomModel>> getClassrooms({String? instituteId}) async {
     try {
-      final response = await _dio.get('/classrooms');
+      final response = await _dio.get(
+        '/classrooms',
+        queryParameters: {
+          if (instituteId != null) 'instituteId': instituteId,
+        },
+      );
       final List<dynamic> data = response.data;
       return data.map((json) => ClassroomModel.fromJson(json)).toList();
     } catch (e) {
@@ -20,13 +25,14 @@ class ClassroomRepository {
     }
   }
 
-  Future<ClassroomModel> addClassroom(String name, {String? description}) async {
+  Future<ClassroomModel> addClassroom(String name, {String? description, required String instituteId}) async {
     try {
       final response = await _dio.post(
         '/classrooms',
         data: {
           'name': name,
           'description': description,
+          'instituteId': instituteId,
         },
       );
       return ClassroomModel.fromJson(response.data);

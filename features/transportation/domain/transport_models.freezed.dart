@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$VehicleModel {
 
-@JsonKey(name: '_id') String get id; String get plateNumber; String get model; int get capacity; String? get driverId; bool get isActive; String get instituteId;
+@JsonKey(name: '_id') String get id; String get plateNumber; String get model; int get capacity;@JsonKey(name: 'driver', readValue: _readDriverId) String? get driverId; bool get isActive; String get instituteId;
 /// Create a copy of VehicleModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $VehicleModelCopyWith<$Res>  {
   factory $VehicleModelCopyWith(VehicleModel value, $Res Function(VehicleModel) _then) = _$VehicleModelCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: '_id') String id, String plateNumber, String model, int capacity, String? driverId, bool isActive, String instituteId
+@JsonKey(name: '_id') String id, String plateNumber, String model, int capacity,@JsonKey(name: 'driver', readValue: _readDriverId) String? driverId, bool isActive, String instituteId
 });
 
 
@@ -159,7 +159,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String plateNumber,  String model,  int capacity,  String? driverId,  bool isActive,  String instituteId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String plateNumber,  String model,  int capacity, @JsonKey(name: 'driver', readValue: _readDriverId)  String? driverId,  bool isActive,  String instituteId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _VehicleModel() when $default != null:
 return $default(_that.id,_that.plateNumber,_that.model,_that.capacity,_that.driverId,_that.isActive,_that.instituteId);case _:
@@ -180,7 +180,7 @@ return $default(_that.id,_that.plateNumber,_that.model,_that.capacity,_that.driv
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String plateNumber,  String model,  int capacity,  String? driverId,  bool isActive,  String instituteId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String plateNumber,  String model,  int capacity, @JsonKey(name: 'driver', readValue: _readDriverId)  String? driverId,  bool isActive,  String instituteId)  $default,) {final _that = this;
 switch (_that) {
 case _VehicleModel():
 return $default(_that.id,_that.plateNumber,_that.model,_that.capacity,_that.driverId,_that.isActive,_that.instituteId);case _:
@@ -200,7 +200,7 @@ return $default(_that.id,_that.plateNumber,_that.model,_that.capacity,_that.driv
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String id,  String plateNumber,  String model,  int capacity,  String? driverId,  bool isActive,  String instituteId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String id,  String plateNumber,  String model,  int capacity, @JsonKey(name: 'driver', readValue: _readDriverId)  String? driverId,  bool isActive,  String instituteId)?  $default,) {final _that = this;
 switch (_that) {
 case _VehicleModel() when $default != null:
 return $default(_that.id,_that.plateNumber,_that.model,_that.capacity,_that.driverId,_that.isActive,_that.instituteId);case _:
@@ -215,14 +215,14 @@ return $default(_that.id,_that.plateNumber,_that.model,_that.capacity,_that.driv
 @JsonSerializable()
 
 class _VehicleModel implements VehicleModel {
-  const _VehicleModel({@JsonKey(name: '_id') required this.id, required this.plateNumber, required this.model, required this.capacity, this.driverId, this.isActive = true, required this.instituteId});
+  const _VehicleModel({@JsonKey(name: '_id') required this.id, required this.plateNumber, required this.model, required this.capacity, @JsonKey(name: 'driver', readValue: _readDriverId) this.driverId, this.isActive = true, required this.instituteId});
   factory _VehicleModel.fromJson(Map<String, dynamic> json) => _$VehicleModelFromJson(json);
 
 @override@JsonKey(name: '_id') final  String id;
 @override final  String plateNumber;
 @override final  String model;
 @override final  int capacity;
-@override final  String? driverId;
+@override@JsonKey(name: 'driver', readValue: _readDriverId) final  String? driverId;
 @override@JsonKey() final  bool isActive;
 @override final  String instituteId;
 
@@ -259,7 +259,7 @@ abstract mixin class _$VehicleModelCopyWith<$Res> implements $VehicleModelCopyWi
   factory _$VehicleModelCopyWith(_VehicleModel value, $Res Function(_VehicleModel) _then) = __$VehicleModelCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: '_id') String id, String plateNumber, String model, int capacity, String? driverId, bool isActive, String instituteId
+@JsonKey(name: '_id') String id, String plateNumber, String model, int capacity,@JsonKey(name: 'driver', readValue: _readDriverId) String? driverId, bool isActive, String instituteId
 });
 
 
@@ -574,7 +574,7 @@ as String,
 /// @nodoc
 mixin _$RouteModel {
 
-@JsonKey(name: '_id') String get id; String get name; List<String> get pickupPoints; String? get assignedVehicleId; bool get isActive; String get instituteId;
+@JsonKey(name: '_id') String get id; String get name; List<String> get pickupPoints;@JsonKey(name: 'assignedVehicle', readValue: _readVehicleId) String? get assignedVehicleId; bool get isActive; String get instituteId;
 /// Create a copy of RouteModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -607,7 +607,7 @@ abstract mixin class $RouteModelCopyWith<$Res>  {
   factory $RouteModelCopyWith(RouteModel value, $Res Function(RouteModel) _then) = _$RouteModelCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: '_id') String id, String name, List<String> pickupPoints, String? assignedVehicleId, bool isActive, String instituteId
+@JsonKey(name: '_id') String id, String name, List<String> pickupPoints,@JsonKey(name: 'assignedVehicle', readValue: _readVehicleId) String? assignedVehicleId, bool isActive, String instituteId
 });
 
 
@@ -717,7 +717,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String name,  List<String> pickupPoints,  String? assignedVehicleId,  bool isActive,  String instituteId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String name,  List<String> pickupPoints, @JsonKey(name: 'assignedVehicle', readValue: _readVehicleId)  String? assignedVehicleId,  bool isActive,  String instituteId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _RouteModel() when $default != null:
 return $default(_that.id,_that.name,_that.pickupPoints,_that.assignedVehicleId,_that.isActive,_that.instituteId);case _:
@@ -738,7 +738,7 @@ return $default(_that.id,_that.name,_that.pickupPoints,_that.assignedVehicleId,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String name,  List<String> pickupPoints,  String? assignedVehicleId,  bool isActive,  String instituteId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String name,  List<String> pickupPoints, @JsonKey(name: 'assignedVehicle', readValue: _readVehicleId)  String? assignedVehicleId,  bool isActive,  String instituteId)  $default,) {final _that = this;
 switch (_that) {
 case _RouteModel():
 return $default(_that.id,_that.name,_that.pickupPoints,_that.assignedVehicleId,_that.isActive,_that.instituteId);case _:
@@ -758,7 +758,7 @@ return $default(_that.id,_that.name,_that.pickupPoints,_that.assignedVehicleId,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String id,  String name,  List<String> pickupPoints,  String? assignedVehicleId,  bool isActive,  String instituteId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String id,  String name,  List<String> pickupPoints, @JsonKey(name: 'assignedVehicle', readValue: _readVehicleId)  String? assignedVehicleId,  bool isActive,  String instituteId)?  $default,) {final _that = this;
 switch (_that) {
 case _RouteModel() when $default != null:
 return $default(_that.id,_that.name,_that.pickupPoints,_that.assignedVehicleId,_that.isActive,_that.instituteId);case _:
@@ -773,7 +773,7 @@ return $default(_that.id,_that.name,_that.pickupPoints,_that.assignedVehicleId,_
 @JsonSerializable()
 
 class _RouteModel implements RouteModel {
-  const _RouteModel({@JsonKey(name: '_id') required this.id, required this.name, final  List<String> pickupPoints = const [], this.assignedVehicleId, this.isActive = true, required this.instituteId}): _pickupPoints = pickupPoints;
+  const _RouteModel({@JsonKey(name: '_id') required this.id, required this.name, final  List<String> pickupPoints = const [], @JsonKey(name: 'assignedVehicle', readValue: _readVehicleId) this.assignedVehicleId, this.isActive = true, required this.instituteId}): _pickupPoints = pickupPoints;
   factory _RouteModel.fromJson(Map<String, dynamic> json) => _$RouteModelFromJson(json);
 
 @override@JsonKey(name: '_id') final  String id;
@@ -785,7 +785,7 @@ class _RouteModel implements RouteModel {
   return EqualUnmodifiableListView(_pickupPoints);
 }
 
-@override final  String? assignedVehicleId;
+@override@JsonKey(name: 'assignedVehicle', readValue: _readVehicleId) final  String? assignedVehicleId;
 @override@JsonKey() final  bool isActive;
 @override final  String instituteId;
 
@@ -822,7 +822,7 @@ abstract mixin class _$RouteModelCopyWith<$Res> implements $RouteModelCopyWith<$
   factory _$RouteModelCopyWith(_RouteModel value, $Res Function(_RouteModel) _then) = __$RouteModelCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: '_id') String id, String name, List<String> pickupPoints, String? assignedVehicleId, bool isActive, String instituteId
+@JsonKey(name: '_id') String id, String name, List<String> pickupPoints,@JsonKey(name: 'assignedVehicle', readValue: _readVehicleId) String? assignedVehicleId, bool isActive, String instituteId
 });
 
 

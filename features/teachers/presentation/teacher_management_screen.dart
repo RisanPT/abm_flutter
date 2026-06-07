@@ -1,6 +1,9 @@
 import 'dart:typed_data';
 
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/auth/domain/user_model.dart';
+import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/teachers/data/teacher_repository.dart';
 import 'package:abm_madrasa/features/teachers/domain/teacher_model.dart';
 import 'package:abm_madrasa/features/teachers/presentation/teacher_controller.dart';
@@ -191,9 +194,22 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
     BuildContext context, [
     TeacherModel? teacher,
   ]) async {
+    // Resolve the correct institute to scope this teacher to.
+    // IT Admin can freely choose; all other roles are locked to their own institute.
+    final user = ref.read(authControllerProvider).value;
+    final isAdmin = user?.role == AppRoles.itAdmin || user?.role == AppRoles.superAdmin;
+    final selectedInstitute = ref.read(selectedInstituteProvider);
+    final instituteId = isAdmin
+        ? selectedInstitute.id
+        : (user?.instituteId ?? selectedInstitute.id);
+
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => _TeacherFormDialog(existingTeacher: teacher),
+      builder: (dialogContext) => _TeacherFormDialog(
+        existingTeacher: teacher,
+        instituteId: instituteId,
+        isAdmin: isAdmin,
+      ),
     );
     ref.invalidate(teacherListProvider(_query));
     ref.invalidate(teacherListProvider(''));
@@ -835,9 +851,15 @@ class _TeacherEmptyState extends StatelessWidget {
 }
 
 class _TeacherFormDialog extends ConsumerStatefulWidget {
-  const _TeacherFormDialog({this.existingTeacher});
+  const _TeacherFormDialog({
+    this.existingTeacher,
+    required this.instituteId,
+    required this.isAdmin,
+  });
 
   final TeacherModel? existingTeacher;
+  final String instituteId;
+  final bool isAdmin;
 
   @override
   ConsumerState<_TeacherFormDialog> createState() => _TeacherFormDialogState();
@@ -924,6 +946,12 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
                       icon: const Icon(Icons.close),
                     ),
                   ],
+                ),
+                const Gap(8),
+                // Institute scope indicator
+                _InstituteScopeBadge(
+                  instituteId: widget.instituteId,
+                  isLocked: !widget.isAdmin,
                 ),
                 const Gap(16),
                 Expanded(
@@ -1152,6 +1180,7 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
         photoUrl: photoUrl,
         isActive: _isActive,
         password: _passwordController.text.trim().isEmpty ? null : _passwordController.text.trim(),
+        instituteId: widget.instituteId,
       );
 
       if (_isEdit) {
@@ -1248,3 +1277,85 @@ class _PhotoPicker extends StatelessWidget {
   }
 }
 
+// ─── Institute Scope Badge ─────────────────────────────────────────────────────
+/// Shows which institute a record will belong to.
+/// Locked (non-admin): read-only padlock chip.
+/// Unlocked (IT Admin): editable — but institute choice comes from the sidebar switcher.
+
+class _InstituteScopeBadge extends ConsumerWidget {
+  const _InstituteScopeBadge({
+    required this.instituteId,
+    required this.isLocked,
+  });
+
+  final String instituteId;
+  final bool isLocked;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final institutesAsync = ref.watch(instituteListProvider);
+
+    final instituteName = institutesAsync.maybeWhen(
+      data: (list) {
+        final match = list.where((i) => i.id == instituteId);
+        return match.isNotEmpty ? match.first.name : instituteId;
+      },
+      orElse: () => instituteId,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isLocked
+            ? colors.primary.withValues(alpha: 0.06)
+            : colors.secondary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isLocked
+              ? colors.primary.withValues(alpha: 0.2)
+              : colors.secondary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isLocked ? LucideIcons.lock : LucideIcons.building2,
+            size: 14,
+            color: isLocked ? colors.primary : colors.secondary,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              isLocked
+                  ? 'Adding to: $instituteName'
+                  : 'Institute: $instituteName (via selected institute)',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isLocked ? colors.primary : colors.secondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (isLocked) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'Auto-assigned',
+                style: TextStyle(fontSize: 10, color: colors.primary, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

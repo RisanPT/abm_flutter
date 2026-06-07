@@ -3,9 +3,12 @@ import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/user_admin/domain/admin_user_model.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/admin_controller.dart';
 import 'package:abm_madrasa/features/user_admin/data/admin_service.dart';
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
+import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 class UserManagementScreen extends ConsumerWidget {
   const UserManagementScreen({super.key});
@@ -26,7 +29,7 @@ class UserManagementScreen extends ConsumerWidget {
         icon: const Icon(Icons.person_add),
         label: const Text('Add User'),
         backgroundColor: colors.primary,
-        foregroundColor: colors.primary,
+        foregroundColor: colors.white,
       ),
       body: usersState.when(
         data: (users) {
@@ -66,6 +69,18 @@ class _UserTile extends ConsumerWidget {
     final colors = context.colors;
     final typography = context.typography;
 
+    final institutesAsync = ref.watch(instituteListProvider);
+    String instituteName = '';
+    if (institutesAsync.hasValue) {
+      final inst = institutesAsync.value!.firstWhere(
+        (i) => i.id == user.instituteId,
+        orElse: () => const Institute(id: '', name: '', location: ''),
+      );
+      if (inst.name.isNotEmpty) {
+        instituteName = inst.name;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -86,16 +101,34 @@ class _UserTile extends ConsumerWidget {
               children: [
                 Text(user.username, style: typography.bodySemiBold.copyWith(color: colors.textPrimary)),
                 const Gap(4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: colors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    user.role.toUpperCase(),
-                    style: typography.caption.copyWith(color: colors.primary, fontWeight: FontWeight.bold),
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: colors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        user.role.toUpperCase(),
+                        style: typography.caption.copyWith(color: colors.primary, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (instituteName.isNotEmpty) ...[
+                      const Gap(8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: colors.textSecondary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          instituteName,
+                          style: typography.caption.copyWith(color: colors.textSecondary, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -161,6 +194,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
   String _selectedRole = AppRoles.staff;
+  String? _selectedInstituteId;
   bool _isLoading = false;
 
   @override
@@ -170,6 +204,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
     _passwordController = TextEditingController();
     if (widget.existingUser != null) {
       _selectedRole = widget.existingUser!.role;
+      _selectedInstituteId = widget.existingUser!.instituteId;
     }
   }
 
@@ -186,12 +221,17 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
     setState(() => _isLoading = true);
     try {
       final roleStr = _selectedRole;
+      final authState = ref.read(authControllerProvider);
+      final currentUser = authState.value;
+      final isITAdmin = currentUser?.role == AppRoles.itAdmin || currentUser?.role == AppRoles.superAdmin;
+      final isGlobalRole = roleStr == AppRoles.itAdmin || roleStr == AppRoles.superAdmin;
 
       if (widget.existingUser == null) {
         await ref.read(adminControllerProvider.notifier).createUser(
           username: _usernameController.text,
           password: _passwordController.text,
           role: roleStr,
+          instituteId: (isITAdmin && !isGlobalRole) ? _selectedInstituteId : null,
         );
       } else {
         await ref.read(adminControllerProvider.notifier).updateUser(
@@ -199,6 +239,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
           username: _usernameController.text,
           password: _passwordController.text.isNotEmpty ? _passwordController.text : null,
           role: roleStr,
+          instituteId: (isITAdmin && !isGlobalRole) ? _selectedInstituteId : null,
         );
       }
       if (mounted) Navigator.pop(context);
@@ -261,6 +302,12 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
     final colors = context.colors;
     final isEdit = widget.existingUser != null;
     
+    // Fetch logged in user and institutes
+    final authState = ref.watch(authControllerProvider);
+    final currentUser = authState.value;
+    final isITAdmin = currentUser?.role == AppRoles.itAdmin || currentUser?.role == AppRoles.superAdmin;
+    final institutesAsync = ref.watch(instituteListProvider);
+
     // Fetch dynamic roles
     final rolesAsync = ref.watch(rolesProvider);
     List<String> availableRoles = [...AppRoles.coreRoles];
@@ -291,6 +338,64 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                 ),
                 validator: (v) => v!.isEmpty ? 'Required' : null,
               ),
+              if (isITAdmin) ...[
+                const Gap(16),
+                if (_selectedRole == AppRoles.superAdmin || _selectedRole == AppRoles.itAdmin)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.globe, size: 20, color: colors.primary),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Global Access (All Institutes)',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: colors.primary),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  institutesAsync.when(
+                    data: (institutes) {
+                      if (institutes.isEmpty) return const SizedBox.shrink();
+                      final effectiveValue = (_selectedInstituteId != null && institutes.any((i) => i.id == _selectedInstituteId))
+                          ? _selectedInstituteId
+                          : (institutes.isNotEmpty ? institutes.first.id : null);
+                      if (effectiveValue != _selectedInstituteId && effectiveValue != null) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) setState(() => _selectedInstituteId = effectiveValue);
+                        });
+                      }
+
+                      return DropdownButtonFormField<String>(
+                        value: effectiveValue,
+                        decoration: InputDecoration(
+                          labelText: 'Institute',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        items: institutes.map((inst) {
+                          return DropdownMenuItem(
+                            value: inst.id,
+                            child: Text(inst.name),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _selectedInstituteId = val);
+                          }
+                        },
+                      );
+                    },
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (_, __) => const Text('Error loading institutes'),
+                  ),
+              ],
               const Gap(16),
               DropdownButtonFormField<String>(
                 initialValue: _selectedRole,
@@ -349,7 +454,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
           onPressed: _isLoading ? null : _submit,
           style: ElevatedButton.styleFrom(
             backgroundColor: colors.primary,
-            foregroundColor: colors.primary,
+            foregroundColor: colors.white,
           ),
           child: _isLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
         ),

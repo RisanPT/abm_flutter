@@ -10,6 +10,7 @@ abstract class AdminUser with _$AdminUser {
     required String username,
     required String role,
     required DateTime createdAt,
+    String? instituteId,
   }) = _AdminUser;
 
   factory AdminUser.fromJson(Map<String, dynamic> json) => _$AdminUserFromJson(json);

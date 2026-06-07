@@ -23,9 +23,8 @@ class AuthRepository {
 
   Future<UserModel> login(
     String username,
-    String password, {
-    required String selectedRole,
-  }) async {
+    String password,
+  ) async {
     try {
       final response = await _dio.post('/auth/login', data: {
         'username': username,
@@ -38,11 +37,7 @@ class AuthRepository {
       await _storage.write(key: 'auth_token', value: token);
 
       final user = UserModel.fromJson(userData);
-      if (user.role != selectedRole) {
-        throw Exception(
-          'This account is ${user.role.label}. Please select the correct role.',
-        );
-      }
+
       return user;
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {

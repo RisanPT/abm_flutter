@@ -1,5 +1,8 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/auth/domain/user_model.dart';
+import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
@@ -48,7 +51,8 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   String? _photoUrl;
   bool _isSaving = false;
   bool _needsTransportation = false;
-  String _selectedInstituteId = 'abm-offline-1';
+  String _selectedInstituteId = '664c39f00000000000000001';
+  bool _isAdmin = false;
   bool _showConcessionBanner = false;
   int _siblingCount = 0;
 
@@ -68,6 +72,23 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     _parentIqamaController = TextEditingController(text: s?.parentIqamaId ?? '');
     _transportFeeController = TextEditingController(text: s?.transportationFee.toString() ?? '0');
     _needsTransportation = s?.needsTransportation ?? false;
+
+    // Resolve institute: non-admin roles are locked to their own institute.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = ref.read(authControllerProvider).value;
+      final selectedInstitute = ref.read(selectedInstituteProvider);
+      final isAdmin = user?.role == AppRoles.itAdmin || user?.role == AppRoles.superAdmin;
+      setState(() {
+        _isAdmin = isAdmin;
+        if (s != null) {
+          _selectedInstituteId = s.instituteId;
+        } else if (isAdmin) {
+          _selectedInstituteId = selectedInstitute.id;
+        } else {
+          _selectedInstituteId = user?.instituteId ?? selectedInstitute.id;
+        }
+      });
+    });
 
     if (s != null) {
       _dob = s.dateOfBirth;
@@ -375,13 +396,90 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   }
 
   Widget _buildInstituteDropdown() {
-    return ABMDropdownField<String>(
-      label: 'Institute',
-      value: _selectedInstituteId,
-      items: const ['abm-offline-1', 'abm-offline-2', 'abm-online'],
-      labelMapper: (id) => id == 'abm-offline-1' ? 'Institute 1 (Offline)' : (id == 'abm-offline-2' ? 'Institute 2 (Offline)' : 'Online Madrasa'),
-      onChanged: (v) => setState(() => _selectedInstituteId = v!),
-    );
+    // IT Admin: full dropdown from live institute list
+    if (_isAdmin) {
+      return Consumer(builder: (context, ref, _) {
+        final institutesAsync = ref.watch(instituteListProvider);
+        return institutesAsync.when(
+          data: (institutes) {
+            if (institutes.isEmpty) return const SizedBox.shrink();
+            // Ensure the current value is valid
+            final ids = institutes.map((i) => i.id).toList();
+            if (!ids.contains(_selectedInstituteId)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _selectedInstituteId = ids.first);
+              });
+            }
+            return ABMDropdownField<String>(
+              label: 'Institute',
+              value: ids.contains(_selectedInstituteId) ? _selectedInstituteId : ids.first,
+              items: ids,
+              labelMapper: (id) {
+                final match = institutes.where((i) => i.id == id);
+                return match.isNotEmpty ? match.first.name : id;
+              },
+              onChanged: (v) => setState(() => _selectedInstituteId = v!),
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => const SizedBox.shrink(),
+        );
+      });
+    }
+
+    return Consumer(builder: (context, ref, _) {
+      final colors = context.colors;
+      final institutesAsync = ref.watch(instituteListProvider);
+      final instituteName = institutesAsync.maybeWhen(
+        data: (list) {
+          final match = list.where((i) => i.id == _selectedInstituteId);
+          return match.isNotEmpty ? match.first.name : _selectedInstituteId;
+        },
+        orElse: () => _selectedInstituteId,
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Institute',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textSecondary),
+          ),
+          const Gap(8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(LucideIcons.lock, size: 16, color: colors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    instituteName,
+                    style: TextStyle(fontWeight: FontWeight.w600, color: colors.primary),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Auto-assigned',
+                    style: TextStyle(fontSize: 10, color: colors.primary, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    });
   }
 }
 

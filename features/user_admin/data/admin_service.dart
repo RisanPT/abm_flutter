@@ -50,12 +50,14 @@ class AdminService {
     required String username,
     required String password,
     required String role,
+    String? instituteId,
   }) async {
     try {
       final response = await _dio.post('/admin/users', data: {
         'username': username,
         'password': password,
         'role': role,
+        if (instituteId != null) 'instituteId': instituteId,
       });
       return AdminUser.fromJson(response.data);
     } catch (e) {
@@ -71,12 +73,14 @@ class AdminService {
     String? username,
     String? password,
     String? role,
+    String? instituteId,
   }) async {
     try {
       final data = <String, dynamic>{};
       if (username != null) data['username'] = username;
       if (password != null && password.isNotEmpty) data['password'] = password;
       if (role != null) data['role'] = role;
+      if (instituteId != null) data['instituteId'] = instituteId;
 
       final response = await _dio.put('/admin/users/$id', data: data);
       return AdminUser.fromJson(response.data);

@@ -2,7 +2,7 @@ import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
-import 'package:abm_madrasa/shared/widgets/institute_switcher.dart';
+import 'package:abm_madrasa/shared/widgets/institute_banner_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -115,7 +115,7 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
       appBar: AppBar(
         title: Text('Outstanding Dues', style: typography.h3),
         actions: [
-          const InstituteSwitcher(),
+          const InstituteBannerChip(),
           asyncData.whenData((data) => IconButton(
             onPressed: () => _exportPdf(data),
             icon: const Icon(LucideIcons.download),

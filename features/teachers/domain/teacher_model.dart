@@ -53,6 +53,7 @@ class TeacherModel {
     this.photoUrl,
     this.isActive = true,
     this.password,
+    this.instituteId,
   });
 
   final String id;
@@ -70,6 +71,7 @@ class TeacherModel {
   final String? photoUrl;
   final bool isActive;
   final String? password;
+  final String? instituteId;
 
   factory TeacherModel.fromJson(Map<String, dynamic> json) {
     return TeacherModel(
@@ -95,6 +97,7 @@ class TeacherModel {
           .toList(),
       photoUrl: json['photoUrl'] as String?,
       isActive: json['isActive'] as bool? ?? true,
+      instituteId: json['instituteId'] as String?,
     );
   }
 
@@ -114,5 +117,6 @@ class TeacherModel {
         'photoUrl': photoUrl,
         'isActive': isActive,
         if (password != null) 'password': password,
+        if (instituteId != null) 'instituteId': instituteId,
       };
 }

@@ -12,7 +12,7 @@ _VehicleModel _$VehicleModelFromJson(Map<String, dynamic> json) =>
       plateNumber: json['plateNumber'] as String,
       model: json['model'] as String,
       capacity: (json['capacity'] as num).toInt(),
-      driverId: json['driverId'] as String?,
+      driverId: _readDriverId(json, 'driver') as String?,
       isActive: json['isActive'] as bool? ?? true,
       instituteId: json['instituteId'] as String,
     );
@@ -23,7 +23,7 @@ Map<String, dynamic> _$VehicleModelToJson(_VehicleModel instance) =>
       'plateNumber': instance.plateNumber,
       'model': instance.model,
       'capacity': instance.capacity,
-      'driverId': instance.driverId,
+      'driver': instance.driverId,
       'isActive': instance.isActive,
       'instituteId': instance.instituteId,
     };
@@ -55,7 +55,7 @@ _RouteModel _$RouteModelFromJson(Map<String, dynamic> json) => _RouteModel(
           ?.map((e) => e as String)
           .toList() ??
       const [],
-  assignedVehicleId: json['assignedVehicleId'] as String?,
+  assignedVehicleId: _readVehicleId(json, 'assignedVehicle') as String?,
   isActive: json['isActive'] as bool? ?? true,
   instituteId: json['instituteId'] as String,
 );
@@ -65,7 +65,7 @@ Map<String, dynamic> _$RouteModelToJson(_RouteModel instance) =>
       '_id': instance.id,
       'name': instance.name,
       'pickupPoints': instance.pickupPoints,
-      'assignedVehicleId': instance.assignedVehicleId,
+      'assignedVehicle': instance.assignedVehicleId,
       'isActive': instance.isActive,
       'instituteId': instance.instituteId,
     };

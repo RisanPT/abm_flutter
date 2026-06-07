@@ -12,6 +12,7 @@ class ABMPageHeader extends StatelessWidget {
   final Widget? bottomChild;
   final double? height;
   final bool showBackButton;
+  final Widget? instituteBanner;
 
   const ABMPageHeader({
     super.key,
@@ -22,6 +23,7 @@ class ABMPageHeader extends StatelessWidget {
     this.bottomChild,
     this.height,
     this.showBackButton = true,
+    this.instituteBanner,
   });
 
   @override
@@ -29,7 +31,11 @@ class ABMPageHeader extends StatelessWidget {
     final colors = context.colors;
     final typography = context.typography;
     final isMobile = context.isMobile;
-    final effectiveHeight = height ?? (isMobile ? 240.0 : 280.0);
+    final bool hasBanner = instituteBanner != null;
+    final effectiveHeight = height ??
+        (hasBanner
+            ? (isMobile ? 295.0 : 340.0)
+            : (isMobile ? 240.0 : 280.0));
 
     return Container(
       width: double.infinity,
@@ -65,18 +71,16 @@ class ABMPageHeader extends StatelessWidget {
                           icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
                           onPressed: () => Navigator.of(context).maybePop(),
                         )
-                      else ?leading,
+                      else if (leading != null)
+                        leading!,
                       const Spacer(),
                       if (actions != null) ...actions!,
                     ],
                   ),
-                  const Gap(16),
                   Expanded(
                     child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: bottomChild != null 
-                          ? MainAxisAlignment.start 
-                          : MainAxisAlignment.center,
                       children: [
                         Text(
                           title,
@@ -98,6 +102,10 @@ class ABMPageHeader extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (instituteBanner != null) ...[
+                    const Gap(8),
+                    instituteBanner!,
+                  ],
                 ],
               ),
             ),

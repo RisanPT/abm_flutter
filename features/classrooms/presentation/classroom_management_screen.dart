@@ -3,6 +3,7 @@ import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/widgets/classroom_widgets.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/student_controller.dart';
+import 'package:dio/dio.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -149,7 +150,23 @@ class ClassroomManagementScreen extends ConsumerWidget {
     );
 
     if (result == true && nameController.text.trim().isNotEmpty) {
-      await ref.read(classroomControllerProvider.notifier).addClassroom(nameController.text.trim());
+      try {
+        await ref.read(classroomControllerProvider.notifier).addClassroom(nameController.text.trim());
+      } catch (e) {
+        if (context.mounted) {
+          String errMsg = e.toString();
+          if (e is DioException) {
+            final responseData = e.response?.data;
+            if (responseData is Map && responseData['message'] != null) {
+              errMsg = responseData['message'].toString();
+            }
+          }
+          if (errMsg.contains('duplicate key error') || errMsg.contains('E11000')) {
+            errMsg = 'Classroom with this name already exists';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errMsg)));
+        }
+      }
     }
   }
 }

@@ -132,6 +132,7 @@ const List<AppNavItem> kAppNavItems = [
 ];
 
 final Map<String, Set<AppModule>> _rolePermissions = {
+  AppRoles.superAdmin: AppModule.values.toSet(),
   AppRoles.itAdmin: AppModule.values.toSet(),
   AppRoles.headMaster: {
     AppModule.dashboard,
@@ -188,6 +189,8 @@ final Map<String, Set<AppModule>> _rolePermissions = {
 extension RoleStringExtension on String {
   String get label {
     switch (this) {
+      case AppRoles.superAdmin:
+        return 'Super Admin';
       case AppRoles.itAdmin:
         return 'IT Admin';
       case AppRoles.headMaster:
@@ -208,12 +211,12 @@ extension RoleStringExtension on String {
   }
 
   // Permission Logic Helpers based on the Roles Matrix image
-  bool get canEditStudentData => this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.staff;
-  bool get canEditAdministration => this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.staff;
-  bool get canEditAttendance => this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.teacher;
-  bool get canEditTimetable => this == AppRoles.itAdmin || this == AppRoles.headMaster;
-  bool get canEditAccounts => this == AppRoles.itAdmin || this == AppRoles.treasurer || this == AppRoles.staff;
-  bool get canEditFinance => this == AppRoles.itAdmin || this == AppRoles.treasurer;
+  bool get canEditStudentData => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.staff;
+  bool get canEditAdministration => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.staff;
+  bool get canEditAttendance => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.teacher;
+  bool get canEditTimetable => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster;
+  bool get canEditAccounts => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.treasurer || this == AppRoles.staff;
+  bool get canEditFinance => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.treasurer;
 
   List<AppNavItem> get navigationItems {
     return kAppNavItems.where((item) => canAccess(item.module)).toList();

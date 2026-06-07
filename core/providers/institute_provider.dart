@@ -3,6 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:abm_madrasa/core/repositories/institute_repository.dart';
+import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 
 part 'institute_provider.freezed.dart';
 part 'institute_provider.g.dart';
@@ -71,11 +72,41 @@ class InstituteList extends _$InstituteList {
 
 @riverpod
 class SelectedInstitute extends _$SelectedInstitute {
+  Institute? _manualSelection;
+
   @override
   Institute build() {
-    // Default fallback if no institutes are loaded yet
-    return const Institute(id: 'default', name: 'Loading...', location: '...');
+    final authState = ref.watch(authControllerProvider);
+    final institutesAsync = ref.watch(instituteListProvider);
+
+    return institutesAsync.maybeWhen(
+      data: (list) {
+        if (list.isEmpty) {
+          return const Institute(id: 'default', name: 'No Institutes', location: '...');
+        }
+
+        if (_manualSelection != null && list.any((i) => i.id == _manualSelection!.id)) {
+          return _manualSelection!;
+        }
+
+        final user = authState.asData?.value;
+        if (user != null && user.instituteId != null) {
+          final matched = list.firstWhere(
+            (i) => i.id == user.instituteId,
+            orElse: () => list.first,
+          );
+          return matched;
+        }
+
+        return list.first;
+      },
+      orElse: () => const Institute(id: 'default', name: 'Loading...', location: '...'),
+    );
   }
 
-  void setInstitute(Institute institute) => state = institute;
+  void setInstitute(Institute institute) {
+    _manualSelection = institute;
+    state = institute;
+  }
 }
+

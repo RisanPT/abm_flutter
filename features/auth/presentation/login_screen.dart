@@ -20,7 +20,6 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  String _selectedRole = AppRoles.headMaster;
 
   @override
   void dispose() {
@@ -33,11 +32,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final success = await ref.read(authControllerProvider.notifier).login(
           _usernameController.text.trim(),
           _passwordController.text,
-          selectedRole: _selectedRole,
         );
 
     if (success && mounted) {
-      context.go(_selectedRole.defaultRoute);
+      final user = ref.read(authControllerProvider).value;
+      if (user != null) {
+        context.go(user.role.defaultRoute);
+      }
     }
   }
 
@@ -52,7 +53,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: isDesktop
             ? Row(
                 children: [
-                  Expanded(child: _BrandPanel(selectedRole: _selectedRole)),
+                  Expanded(child: const _BrandPanel()),
                   Expanded(
                     child: Container(
                       color: const Color(0xFFF8F7F2),
@@ -64,10 +65,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: _LoginCard(
                               usernameController: _usernameController,
                               passwordController: _passwordController,
-                              selectedRole: _selectedRole,
-                              onRoleSelected: (role) {
-                                setState(() => _selectedRole = role);
-                              },
                               onSubmit: _handleLogin,
                             ),
                           ),
@@ -79,7 +76,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               )
             : Stack(
                 children: [
-                  Positioned.fill(child: _BrandPanel(selectedRole: _selectedRole)),
+                  Positioned.fill(child: const _BrandPanel()),
                   Align(
                     alignment: Alignment.bottomCenter,
                     child: SingleChildScrollView(
@@ -87,10 +84,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: _LoginCard(
                         usernameController: _usernameController,
                         passwordController: _passwordController,
-                        selectedRole: _selectedRole,
-                        onRoleSelected: (role) {
-                          setState(() => _selectedRole = role);
-                        },
                         onSubmit: _handleLogin,
                       ),
                     ),
@@ -103,9 +96,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 class _BrandPanel extends StatelessWidget {
-  const _BrandPanel({required this.selectedRole});
-
-  final String selectedRole;
+  const _BrandPanel();
 
   @override
   Widget build(BuildContext context) {
@@ -160,13 +151,6 @@ class _BrandPanel extends StatelessWidget {
                       color: const Color(0xFFD6B64C),
                     ),
                   ),
-                  const Gap(14),
-                  Text(
-                    'Selected role: ${selectedRole.label}',
-                    style: typography.bodyMedium.copyWith(
-                      color: Colors.white.withValues(alpha: 0.72),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -181,15 +165,11 @@ class _LoginCard extends ConsumerWidget {
   const _LoginCard({
     required this.usernameController,
     required this.passwordController,
-    required this.selectedRole,
-    required this.onRoleSelected,
     required this.onSubmit,
   });
 
   final TextEditingController usernameController;
   final TextEditingController passwordController;
-  final String selectedRole;
-  final ValueChanged<String> onRoleSelected;
   final VoidCallback onSubmit;
 
   @override
@@ -222,63 +202,22 @@ class _LoginCard extends ConsumerWidget {
             'Please log in to your account to continue.',
             style: typography.bodyMedium.copyWith(color: colors.textSecondary),
           ),
-          const Gap(28),
-          Text('Select Role', style: typography.bodyMediumSemiBold),
-          const Gap(14),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: AppRoles.coreRoles.map((role) {
-              final selected = selectedRole == role;
-              return GestureDetector(
-                onTap: () => onRoleSelected(role),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected ? const Color(0xFF0F4A3A) : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: selected
-                          ? const Color(0xFF0F4A3A)
-                          : const Color(0xFFE7E3D6),
-                    ),
-                    boxShadow: [
-                      if (!selected)
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _roleIcon(role),
-                        size: 18,
-                        color: selected
-                            ? const Color(0xFFD6B64C)
-                            : colors.textSecondary,
-                      ),
-                      const Gap(10),
-                      Text(
-                        role.label,
-                        style: typography.bodyMediumSemiBold.copyWith(
-                          color: selected ? Colors.white : colors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const Gap(28),
+          const Gap(32),
+          if (errorText != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade700.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                errorText.replaceFirst('Exception: ', ''),
+                style: typography.bodySmall.copyWith(color: Colors.red.shade700),
+              ),
+            ),
+            const Gap(20),
+          ],
           ABMTextField(
             label: 'Email Address',
             hint: 'ustadh.ibrahim@anasbinmalik.edu',
@@ -308,13 +247,6 @@ class _LoginCard extends ConsumerWidget {
               ),
             ],
           ),
-          if (errorText != null) ...[
-            const Gap(16),
-            Text(
-              errorText.replaceFirst('Exception: ', ''),
-              style: typography.bodySmall.copyWith(color: Colors.red.shade700),
-            ),
-          ],
           const Gap(28),
           authState.isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -332,22 +264,5 @@ class _LoginCard extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  IconData _roleIcon(String role) {
-    switch (role) {
-      case AppRoles.itAdmin:
-        return Icons.verified_user_outlined;
-      case AppRoles.headMaster:
-        return Icons.school_outlined;
-      case AppRoles.teacher:
-        return Icons.cast_for_education_outlined;
-      case AppRoles.treasurer:
-        return Icons.account_balance_wallet_outlined;
-      case AppRoles.staff:
-        return Icons.groups_2_outlined;
-      default:
-        return Icons.person_outline;
-    }
   }
 }

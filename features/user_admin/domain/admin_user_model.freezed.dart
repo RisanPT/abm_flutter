@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AdminUser {
 
- String get id; String get username; String get role; DateTime get createdAt;
+ String get id; String get username; String get role; DateTime get createdAt; String? get instituteId;
 /// Create a copy of AdminUser
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $AdminUserCopyWith<AdminUser> get copyWith => _$AdminUserCopyWithImpl<AdminUser>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AdminUser&&(identical(other.id, id) || other.id == id)&&(identical(other.username, username) || other.username == username)&&(identical(other.role, role) || other.role == role)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AdminUser&&(identical(other.id, id) || other.id == id)&&(identical(other.username, username) || other.username == username)&&(identical(other.role, role) || other.role == role)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.instituteId, instituteId) || other.instituteId == instituteId));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,username,role,createdAt);
+int get hashCode => Object.hash(runtimeType,id,username,role,createdAt,instituteId);
 
 @override
 String toString() {
-  return 'AdminUser(id: $id, username: $username, role: $role, createdAt: $createdAt)';
+  return 'AdminUser(id: $id, username: $username, role: $role, createdAt: $createdAt, instituteId: $instituteId)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $AdminUserCopyWith<$Res>  {
   factory $AdminUserCopyWith(AdminUser value, $Res Function(AdminUser) _then) = _$AdminUserCopyWithImpl;
 @useResult
 $Res call({
- String id, String username, String role, DateTime createdAt
+ String id, String username, String role, DateTime createdAt, String? instituteId
 });
 
 
@@ -65,13 +65,14 @@ class _$AdminUserCopyWithImpl<$Res>
 
 /// Create a copy of AdminUser
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? username = null,Object? role = null,Object? createdAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? username = null,Object? role = null,Object? createdAt = null,Object? instituteId = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,role: null == role ? _self.role : role // ignore: cast_nullable_to_non_nullable
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,instituteId: freezed == instituteId ? _self.instituteId : instituteId // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -156,10 +157,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String username,  String role,  DateTime createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String username,  String role,  DateTime createdAt,  String? instituteId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AdminUser() when $default != null:
-return $default(_that.id,_that.username,_that.role,_that.createdAt);case _:
+return $default(_that.id,_that.username,_that.role,_that.createdAt,_that.instituteId);case _:
   return orElse();
 
 }
@@ -177,10 +178,10 @@ return $default(_that.id,_that.username,_that.role,_that.createdAt);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String username,  String role,  DateTime createdAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String username,  String role,  DateTime createdAt,  String? instituteId)  $default,) {final _that = this;
 switch (_that) {
 case _AdminUser():
-return $default(_that.id,_that.username,_that.role,_that.createdAt);case _:
+return $default(_that.id,_that.username,_that.role,_that.createdAt,_that.instituteId);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +198,10 @@ return $default(_that.id,_that.username,_that.role,_that.createdAt);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String username,  String role,  DateTime createdAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String username,  String role,  DateTime createdAt,  String? instituteId)?  $default,) {final _that = this;
 switch (_that) {
 case _AdminUser() when $default != null:
-return $default(_that.id,_that.username,_that.role,_that.createdAt);case _:
+return $default(_that.id,_that.username,_that.role,_that.createdAt,_that.instituteId);case _:
   return null;
 
 }
@@ -212,13 +213,14 @@ return $default(_that.id,_that.username,_that.role,_that.createdAt);case _:
 @JsonSerializable()
 
 class _AdminUser implements AdminUser {
-  const _AdminUser({required this.id, required this.username, required this.role, required this.createdAt});
+  const _AdminUser({required this.id, required this.username, required this.role, required this.createdAt, this.instituteId});
   factory _AdminUser.fromJson(Map<String, dynamic> json) => _$AdminUserFromJson(json);
 
 @override final  String id;
 @override final  String username;
 @override final  String role;
 @override final  DateTime createdAt;
+@override final  String? instituteId;
 
 /// Create a copy of AdminUser
 /// with the given fields replaced by the non-null parameter values.
@@ -233,16 +235,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AdminUser&&(identical(other.id, id) || other.id == id)&&(identical(other.username, username) || other.username == username)&&(identical(other.role, role) || other.role == role)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AdminUser&&(identical(other.id, id) || other.id == id)&&(identical(other.username, username) || other.username == username)&&(identical(other.role, role) || other.role == role)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.instituteId, instituteId) || other.instituteId == instituteId));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,username,role,createdAt);
+int get hashCode => Object.hash(runtimeType,id,username,role,createdAt,instituteId);
 
 @override
 String toString() {
-  return 'AdminUser(id: $id, username: $username, role: $role, createdAt: $createdAt)';
+  return 'AdminUser(id: $id, username: $username, role: $role, createdAt: $createdAt, instituteId: $instituteId)';
 }
 
 
@@ -253,7 +255,7 @@ abstract mixin class _$AdminUserCopyWith<$Res> implements $AdminUserCopyWith<$Re
   factory _$AdminUserCopyWith(_AdminUser value, $Res Function(_AdminUser) _then) = __$AdminUserCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String username, String role, DateTime createdAt
+ String id, String username, String role, DateTime createdAt, String? instituteId
 });
 
 
@@ -270,13 +272,14 @@ class __$AdminUserCopyWithImpl<$Res>
 
 /// Create a copy of AdminUser
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? username = null,Object? role = null,Object? createdAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? username = null,Object? role = null,Object? createdAt = null,Object? instituteId = freezed,}) {
   return _then(_AdminUser(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,username: null == username ? _self.username : username // ignore: cast_nullable_to_non_nullable
 as String,role: null == role ? _self.role : role // ignore: cast_nullable_to_non_nullable
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
-as DateTime,
+as DateTime,instituteId: freezed == instituteId ? _self.instituteId : instituteId // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

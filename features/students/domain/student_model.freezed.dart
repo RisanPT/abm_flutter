@@ -229,7 +229,7 @@ return $default(_that.id,_that.fullName,_that.admissionNumber,_that.classroom,_t
 @JsonSerializable()
 
 class _StudentModel implements StudentModel {
-  const _StudentModel({@JsonKey(name: '_id') required this.id, required this.fullName, @JsonKey(name: 'studentId') required this.admissionNumber, @JsonKey(name: 'grade') required this.classroom, required this.dateOfBirth, required this.gender, this.bloodGroup, this.guardianName = 'Unknown', @JsonKey(name: 'parentContact') required this.guardianContact, required this.address, @JsonKey(name: 'enrollmentDate') required this.admissionDate, this.attendancePercentage, this.isActive = true, this.photoUrl, this.parentPassportId, this.parentIqamaId, this.needsTransportation = false, this.transportationFee = 0, this.hasConcession = false, this.instituteId = 'abm-offline-1', this.scholarshipAmount});
+  const _StudentModel({@JsonKey(name: '_id') required this.id, required this.fullName, @JsonKey(name: 'studentId') required this.admissionNumber, @JsonKey(name: 'grade') required this.classroom, required this.dateOfBirth, required this.gender, this.bloodGroup, this.guardianName = 'Unknown', @JsonKey(name: 'parentContact') required this.guardianContact, required this.address, @JsonKey(name: 'enrollmentDate') required this.admissionDate, this.attendancePercentage, this.isActive = true, this.photoUrl, this.parentPassportId, this.parentIqamaId, this.needsTransportation = false, this.transportationFee = 0, this.hasConcession = false, this.instituteId = '664c39f00000000000000001', this.scholarshipAmount});
   factory _StudentModel.fromJson(Map<String, dynamic> json) => _$StudentModelFromJson(json);
 
 @override@JsonKey(name: '_id') final  String id;

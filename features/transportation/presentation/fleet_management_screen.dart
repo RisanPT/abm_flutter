@@ -2,8 +2,9 @@ import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/transportation/domain/transport_models.dart';
 import 'package:abm_madrasa/features/transportation/presentation/transport_controller.dart';
+import 'package:dio/dio.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
-import 'package:abm_madrasa/shared/widgets/institute_switcher.dart';
+import 'package:abm_madrasa/shared/widgets/institute_banner_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -42,6 +43,8 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
           ABMPageHeader(
             title: 'Fleet & Transport',
             subtitle: 'Manage vehicles, drivers, routes and student assignments',
+            showBackButton: false,
+            instituteBanner: const InstituteBannerChip(),
             actions: [
               IconButton(
                 onPressed: _showAddDialog,
@@ -50,7 +53,6 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
               ),
             ],
           ),
-          const InstituteSwitcher(),
           Container(
             color: colors.cardBackground,
             child: TabBar(
@@ -125,7 +127,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final vehicle = VehicleModel(
                 id: existing?.id ?? '',
                 plateNumber: plateCtrl.text.trim(),
@@ -136,12 +138,32 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
                 driverId: existing?.driverId,
               );
               final ctrl = ref.read(fleetManagementControllerProvider.notifier);
-              if (existing == null) {
-                ctrl.addVehicle(vehicle);
-              } else {
-                ctrl.updateVehicle(vehicle);
+              try {
+                if (existing == null) {
+                  await ctrl.addVehicle(vehicle);
+                } else {
+                  await ctrl.updateVehicle(vehicle);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              } catch (e) {
+                if (ctx.mounted) {
+                  String errMsg = e.toString();
+                  if (e is DioException) {
+                    final responseData = e.response?.data;
+                    if (responseData is Map && responseData['message'] != null) {
+                      errMsg = responseData['message'].toString();
+                    } else if (e.message != null) {
+                      errMsg = e.message!;
+                    }
+                  }
+                  if (errMsg.contains('duplicate key error') || errMsg.contains('E11000')) {
+                    errMsg = 'Vehicle with this plate number already exists';
+                  }
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text(errMsg)),
+                  );
+                }
               }
-              Navigator.pop(ctx);
             },
             child: Text(existing == null ? 'Add' : 'Save'),
           ),
@@ -174,7 +196,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final driver = DriverModel(
                 id: existing?.id ?? '',
                 fullName: nameCtrl.text.trim(),
@@ -184,12 +206,32 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
                 isActive: true,
               );
               final ctrl = ref.read(fleetManagementControllerProvider.notifier);
-              if (existing == null) {
-                ctrl.addDriver(driver);
-              } else {
-                ctrl.updateDriver(driver);
+              try {
+                if (existing == null) {
+                  await ctrl.addDriver(driver);
+                } else {
+                  await ctrl.updateDriver(driver);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              } catch (e) {
+                if (ctx.mounted) {
+                  String errMsg = e.toString();
+                  if (e is DioException) {
+                    final responseData = e.response?.data;
+                    if (responseData is Map && responseData['message'] != null) {
+                      errMsg = responseData['message'].toString();
+                    } else if (e.message != null) {
+                      errMsg = e.message!;
+                    }
+                  }
+                  if (errMsg.contains('duplicate key error') || errMsg.contains('E11000')) {
+                    errMsg = 'Driver with this license number already exists';
+                  }
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text(errMsg)),
+                  );
+                }
               }
-              Navigator.pop(ctx);
             },
             child: Text(existing == null ? 'Add' : 'Save'),
           ),
@@ -222,7 +264,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final route = RouteModel(
                 id: existing?.id ?? '',
                 name: nameCtrl.text.trim(),
@@ -232,12 +274,29 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
                 assignedVehicleId: existing?.assignedVehicleId,
               );
               final ctrl = ref.read(fleetManagementControllerProvider.notifier);
-              if (existing == null) {
-                ctrl.addRoute(route);
-              } else {
-                ctrl.updateRoute(route);
+              try {
+                if (existing == null) {
+                  await ctrl.addRoute(route);
+                } else {
+                  await ctrl.updateRoute(route);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              } catch (e) {
+                if (ctx.mounted) {
+                  String errMsg = e.toString();
+                  if (e is DioException) {
+                    final responseData = e.response?.data;
+                    if (responseData is Map && responseData['message'] != null) {
+                      errMsg = responseData['message'].toString();
+                    } else if (e.message != null) {
+                      errMsg = e.message!;
+                    }
+                  }
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text(errMsg)),
+                  );
+                }
               }
-              Navigator.pop(ctx);
             },
             child: Text(existing == null ? 'Add' : 'Save'),
           ),
@@ -251,15 +310,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
   void _showAssignStudentDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => _AssignStudentDialog(
-        onAssign: (studentId, routeId) {
-          ref.read(fleetManagementControllerProvider.notifier).assignStudent(
-            studentId: studentId,
-            routeId: routeId,
-            instituteId: ref.read(selectedInstituteProvider).id,
-          );
-        },
-      ),
+      builder: (ctx) => const _AssignStudentDialog(),
     );
   }
 }
@@ -311,7 +362,7 @@ class _VehiclesList extends ConsumerWidget {
     state?._showVehicleDialog(v);
   }
 
-  void _confirmDelete(BuildContext context, String label, VoidCallback onConfirm) {
+  void _confirmDelete(BuildContext context, String label, Future<void> Function() onConfirm) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -321,7 +372,23 @@ class _VehiclesList extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () { onConfirm(); Navigator.pop(ctx); },
+            onPressed: () async {
+              try {
+                await onConfirm();
+                if (ctx.mounted) Navigator.pop(ctx);
+              } catch (e) {
+                if (ctx.mounted) {
+                  String errMsg = e.toString();
+                  if (e is DioException) {
+                    final responseData = e.response?.data;
+                    if (responseData is Map && responseData['message'] != null) {
+                      errMsg = responseData['message'].toString();
+                    }
+                  }
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(errMsg)));
+                }
+              }
+            },
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -363,9 +430,22 @@ class _DriversList extends ConsumerWidget {
                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                    onPressed: () {
-                      ref.read(fleetManagementControllerProvider.notifier).deleteDriver(d.id);
-                      Navigator.pop(ctx);
+                    onPressed: () async {
+                      try {
+                        await ref.read(fleetManagementControllerProvider.notifier).deleteDriver(d.id);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          String errMsg = e.toString();
+                          if (e is DioException) {
+                            final responseData = e.response?.data;
+                            if (responseData is Map && responseData['message'] != null) {
+                              errMsg = responseData['message'].toString();
+                            }
+                          }
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(errMsg)));
+                        }
+                      }
                     },
                     child: const Text('Delete', style: TextStyle(color: Colors.white)),
                   ),
@@ -421,9 +501,22 @@ class _RoutesList extends ConsumerWidget {
                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                    onPressed: () {
-                      ref.read(fleetManagementControllerProvider.notifier).deleteRoute(r.id);
-                      Navigator.pop(ctx);
+                    onPressed: () async {
+                      try {
+                        await ref.read(fleetManagementControllerProvider.notifier).deleteRoute(r.id);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          String errMsg = e.toString();
+                          if (e is DioException) {
+                            final responseData = e.response?.data;
+                            if (responseData is Map && responseData['message'] != null) {
+                              errMsg = responseData['message'].toString();
+                            }
+                          }
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(errMsg)));
+                        }
+                      }
                     },
                     child: const Text('Delete', style: TextStyle(color: Colors.white)),
                   ),
@@ -483,12 +576,25 @@ class _StudentAssignmentList extends ConsumerWidget {
                     trailing: IconButton(
                       icon: const Icon(LucideIcons.userMinus, color: Colors.red),
                       tooltip: 'Remove from transport',
-                      onPressed: () {
+                      onPressed: () async {
                         final studentId = student?['_id'] as String?;
                         if (studentId != null) {
-                          ref
-                              .read(fleetManagementControllerProvider.notifier)
-                              .removeStudent(studentId);
+                          try {
+                            await ref
+                                .read(fleetManagementControllerProvider.notifier)
+                                .removeStudent(studentId);
+                          } catch (e) {
+                            if (context.mounted) {
+                              String errMsg = e.toString();
+                              if (e is DioException) {
+                                final responseData = e.response?.data;
+                                if (responseData is Map && responseData['message'] != null) {
+                                  errMsg = responseData['message'].toString();
+                                }
+                              }
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errMsg)));
+                            }
+                          }
                         }
                       },
                     ),
@@ -543,10 +649,23 @@ class _AssignDriverButton extends ConsumerWidget {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () {
-                ref.read(fleetManagementControllerProvider.notifier)
-                    .assignDriverToVehicle(vehicle.id, selectedId);
-                Navigator.pop(ctx);
+              onPressed: () async {
+                try {
+                  await ref.read(fleetManagementControllerProvider.notifier)
+                      .assignDriverToVehicle(vehicle.id, selectedId);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (e) {
+                  if (ctx.mounted) {
+                    String errMsg = e.toString();
+                    if (e is DioException) {
+                      final responseData = e.response?.data;
+                      if (responseData is Map && responseData['message'] != null) {
+                        errMsg = responseData['message'].toString();
+                      }
+                    }
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(errMsg)));
+                  }
+                }
               },
               child: const Text('Assign'),
             ),
@@ -596,10 +715,23 @@ class _AssignVehicleButton extends ConsumerWidget {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () {
-                ref.read(fleetManagementControllerProvider.notifier)
-                    .assignVehicleToRoute(route.id, selectedId);
-                Navigator.pop(ctx);
+              onPressed: () async {
+                try {
+                  await ref.read(fleetManagementControllerProvider.notifier)
+                      .assignVehicleToRoute(route.id, selectedId);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (e) {
+                  if (ctx.mounted) {
+                    String errMsg = e.toString();
+                    if (e is DioException) {
+                      final responseData = e.response?.data;
+                      if (responseData is Map && responseData['message'] != null) {
+                        errMsg = responseData['message'].toString();
+                      }
+                    }
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(errMsg)));
+                  }
+                }
               },
               child: const Text('Assign'),
             ),
@@ -613,8 +745,7 @@ class _AssignVehicleButton extends ConsumerWidget {
 // ── Assign Student Dialog ─────────────────────────────────────────────────────
 
 class _AssignStudentDialog extends ConsumerWidget {
-  const _AssignStudentDialog({required this.onAssign});
-  final void Function(String studentId, String routeId) onAssign;
+  const _AssignStudentDialog();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -695,9 +826,26 @@ class _AssignStudentDialog extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: selectedStudentId != null && selectedRouteId != null
-                ? () {
-                    onAssign(selectedStudentId!, selectedRouteId!);
-                    Navigator.pop(ctx);
+                ? () async {
+                    try {
+                      await ref.read(fleetManagementControllerProvider.notifier).assignStudent(
+                        studentId: selectedStudentId!,
+                        routeId: selectedRouteId!,
+                        instituteId: ref.read(selectedInstituteProvider).id,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        String errMsg = e.toString();
+                        if (e is DioException) {
+                          final responseData = e.response?.data;
+                          if (responseData is Map && responseData['message'] != null) {
+                            errMsg = responseData['message'].toString();
+                          }
+                        }
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(errMsg)));
+                      }
+                    }
                   }
                 : null,
             child: const Text('Assign'),
@@ -803,7 +951,7 @@ class _TransportCard extends StatelessWidget {
                     )),
               ),
               const Spacer(),
-              ?trailing,
+              if (trailing != null) trailing!,
             ],
           ),
         ],

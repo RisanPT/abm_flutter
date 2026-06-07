@@ -13,15 +13,13 @@ class AuthController extends _$AuthController {
 
   Future<bool> login(
     String username,
-    String password, {
-    required String selectedRole,
-  }) async {
+    String password,
+  ) async {
     state = const AsyncValue.loading();
     final result = await AsyncValue.guard(
       () => ref.read(authRepositoryProvider).login(
             username,
             password,
-            selectedRole: selectedRole,
           ),
     );
     state = result;

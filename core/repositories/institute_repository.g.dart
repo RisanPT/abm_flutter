@@ -55,4 +55,4 @@ final class InstituteRepositoryProvider
 }
 
 String _$instituteRepositoryHash() =>
-    r'e55cc523be945c495ddb7874ea38627721212d86';
+    r'aefbb607ea7e1f464d2047f7218df5cc5bddea2c';

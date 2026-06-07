@@ -11,6 +11,7 @@ _AdminUser _$AdminUserFromJson(Map<String, dynamic> json) => _AdminUser(
   username: json['username'] as String,
   role: json['role'] as String,
   createdAt: DateTime.parse(json['createdAt'] as String),
+  instituteId: json['instituteId'] as String?,
 );
 
 Map<String, dynamic> _$AdminUserToJson(_AdminUser instance) =>
@@ -19,4 +20,5 @@ Map<String, dynamic> _$AdminUserToJson(_AdminUser instance) =>
       'username': instance.username,
       'role': instance.role,
       'createdAt': instance.createdAt.toIso8601String(),
+      'instituteId': instance.instituteId,
     };

@@ -66,7 +66,7 @@ final class InstituteListProvider
   InstituteList create() => InstituteList();
 }
 
-String _$instituteListHash() => r'b0b558c7e99ac17eb0311966e91ed36ca17635cb';
+String _$instituteListHash() => r'afff5f7254ac31b4553f4761956a5c9091349486';
 
 abstract class _$InstituteList extends $AsyncNotifier<List<Institute>> {
   FutureOr<List<Institute>> build();
@@ -118,7 +118,7 @@ final class SelectedInstituteProvider
   }
 }
 
-String _$selectedInstituteHash() => r'7a73ba57e1fa4c0085863bd68c9f77534954de0c';
+String _$selectedInstituteHash() => r'e860f6c6b9a371e72f29c2d4e99efd5925102a35';
 
 abstract class _$SelectedInstitute extends $Notifier<Institute> {
   Institute build();

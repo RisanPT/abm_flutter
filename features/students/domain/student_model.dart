@@ -32,7 +32,7 @@ abstract class StudentModel with _$StudentModel {
     @Default(false) bool needsTransportation,
     @Default(0) double transportationFee,
     @Default(false) bool hasConcession,
-    @Default('abm-offline-1') String instituteId,
+    @Default('664c39f00000000000000001') String instituteId,
     double? scholarshipAmount,
   }) = _StudentModel;
 

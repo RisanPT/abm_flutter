@@ -27,7 +27,7 @@ _StudentModel _$StudentModelFromJson(Map<String, dynamic> json) =>
       needsTransportation: json['needsTransportation'] as bool? ?? false,
       transportationFee: (json['transportationFee'] as num?)?.toDouble() ?? 0,
       hasConcession: json['hasConcession'] as bool? ?? false,
-      instituteId: json['instituteId'] as String? ?? 'abm-offline-1',
+      instituteId: json['instituteId'] as String? ?? '664c39f00000000000000001',
       scholarshipAmount: (json['scholarshipAmount'] as num?)?.toDouble(),
     );
 

@@ -6,7 +6,7 @@ import 'package:abm_madrasa/features/dashboard/presentation/dashboard_controller
 import 'package:abm_madrasa/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
-import 'package:abm_madrasa/shared/widgets/institute_switcher.dart';
+import 'package:abm_madrasa/shared/widgets/institute_banner_chip.dart';
 import 'package:abm_madrasa/features/transportation/presentation/fleet_management_screen.dart';
 import 'package:abm_madrasa/features/attendance/presentation/secure_attendance_screen.dart';
 import 'package:abm_madrasa/features/teachers/presentation/progress_report_upload_screen.dart';
@@ -39,8 +39,7 @@ class DashboardScreen extends ConsumerWidget {
               children: [
                 // Custom Premium Header
                 _buildHeader(context, ref),
-                
-                const InstituteSwitcher(),
+
 
                 Padding(
                   padding: const EdgeInsets.all(20),
@@ -161,6 +160,9 @@ class DashboardScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              const Gap(16),
+              // Institute chip
+              const InstituteBannerChip(),
             ],
           ),
         ],

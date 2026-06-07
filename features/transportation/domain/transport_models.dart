@@ -3,6 +3,22 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'transport_models.freezed.dart';
 part 'transport_models.g.dart';
 
+Object? _readDriverId(Map json, String key) {
+  final val = json['driver'];
+  if (val is Map) {
+    return val['_id'];
+  }
+  return val;
+}
+
+Object? _readVehicleId(Map json, String key) {
+  final val = json['assignedVehicle'];
+  if (val is Map) {
+    return val['_id'];
+  }
+  return val;
+}
+
 @freezed
 abstract class VehicleModel with _$VehicleModel {
   const factory VehicleModel({
@@ -10,7 +26,7 @@ abstract class VehicleModel with _$VehicleModel {
     required String plateNumber,
     required String model,
     required int capacity,
-    String? driverId,
+    @JsonKey(name: 'driver', readValue: _readDriverId) String? driverId,
     @Default(true) bool isActive,
     required String instituteId,
   }) = _VehicleModel;
@@ -38,11 +54,12 @@ abstract class RouteModel with _$RouteModel {
     @JsonKey(name: '_id') required String id,
     required String name,
     @Default([]) List<String> pickupPoints,
-    String? assignedVehicleId,
+    @JsonKey(name: 'assignedVehicle', readValue: _readVehicleId) String? assignedVehicleId,
     @Default(true) bool isActive,
     required String instituteId,
   }) = _RouteModel;
 
   factory RouteModel.fromJson(Map<String, dynamic> json) => _$RouteModelFromJson(json);
 }
+
 
