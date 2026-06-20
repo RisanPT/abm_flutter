@@ -26,6 +26,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
   DateTime _selectedDate = DateTime.now();
   String? _selectedClassroom;
   String _searchQuery = '';
+  String _selectedType = 'Student';
 
   @override
   Widget build(BuildContext context) {
@@ -37,15 +38,63 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
       backgroundColor: colors.background,
       body: classroomsAsync.when(
         data: (classrooms) {
-          if (classrooms.isEmpty) {
-            return const Center(child: Text('No classes available for attendance.'));
+          if (classrooms.isNotEmpty) {
+            _selectedClassroom ??= classrooms.first;
           }
 
-          _selectedClassroom ??= classrooms.first;
+          if (classrooms.isEmpty && _selectedType == 'Student') {
+            return Column(
+              children: [
+                _AttendanceHeader(
+                  selectedDate: _selectedDate,
+                  selectedClassroom: null,
+                  classrooms: const [],
+                  user: user,
+                  searchQuery: _searchQuery,
+                  selectedType: _selectedType,
+                  onTypeChanged: (val) => setState(() => _selectedType = val),
+                  onSelectClassroom: (value) {},
+                  onSearchChanged: (value) => setState(() => _searchQuery = value),
+                  onMarkAllPresent: () {},
+                  onSelectDate: () {},
+                ),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.school, size: 48, color: colors.textSecondary),
+                        const Gap(16),
+                        Text(
+                          'No classrooms found',
+                          style: context.typography.h3.copyWith(color: colors.textSecondary),
+                        ),
+                        const Gap(8),
+                        Text(
+                          'Add classrooms to this institute to start marking attendance.',
+                          style: context.typography.bodyMedium.copyWith(color: colors.textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                        const Gap(24),
+                        if (user?.role.canEditAdministration == true)
+                          ABMButton(
+                            text: 'Manage Classrooms',
+                            icon: LucideIcons.layers,
+                            onPressed: () => context.go(RouteNames.classrooms),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
           final attendanceAsync = ref.watch(
             attendanceControllerProvider(
               date: _selectedDate,
-              classroom: _selectedClassroom,
+              classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
+              type: _selectedType,
             ),
           );
 
@@ -53,10 +102,12 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
             children: [
               _AttendanceHeader(
                 selectedDate: _selectedDate,
-                selectedClassroom: _selectedClassroom ?? classrooms.first,
+                selectedClassroom: _selectedClassroom ?? (classrooms.isNotEmpty ? classrooms.first : ''),
                 classrooms: classrooms,
                 user: user,
                 searchQuery: _searchQuery,
+                selectedType: _selectedType,
+                onTypeChanged: (val) => setState(() => _selectedType = val),
                 onSelectClassroom: (value) {
                   setState(() => _selectedClassroom = value);
                 },
@@ -68,7 +119,8 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                       .read(
                         attendanceControllerProvider(
                           date: _selectedDate,
-                          classroom: _selectedClassroom,
+                          classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
+                          type: _selectedType,
                         ).notifier,
                       )
                       .markAll(AttendanceStatus.present);
@@ -93,8 +145,8 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                       if (query.isEmpty) {
                         return true;
                       }
-                      final name = (record.studentName ?? '').toLowerCase();
-                      final id = record.studentId.toLowerCase();
+                      final name = (record.studentName ?? record.teacherName ?? '').toLowerCase();
+                      final id = (record.studentId ?? record.teacherId ?? '').toLowerCase();
                       return name.contains(query) || id.contains(query);
                     }).toList();
 
@@ -288,6 +340,8 @@ class _AttendanceHeader extends StatelessWidget {
     required this.classrooms,
     required this.user,
     required this.searchQuery,
+    required this.selectedType,
+    required this.onTypeChanged,
     required this.onSelectClassroom,
     required this.onSearchChanged,
     required this.onMarkAllPresent,
@@ -295,10 +349,12 @@ class _AttendanceHeader extends StatelessWidget {
   });
 
   final DateTime selectedDate;
-  final String selectedClassroom;
+  final String? selectedClassroom;
   final List<String> classrooms;
   final UserModel? user;
   final String searchQuery;
+  final String selectedType;
+  final ValueChanged<String> onTypeChanged;
   final ValueChanged<String> onSelectClassroom;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onMarkAllPresent;
@@ -382,7 +438,7 @@ class _AttendanceHeader extends StatelessWidget {
                       color: const Color(0xFF163D32),
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Search student...',
+                      hintText: selectedType == 'Teacher' ? 'Search teacher...' : 'Search student...',
                       hintStyle: typography.bodyMedium.copyWith(
                         color: const Color(0xFF8B928F),
                       ),
@@ -414,39 +470,63 @@ class _AttendanceHeader extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      _HeaderTile(
-                        title: 'CLASS / SECTION',
-                        child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedClassroom,
-                          isExpanded: true,
-                          dropdownColor: Colors.white,
-                          iconEnabledColor: const Color(0xFF7A837E),
-                          style: typography.bodyMediumSemiBold.copyWith(
-                            color: const Color(0xFF163D32),
-                          ),
-                          items: classrooms
-                              .map(
-                                  (classroom) => DropdownMenuItem(
-                                    value: classroom,
-                                    child: Text(
-                                      classroom,
-                                      style: typography.bodyMediumSemiBold.copyWith(
-                                        color: const Color(0xFF163D32),
+                      if (user?.role.canEditAdministration == true)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _TypeToggleTab(
+                                title: 'Students',
+                                isSelected: selectedType == 'Student',
+                                onTap: () => onTypeChanged('Student'),
+                              ),
+                            ),
+                            const Gap(8),
+                            Expanded(
+                              child: _TypeToggleTab(
+                                title: 'Teachers',
+                                isSelected: selectedType == 'Teacher',
+                                onTap: () => onTypeChanged('Teacher'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (user?.role.canEditAdministration == true)
+                        Gap(isMobile ? 12 : 18),
+                      if (selectedType == 'Student') ...[
+                        _HeaderTile(
+                          title: 'CLASS / SECTION',
+                          child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedClassroom,
+                            isExpanded: true,
+                            dropdownColor: Colors.white,
+                            iconEnabledColor: const Color(0xFF7A837E),
+                            style: typography.bodyMediumSemiBold.copyWith(
+                              color: const Color(0xFF163D32),
+                            ),
+                            items: classrooms
+                                .map(
+                                    (classroom) => DropdownMenuItem(
+                                      value: classroom,
+                                      child: Text(
+                                        classroom,
+                                        style: typography.bodyMediumSemiBold.copyWith(
+                                          color: const Color(0xFF163D32),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                onSelectClassroom(value);
-                              }
-                            },
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  onSelectClassroom(value);
+                                }
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                      Gap(isMobile ? 8 : 14),
+                        Gap(isMobile ? 8 : 14),
+                      ],
                       _HeaderTile(
                         title: user?.role == AppRoles.teacher
                             ? 'DATE'
@@ -479,7 +559,7 @@ class _AttendanceHeader extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      'Students List',
+                      selectedType == 'Teacher' ? 'Teachers List' : 'Students List',
                       style: typography.bodyLargeSemiBold.copyWith(
                         color: Colors.white,
                         fontSize: isMobile ? 18 : 22,
@@ -623,7 +703,7 @@ class _AttendanceRow extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  record.studentName ?? 'Student',
+                  record.studentName?.isNotEmpty == true ? record.studentName! : (record.teacherName ?? 'Unknown'),
                   style: context.typography.bodyMediumSemiBold.copyWith(
                     color: rowTitleColor,
                     fontSize: context.isMobile ? 14 : null,
@@ -633,7 +713,7 @@ class _AttendanceRow extends ConsumerWidget {
                 ),
                 const Gap(3),
                 Text(
-                  'ID: ${record.studentId}',
+                  'ID: ${record.studentId?.isNotEmpty == true ? record.studentId : record.teacherId ?? 'N/A'}',
                   style: context.typography.bodySmall.copyWith(
                     color: rowSubtleColor,
                     fontSize: context.isMobile ? 12 : null,
@@ -647,17 +727,59 @@ class _AttendanceRow extends ConsumerWidget {
           _StatusSwitch(
             status: record.status,
             onChanged: (status) {
+              final isTeacher = record.teacherId != null && record.teacherId!.isNotEmpty;
+              final targetId = isTeacher ? record.teacherId! : record.studentId!;
+              
               ref
                   .read(
                     attendanceControllerProvider(
                       date: date,
-                      classroom: classroom,
+                      classroom: isTeacher ? null : classroom,
+                      type: isTeacher ? 'Teacher' : 'Student',
                     ).notifier,
                   )
-                  .updateStatus(record.studentId, status);
+                  .updateStatus(targetId, status, type: isTeacher ? 'Teacher' : 'Student');
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TypeToggleTab extends StatelessWidget {
+  const _TypeToggleTab({
+    required this.title,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String title;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final typography = context.typography;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFD6B64C) : const Color(0xFFF8F7F2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFD6B64C) : const Color(0xFFE7E3D7),
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          title,
+          style: typography.bodyMediumSemiBold.copyWith(
+            color: isSelected ? Colors.white : const Color(0xFF8A8A81),
+          ),
+        ),
       ),
     );
   }

@@ -26,6 +26,16 @@ abstract class RecentActivity with _$RecentActivity {
 }
 
 @freezed
+abstract class AccountSegmentData with _$AccountSegmentData {
+  const factory AccountSegmentData({
+    @Default(0.0) double income,
+    @Default(0.0) double expense,
+  }) = _AccountSegmentData;
+
+  factory AccountSegmentData.fromJson(Map<String, dynamic> json) => _$AccountSegmentDataFromJson(json);
+}
+
+@freezed
 abstract class DashboardStats with _$DashboardStats {
   const factory DashboardStats({
     @Default(0) int totalStudents,
@@ -35,6 +45,7 @@ abstract class DashboardStats with _$DashboardStats {
     @Default(0) int upcomingEvents,
     @Default([]) List<MonthlyFinanceData> monthlyFinanceData,
     @Default([]) List<RecentActivity> recentActivities,
+    @Default({}) Map<String, AccountSegmentData> segmentData,
   }) = _DashboardStats;
 
   factory DashboardStats.fromJson(Map<String, dynamic> json) => _$DashboardStatsFromJson(json);

@@ -59,6 +59,7 @@ class ReceiptHistoryItem {
     required this.totalDue,
     required this.totalPaid,
     required this.status,
+    this.lineItems = const [],
     this.receiptNumber,
     this.paidOn,
   });
@@ -68,6 +69,7 @@ class ReceiptHistoryItem {
   final double totalDue;
   final double totalPaid;
   final String status;
+  final List<AccountLineItem> lineItems;
   final String? receiptNumber;
   final DateTime? paidOn;
 
@@ -78,6 +80,9 @@ class ReceiptHistoryItem {
         totalDue: (json['totalDue'] as num?)?.toDouble() ?? 0,
         totalPaid: (json['totalPaid'] as num?)?.toDouble() ?? 0,
         status: json['status'] as String? ?? 'Pending',
+        lineItems: ((json['lineItems'] as List?) ?? [])
+            .map((item) => AccountLineItem.fromJson(item as Map<String, dynamic>))
+            .toList(),
         receiptNumber: json['receiptNumber'] as String?,
         paidOn: json['paidOn'] != null
             ? DateTime.tryParse(json['paidOn'] as String)
@@ -140,4 +145,46 @@ class StudentAccountDetails {
           .toList(),
     );
   }
+}
+
+class FeeStructureModel {
+  const FeeStructureModel({
+    required this.id,
+    required this.instituteId,
+    required this.grade,
+    required this.hasTransport,
+    required this.transportFeeAmount,
+    required this.totalAmount,
+    required this.lineItems,
+  });
+
+  final String id;
+  final String instituteId;
+  final String grade;
+  final bool hasTransport;
+  final double transportFeeAmount;
+  final double totalAmount;
+  final List<AccountLineItem> lineItems;
+
+  factory FeeStructureModel.fromJson(Map<String, dynamic> json) => FeeStructureModel(
+        id: json['_id'] as String,
+        instituteId: json['instituteId'] as String,
+        grade: json['grade'] as String,
+        hasTransport: json['hasTransport'] as bool? ?? false,
+        transportFeeAmount: (json['transportFeeAmount'] as num?)?.toDouble() ?? 0,
+        totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
+        lineItems: ((json['lineItems'] as List?) ?? [])
+            .map((item) => AccountLineItem.fromJson(item as Map<String, dynamic>))
+            .toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (id.isNotEmpty) '_id': id,
+        'instituteId': instituteId,
+        'grade': grade,
+        'hasTransport': hasTransport,
+        'transportFeeAmount': transportFeeAmount,
+        'totalAmount': totalAmount,
+        'lineItems': lineItems.map((e) => {'title': e.title, 'amount': e.amount}).toList(),
+      };
 }

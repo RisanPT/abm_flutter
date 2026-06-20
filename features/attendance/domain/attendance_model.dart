@@ -16,8 +16,10 @@ enum AttendanceStatus {
 abstract class AttendanceModel with _$AttendanceModel {
   const factory AttendanceModel({
     @JsonKey(name: '_id') String? id,
-    required String studentId,
+    String? studentId,
     String? studentName, // Populated from studentId object if available
+    String? teacherId,
+    String? teacherName, // Populated from teacherId object if available
     required DateTime date,
     @Default(AttendanceStatus.absent) AttendanceStatus status,
     @Default('Admin') String markedBy,
@@ -28,14 +30,20 @@ abstract class AttendanceModel with _$AttendanceModel {
       _$AttendanceModelFromJson(_preProcessJson(json));
 
   static Map<String, dynamic> _preProcessJson(Map<String, dynamic> json) {
-    if (json['studentId'] is Map<String, dynamic>) {
-      final studentMap = json['studentId'] as Map<String, dynamic>;
-      return {
-        ...json,
-        'studentId': studentMap['_id'] ?? '',
-        'studentName': studentMap['fullName'] ?? studentMap['name'] ?? '',
-      };
+    var modifiedJson = Map<String, dynamic>.from(json);
+    
+    if (modifiedJson['studentId'] is Map<String, dynamic>) {
+      final studentMap = modifiedJson['studentId'] as Map<String, dynamic>;
+      modifiedJson['studentId'] = studentMap['_id'] ?? '';
+      modifiedJson['studentName'] = studentMap['fullName'] ?? studentMap['name'] ?? '';
     }
-    return json;
+    
+    if (modifiedJson['teacherId'] is Map<String, dynamic>) {
+      final teacherMap = modifiedJson['teacherId'] as Map<String, dynamic>;
+      modifiedJson['teacherId'] = teacherMap['_id'] ?? '';
+      modifiedJson['teacherName'] = teacherMap['fullName'] ?? teacherMap['name'] ?? '';
+    }
+    
+    return modifiedJson;
   }
 }

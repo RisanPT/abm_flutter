@@ -1,6 +1,5 @@
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
-import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:dio/dio.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';

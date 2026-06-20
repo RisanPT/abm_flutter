@@ -27,6 +27,7 @@ class _SecureAttendanceScreenState extends ConsumerState<SecureAttendanceScreen>
   bool _isFaceVerified = false;
   String? _statusMessage;
   Position? _currentPosition;
+  String? _capturedImagePath;
 
   @override
   void initState() {
@@ -45,7 +46,11 @@ class _SecureAttendanceScreenState extends ConsumerState<SecureAttendanceScreen>
         }
         return;
       }
-      _cameraController = CameraController(cameras.first, ResolutionPreset.medium);
+      final frontCamera = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+      _cameraController = CameraController(frontCamera, ResolutionPreset.medium);
       await _cameraController!.initialize();
       if (mounted) setState(() {});
     } catch (e) {
@@ -106,6 +111,7 @@ class _SecureAttendanceScreenState extends ConsumerState<SecureAttendanceScreen>
             _isLocationVerified = true;
             _statusMessage = 'Location Verified (${distance.toInt()}m from institute, accuracy: ±${_currentPosition!.accuracy.toInt()}m)';
           });
+          _checkAndMarkAttendance();
         } else {
           setState(() {
             _isLocationVerified = false;
@@ -153,10 +159,12 @@ class _SecureAttendanceScreenState extends ConsumerState<SecureAttendanceScreen>
       await faceDetector.close();
 
       if (faces.isNotEmpty) {
+        _capturedImagePath = image.path;
         setState(() {
           _isFaceVerified = true;
           _statusMessage = 'Face Match Successful!';
         });
+        _checkAndMarkAttendance();
       } else {
         setState(() {
           _isFaceVerified = false;
@@ -165,6 +173,12 @@ class _SecureAttendanceScreenState extends ConsumerState<SecureAttendanceScreen>
       }
     } catch (e) {
       setState(() => _statusMessage = 'Face verification failed: $e');
+    }
+  }
+
+  void _checkAndMarkAttendance() {
+    if (_isLocationVerified && _isFaceVerified && !_isMarking) {
+      _markAttendance();
     }
   }
 
@@ -178,6 +192,7 @@ class _SecureAttendanceScreenState extends ConsumerState<SecureAttendanceScreen>
         lat: _currentPosition!.latitude,
         lng: _currentPosition!.longitude,
         verificationMethod: 'Face + GPS',
+        imagePath: _capturedImagePath,
       );
       
       if (mounted) {
@@ -296,12 +311,18 @@ class _SecureAttendanceScreenState extends ConsumerState<SecureAttendanceScreen>
                       icon: LucideIcons.camera,
                     )
                   else
-                    ABMButton(
-                      text: 'Mark Attendance',
-                      onPressed: _isMarking ? null : _markAttendance,
-                      isLoading: _isMarking,
-                      color: Colors.green,
-                      icon: LucideIcons.checkCircle,
+                    Column(
+                      children: [
+                        const CircularProgressIndicator(),
+                        const Gap(12),
+                        Text(
+                          'Marking Attendance Automatically...',
+                          style: TextStyle(
+                            color: colors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                 ],
               ),

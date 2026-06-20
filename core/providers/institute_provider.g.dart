@@ -118,7 +118,7 @@ final class SelectedInstituteProvider
   }
 }
 
-String _$selectedInstituteHash() => r'e860f6c6b9a371e72f29c2d4e99efd5925102a35';
+String _$selectedInstituteHash() => r'cbc83134074dd6a6a18a805dd2c3e30bffcaafec';
 
 abstract class _$SelectedInstitute extends $Notifier<Institute> {
   Institute build();

@@ -2,6 +2,8 @@ import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/features/attendance/data/attendance_repository.dart';
 import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
+import 'package:abm_madrasa/features/students/data/classroom_repository.dart';
+import 'package:abm_madrasa/features/teachers/data/teacher_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -10,32 +12,50 @@ part 'attendance_controller.g.dart';
 @riverpod
 class AttendanceController extends _$AttendanceController {
   @override
-  FutureOr<List<AttendanceModel>> build({required DateTime date, String? classroom}) async {
+  FutureOr<List<AttendanceModel>> build({required DateTime date, String? classroom, String type = 'Student'}) async {
     final instituteId = ref.watch(selectedInstituteProvider).id;
-    // 1. Fetch all students for the classroom
-    final students = await ref.read(studentRepositoryProvider).getStudents(classroom: classroom);
     
-    // 2. Fetch existing attendance for the date
-    final existingAttendance = await ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId);
-    
-    // 3. Map students to attendance records (use existing if found, else default to present)
-    return students.map((student) {
-      final existing = existingAttendance.where((a) => a.studentId == student.id).firstOrNull;
-      return existing ?? AttendanceModel(
-        studentId: student.id,
-        studentName: student.fullName,
-        date: date,
-        status: AttendanceStatus.present,
-      );
-    }).toList();
+    if (type == 'Teacher') {
+      final teachers = await ref.read(teacherRepositoryProvider).getTeachers();
+      final existingAttendance = await ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId, type: 'Teacher');
+      
+      return teachers.map((teacher) {
+        final existing = existingAttendance.where((a) => a.teacherId == teacher.id).firstOrNull;
+        return existing ?? AttendanceModel(
+          teacherId: teacher.id,
+          teacherName: teacher.fullName,
+          date: date,
+          status: AttendanceStatus.present,
+        );
+      }).toList();
+    } else {
+      // 1. Fetch all students for the classroom
+      final students = await ref.read(studentRepositoryProvider).getStudents(classroom: classroom);
+      
+      // 2. Fetch existing attendance for the date
+      final existingAttendance = await ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId, type: 'Student');
+      
+      // 3. Map students to attendance records (use existing if found, else default to present)
+      return students.map((student) {
+        final existing = existingAttendance.where((a) => a.studentId == student.id).firstOrNull;
+        return existing ?? AttendanceModel(
+          studentId: student.id,
+          studentName: student.fullName,
+          date: date,
+          status: AttendanceStatus.present,
+        );
+      }).toList();
+    }
   }
 
-  void updateStatus(String studentId, AttendanceStatus status) {
+  void updateStatus(String targetId, AttendanceStatus status, {String type = 'Student'}) {
     if (state.value == null) return;
     
     final updatedList = state.value!.map((record) {
-      if (record.studentId == studentId) {
-        return record.copyWith(status: status);
+      if (type == 'Teacher') {
+        if (record.teacherId == targetId) return record.copyWith(status: status);
+      } else {
+        if (record.studentId == targetId) return record.copyWith(status: status);
       }
       return record;
     }).toList();
@@ -62,11 +82,13 @@ class AttendanceController extends _$AttendanceController {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final date = records.first.date;
+      final type = records.first.teacherId != null ? 'Teacher' : 'Student';
       await ref.read(attendanceRepositoryProvider).saveBulkAttendance(
         date: date,
         records: records,
         markedBy: markedBy,
         instituteId: instituteId,
+        type: type,
       );
       // Invalidate the summary provider when attendance is saved
       ref.invalidate(attendanceSummaryProvider);
@@ -76,9 +98,9 @@ class AttendanceController extends _$AttendanceController {
 }
 
 final attendanceClassroomsProvider = FutureProvider<List<String>>((ref) async {
-  final students = await ref.read(studentRepositoryProvider).getStudents();
-  final classrooms = students.map((student) => student.classroom).toSet().toList()
-    ..sort();
+  final instituteId = ref.watch(selectedInstituteProvider).id;
+  final classroomsModels = await ref.read(classroomRepositoryProvider).getClassrooms(instituteId: instituteId);
+  final classrooms = classroomsModels.map((c) => c.name).toSet().toList()..sort();
   return classrooms;
 });
 

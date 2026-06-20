@@ -13,8 +13,8 @@ class DashboardService {
 
   DashboardService(this._dio);
 
-  Future<DashboardStats> getDashboardStats() async {
-    final response = await _dio.get('/dashboard');
+  Future<DashboardStats> getDashboardStats(String instituteId) async {
+    final response = await _dio.get('/dashboard', queryParameters: {'instituteId': instituteId});
     return DashboardStats.fromJson(response.data);
   }
 }

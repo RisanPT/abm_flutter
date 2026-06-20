@@ -14,8 +14,11 @@ class RouteNames {
   static const String outstandingDues = '/outstanding-dues';
   static const String incomeEntry = '/income-entry';
   static const String finance = '/finance';
+  static const String feeSetup = '/fee-setup';
   static const String teachers = '/teachers';
   static const String progressReports = '/progress-reports';
+  static const String addProgressReport = '/progress-reports/add';
+  static const String editProgressReport = '/progress-reports/edit';
   static const String classrooms = '/classrooms';
   static const String transport = '/transport';
   static const String admin = '/admin';

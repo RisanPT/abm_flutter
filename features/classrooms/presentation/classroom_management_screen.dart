@@ -1,5 +1,7 @@
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/widgets/classroom_widgets.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/student_controller.dart';
@@ -85,15 +87,16 @@ class ClassroomManagementScreen extends ConsumerWidget {
               error: (e, _) => Center(child: Text('Error loading classrooms: $e')),
             ),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddClassDialog(context, ref),
-        label: const Text('Add Classroom'),
-        icon: const Icon(LucideIcons.plus),
-        backgroundColor: colors.primary,
-        foregroundColor: Colors.white,
-      ),
+      ]),
+      floatingActionButton: ref.watch(authControllerProvider).value?.role.canEditAdministration == true
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddClassDialog(context, ref),
+              label: const Text('Add Classroom'),
+              icon: const Icon(LucideIcons.plus),
+              backgroundColor: colors.primary,
+              foregroundColor: Colors.white,
+            )
+          : null,
     );
   }
 

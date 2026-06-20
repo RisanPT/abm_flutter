@@ -24,11 +24,12 @@ class StudentRepository {
     return data;
   }
 
-  Future<List<StudentModel>> getStudents({String? query, String? classroom}) async {
+  Future<List<StudentModel>> getStudents({String? query, String? classroom, String? instituteId}) async {
     try {
       final response = await _dio.get('/students', queryParameters: {
         'search': query,
         'grade': classroom,
+        'instituteId': instituteId,
       }..removeWhere((_ , v) => v == null));
 
       final List<dynamic> data = response.data;
@@ -94,6 +95,15 @@ class StudentRepository {
       await _dio.delete('/students/$id');
     } catch (e) {
       throw Exception('Failed to delete student: $e');
+    }
+  }
+
+  Future<int> promoteStudents() async {
+    try {
+      final response = await _dio.post('/students/promote-students');
+      return response.data['promotedCount'] as int;
+    } catch (e) {
+      throw Exception('Failed to promote students: $e');
     }
   }
 

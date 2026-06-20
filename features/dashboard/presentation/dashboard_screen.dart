@@ -50,6 +50,8 @@ class DashboardScreen extends ConsumerWidget {
                       _buildStatsGrid(context, stats),
                       
                       const Gap(24),
+                      _buildSegmentData(context, stats),
+                      const Gap(24),
                       
                       if (stats.monthlyFinanceData.length > 1) ...[
                         _buildFinanceChart(context, stats.monthlyFinanceData),
@@ -212,6 +214,63 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildSegmentData(BuildContext context, DashboardStats stats) {
+    if (stats.segmentData.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Accounts Segmentation', style: context.typography.h4.copyWith(fontWeight: FontWeight.bold)),
+        const Gap(16),
+        Row(
+          children: stats.segmentData.entries.map((entry) {
+            final segment = entry.key;
+            final data = entry.value;
+            final net = data.income - data.expense;
+            return Expanded(
+              child: Card(
+                margin: const EdgeInsets.only(right: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(segment, style: context.typography.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+                      const Gap(12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Income:', style: context.typography.bodySmall),
+                          Text('₹${data.income.toStringAsFixed(0)}', style: context.typography.bodySmall.copyWith(color: Colors.green, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const Gap(4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Expense:', style: context.typography.bodySmall),
+                          Text('₹${data.expense.toStringAsFixed(0)}', style: context.typography.bodySmall.copyWith(color: Colors.red, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Net:', style: context.typography.bodySmall.copyWith(fontWeight: FontWeight.bold)),
+                          Text('₹${net.toStringAsFixed(0)}', style: context.typography.bodySmall.copyWith(color: net >= 0 ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFinanceChart(BuildContext context, List<MonthlyFinanceData> data) {
     final colors = context.colors;
     final typography = context.typography;
@@ -363,18 +422,20 @@ class DashboardScreen extends ConsumerWidget {
                   color: const Color(0xFF1B3D2F),
                   onTap: () => context.push(RouteNames.addStudent),
                 ),
-              _QuickActionItem(
-                icon: LucideIcons.bus,
-                label: 'Transport',
-                color: Colors.indigo,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FleetManagementScreen())),
-              ),
-              _QuickActionItem(
-                icon: LucideIcons.scanFace,
-                label: 'Attendance+',
-                color: Colors.redAccent,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SecureAttendanceScreen())),
-              ),
+              if (routes.contains(RouteNames.transport))
+                _QuickActionItem(
+                  icon: LucideIcons.bus,
+                  label: 'Transport',
+                  color: Colors.indigo,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FleetManagementScreen())),
+                ),
+              if (routes.contains(RouteNames.teacherCheckIn))
+                _QuickActionItem(
+                  icon: LucideIcons.scanFace,
+                  label: 'My Check-In',
+                  color: Colors.redAccent,
+                  onTap: () => context.push(RouteNames.teacherCheckIn),
+                ),
               _QuickActionItem(
                 icon: LucideIcons.fileSpreadsheet,
                 label: 'Upload Grades',

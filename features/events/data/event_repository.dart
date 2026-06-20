@@ -16,9 +16,9 @@ class EventRepository {
   final Dio _dio;
   EventRepository(this._dio);
 
-  Future<List<EventModel>> getEvents() async {
+  Future<List<EventModel>> getEvents({String? instituteId}) async {
     try {
-      final response = await _dio.get('/events');
+      final response = await _dio.get('/events', queryParameters: {'instituteId': instituteId}..removeWhere((k, v) => v == null));
       final List<dynamic> data = response.data;
       return data.map((json) => EventModel.fromJson(json)).toList();
     } catch (e) {

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:dio/dio.dart';
@@ -18,12 +21,13 @@ class AttendanceRepository {
   final _dateFormatter = DateFormat('yyyy-MM-dd');
   AttendanceRepository(this._dio);
 
-  Future<List<AttendanceModel>> getAttendanceForDate(DateTime date, String instituteId) async {
+  Future<List<AttendanceModel>> getAttendanceForDate(DateTime date, String instituteId, {String type = 'Student'}) async {
     try {
       final dateStr = _dateFormatter.format(date);
       final response = await _dio.get('/attendance', queryParameters: {
         'date': dateStr,
-        'instituteId': instituteId
+        'instituteId': instituteId,
+        'type': type,
       });
       final List<dynamic> data = response.data;
       return data.map((json) => AttendanceModel.fromJson(json)).toList();
@@ -37,14 +41,17 @@ class AttendanceRepository {
     required List<AttendanceModel> records,
     required String markedBy,
     required String instituteId,
+    String type = 'Student',
   }) async {
     try {
       final data = {
         'date': _dateFormatter.format(date),
         'markedBy': markedBy,
         'instituteId': instituteId,
+        'type': type,
         'records': records.map((r) => {
-          'studentId': r.studentId,
+          if (r.studentId != null && r.studentId!.isNotEmpty) 'studentId': r.studentId,
+          if (r.teacherId != null && r.teacherId!.isNotEmpty) 'teacherId': r.teacherId,
           'status': _statusToString(r.status),
           'remarks': r.remarks,
         }).toList(),
@@ -60,8 +67,15 @@ class AttendanceRepository {
     required double lat,
     required double lng,
     required String verificationMethod,
+    String? imagePath,
   }) async {
     try {
+      String? base64Image;
+      if (imagePath != null) {
+        final bytes = await File(imagePath).readAsBytes();
+        base64Image = base64Encode(bytes);
+      }
+
       await _dio.post('/attendance/check-in', data: {
         'instituteId': instituteId,
         'location': {
@@ -69,6 +83,7 @@ class AttendanceRepository {
           'longitude': lng,
         },
         'verificationMethod': verificationMethod,
+        if (base64Image != null) 'image': 'data:image/jpeg;base64,$base64Image',
       });
     } catch (e) {
       throw Exception('Check-in failed: $e');

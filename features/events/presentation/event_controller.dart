@@ -1,3 +1,4 @@
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/features/events/data/event_repository.dart';
 import 'package:abm_madrasa/features/events/domain/event_model.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -8,11 +9,13 @@ part 'event_controller.g.dart';
 class EventController extends _$EventController {
   @override
   FutureOr<List<EventModel>> build() async {
+    ref.watch(selectedInstituteProvider);
     return _fetchEvents();
   }
 
   Future<List<EventModel>> _fetchEvents() {
-    return ref.read(eventRepositoryProvider).getEvents();
+    final instituteId = ref.read(selectedInstituteProvider).id;
+    return ref.read(eventRepositoryProvider).getEvents(instituteId: instituteId);
   }
 
   Future<void> refresh() async {

@@ -1,5 +1,7 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -14,9 +16,11 @@ class InstituteBannerChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final institute = ref.watch(selectedInstituteProvider);
+    final user = ref.watch(authControllerProvider).asData?.value;
+    final canSwitch = user?.role == AppRoles.superAdmin || user?.role == AppRoles.itAdmin;
 
     return GestureDetector(
-      onTap: () => _showPremiumPicker(context, ref),
+      onTap: canSwitch ? () => _showPremiumPicker(context, ref) : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -59,12 +63,14 @@ class InstituteBannerChip extends ConsumerWidget {
                 maxLines: 1,
               ),
             ),
-            const SizedBox(width: 6),
-            const Icon(
-              LucideIcons.chevronsUpDown,
-              color: Colors.white,
-              size: 13,
-            ),
+            if (canSwitch) ...[
+              const SizedBox(width: 6),
+              const Icon(
+                LucideIcons.chevronsUpDown,
+                color: Colors.white,
+                size: 13,
+              ),
+            ],
           ],
         ),
       ),

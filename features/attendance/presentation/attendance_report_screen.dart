@@ -1,6 +1,8 @@
+import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -58,7 +60,9 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+    final user = ref.read(authControllerProvider).value;
+    final canEditAdmin = user?.role.canEditAdministration == true;
+    _tabCtrl = TabController(length: canEditAdmin ? 2 : 1, vsync: this);
   }
 
   @override
@@ -186,9 +190,10 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           labelColor: colors.primary,
           unselectedLabelColor: colors.textSecondary,
           indicatorColor: colors.primary,
-          tabs: const [
-            Tab(text: 'Student Report', icon: Icon(LucideIcons.bookOpen, size: 18)),
-            Tab(text: 'Teacher Report', icon: Icon(LucideIcons.userCheck, size: 18)),
+          tabs: [
+            const Tab(text: 'Student Report', icon: Icon(LucideIcons.bookOpen, size: 18)),
+            if (ref.watch(authControllerProvider).value?.role.canEditAdministration == true)
+              const Tab(text: 'Teacher Report', icon: Icon(LucideIcons.userCheck, size: 18)),
           ],
         ),
       ),
@@ -196,7 +201,8 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         controller: _tabCtrl,
         children: [
           _StudentReportTab(month: _monthKey, instituteId: institute.id),
-          _TeacherReportTab(month: _monthKey, instituteId: institute.id),
+          if (ref.watch(authControllerProvider).value?.role.canEditAdministration == true)
+            _TeacherReportTab(month: _monthKey, instituteId: institute.id),
         ],
       ),
     );
@@ -229,13 +235,30 @@ class _StudentReportTab extends ConsumerWidget {
       data: (data) {
         final summary = (data['summary'] as List?) ?? [];
         final total = data['totalRecords'] as int? ?? 0;
+        
+        int totalPresent = 0;
+        int totalAbsent = 0;
+        int totalLate = 0;
+        for (final row in summary) {
+          final r = row as Map<String, dynamic>;
+          totalPresent += (r['present'] as int?) ?? 0;
+          totalAbsent += (r['absent'] as int?) ?? 0;
+          totalLate += (r['late'] as int?) ?? 0;
+        }
+
         if (summary.isEmpty) {
           return _EmptyReport(message: 'No student attendance recorded for $month.');
         }
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            _SummaryCard(total: total, month: month),
+            _SummaryCard(
+              total: total, 
+              month: month,
+              totalPresent: totalPresent,
+              totalAbsent: totalAbsent,
+              totalLate: totalLate,
+            ),
             const Gap(20),
             Text('By Classroom', style: context.typography.h4),
             const Gap(12),
@@ -284,34 +307,101 @@ class _TeacherReportTab extends ConsumerWidget {
 // ── Widgets ───────────────────────────────────────────────────────────────────
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.total, required this.month});
+  const _SummaryCard({
+    required this.total, 
+    required this.month,
+    required this.totalPresent,
+    required this.totalAbsent,
+    required this.totalLate,
+  });
+  
   final int total;
   final String month;
+  final int totalPresent;
+  final int totalAbsent;
+  final int totalLate;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [colors.primary, colors.primary.withValues(alpha: 0.75)]),
-        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [colors.primary, const Color(0xFF0F4A3A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: colors.primary.withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          Icon(LucideIcons.clipboardList, color: Colors.white, size: 36),
-          const Gap(16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text('Total Records', style: typography.bodyMedium.copyWith(color: Colors.white70)),
-              Text('$total attendance entries', style: typography.h3.copyWith(color: Colors.white)),
-              Text('Month: $month', style: typography.bodySmall.copyWith(color: Colors.white60)),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(LucideIcons.clipboardList, color: Colors.white, size: 28),
+              ),
+              const Gap(16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Institution Summary', style: typography.bodyMedium.copyWith(color: Colors.white70)),
+                    Text('$total Records', style: typography.h3.copyWith(color: Colors.white)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(month, style: typography.bodyMediumSemiBold.copyWith(color: Colors.white)),
+              ),
+            ],
+          ),
+          const Gap(24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildStatMetric(context, 'Present', totalPresent, Colors.greenAccent),
+              _buildStatMetric(context, 'Late', totalLate, Colors.orangeAccent),
+              _buildStatMetric(context, 'Absent', totalAbsent, Colors.redAccent),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatMetric(BuildContext context, String label, int value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value.toString(),
+          style: context.typography.h3.copyWith(color: color, fontWeight: FontWeight.bold),
+        ),
+        const Gap(4),
+        Text(
+          label,
+          style: context.typography.bodySmallSemiBold.copyWith(color: Colors.white.withValues(alpha: 0.8)),
+        ),
+      ],
     );
   }
 }

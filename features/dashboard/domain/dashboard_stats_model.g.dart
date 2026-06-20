@@ -31,27 +31,41 @@ Map<String, dynamic> _$RecentActivityToJson(_RecentActivity instance) =>
       'time': instance.time.toIso8601String(),
     };
 
-_DashboardStats _$DashboardStatsFromJson(Map<String, dynamic> json) =>
-    _DashboardStats(
-      totalStudents: (json['totalStudents'] as num?)?.toInt() ?? 0,
-      attendanceRate: (json['attendanceRate'] as num?)?.toDouble() ?? 0.0,
-      feeCollectedThisMonth:
-          (json['feeCollectedThisMonth'] as num?)?.toDouble() ?? 0.0,
-      feeCollectedTrend: json['feeCollectedTrend'] as String? ?? '',
-      upcomingEvents: (json['upcomingEvents'] as num?)?.toInt() ?? 0,
-      monthlyFinanceData:
-          (json['monthlyFinanceData'] as List<dynamic>?)
-              ?.map(
-                (e) => MonthlyFinanceData.fromJson(e as Map<String, dynamic>),
-              )
-              .toList() ??
-          const [],
-      recentActivities:
-          (json['recentActivities'] as List<dynamic>?)
-              ?.map((e) => RecentActivity.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          const [],
+_AccountSegmentData _$AccountSegmentDataFromJson(Map<String, dynamic> json) =>
+    _AccountSegmentData(
+      income: (json['income'] as num?)?.toDouble() ?? 0.0,
+      expense: (json['expense'] as num?)?.toDouble() ?? 0.0,
     );
+
+Map<String, dynamic> _$AccountSegmentDataToJson(_AccountSegmentData instance) =>
+    <String, dynamic>{'income': instance.income, 'expense': instance.expense};
+
+_DashboardStats _$DashboardStatsFromJson(
+  Map<String, dynamic> json,
+) => _DashboardStats(
+  totalStudents: (json['totalStudents'] as num?)?.toInt() ?? 0,
+  attendanceRate: (json['attendanceRate'] as num?)?.toDouble() ?? 0.0,
+  feeCollectedThisMonth:
+      (json['feeCollectedThisMonth'] as num?)?.toDouble() ?? 0.0,
+  feeCollectedTrend: json['feeCollectedTrend'] as String? ?? '',
+  upcomingEvents: (json['upcomingEvents'] as num?)?.toInt() ?? 0,
+  monthlyFinanceData:
+      (json['monthlyFinanceData'] as List<dynamic>?)
+          ?.map((e) => MonthlyFinanceData.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const [],
+  recentActivities:
+      (json['recentActivities'] as List<dynamic>?)
+          ?.map((e) => RecentActivity.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const [],
+  segmentData:
+      (json['segmentData'] as Map<String, dynamic>?)?.map(
+        (k, e) =>
+            MapEntry(k, AccountSegmentData.fromJson(e as Map<String, dynamic>)),
+      ) ??
+      const {},
+);
 
 Map<String, dynamic> _$DashboardStatsToJson(_DashboardStats instance) =>
     <String, dynamic>{
@@ -62,4 +76,5 @@ Map<String, dynamic> _$DashboardStatsToJson(_DashboardStats instance) =>
       'upcomingEvents': instance.upcomingEvents,
       'monthlyFinanceData': instance.monthlyFinanceData,
       'recentActivities': instance.recentActivities,
+      'segmentData': instance.segmentData,
     };

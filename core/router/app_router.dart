@@ -5,6 +5,7 @@ import 'package:abm_madrasa/features/auth/presentation/login_screen.dart';
 import 'package:abm_madrasa/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:abm_madrasa/features/teachers/presentation/teacher_management_screen.dart';
 import 'package:abm_madrasa/features/teachers/presentation/progress_report_upload_screen.dart';
+import 'package:abm_madrasa/features/teachers/presentation/progress_report_list_screen.dart' as abm_progress_list;
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/presentation/student_list_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/add_student_screen.dart';
@@ -18,6 +19,7 @@ import 'package:abm_madrasa/features/timetable/presentation/timetable_screen.dar
 import 'package:abm_madrasa/features/accounts/presentation/finance_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/outstanding_dues_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/income_entry_screen.dart';
+import 'package:abm_madrasa/features/accounts/presentation/fee_structure_setup_screen.dart';
 import 'package:abm_madrasa/features/finance/presentation/finance_screen.dart' as expenditure;
 import 'package:abm_madrasa/features/events/presentation/event_list_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/settings_screen.dart';
@@ -141,7 +143,18 @@ GoRouter router(Ref ref) {
           ),
           GoRoute(
             path: RouteNames.progressReports,
+            builder: (context, state) => const abm_progress_list.ProgressReportListScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.addProgressReport,
             builder: (context, state) => const ProgressReportUploadScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.editProgressReport,
+            builder: (context, state) {
+              final report = state.extra as Map<String, dynamic>?;
+              return ProgressReportUploadScreen(existingReport: report);
+            },
           ),
           GoRoute(
             path: RouteNames.timetable,
@@ -162,6 +175,10 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.finance,
             builder: (context, state) => const expenditure.FinanceScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.feeSetup,
+            builder: (context, state) => const FeeStructureSetupScreen(),
           ),
           GoRoute(
             path: RouteNames.teachers,

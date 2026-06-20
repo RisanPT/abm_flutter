@@ -1,3 +1,4 @@
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,11 +10,13 @@ part 'student_controller.g.dart';
 class StudentController extends _$StudentController {
   @override
   FutureOr<List<StudentModel>> build() async {
+    ref.watch(selectedInstituteProvider);
     return _fetchStudents();
   }
 
   Future<List<StudentModel>> _fetchStudents({String? query, String? classroom}) {
-    return ref.read(studentRepositoryProvider).getStudents(query: query, classroom: classroom);
+    final instituteId = ref.read(selectedInstituteProvider).id;
+    return ref.read(studentRepositoryProvider).getStudents(instituteId: instituteId, query: query, classroom: classroom);
   }
 
   Future<void> search(String query) async {

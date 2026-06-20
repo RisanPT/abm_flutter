@@ -13,7 +13,10 @@ enum AppModule {
   accounts,
   outstandingDues,
   incomeEntry,
+  feeSetup,
+  expenditure,
   teachers,
+  teacherCheckIn,
   progressReports,
   transport,
   administration,
@@ -28,6 +31,7 @@ class AppNavItem {
     required this.icon,
     required this.module,
     this.mobileLabel,
+    this.children,
   });
 
   final String label;
@@ -35,6 +39,7 @@ class AppNavItem {
   final IconData icon;
   final AppModule module;
   final String? mobileLabel;
+  final List<AppNavItem>? children;
 }
 
 const List<AppNavItem> kAppNavItems = [
@@ -61,12 +66,32 @@ const List<AppNavItem> kAppNavItems = [
     route: RouteNames.attendance,
     icon: LucideIcons.clipboardCheck,
     module: AppModule.attendance,
+    children: [
+      AppNavItem(
+        label: 'Mark Attendance',
+        route: RouteNames.attendance,
+        icon: LucideIcons.checkSquare,
+        module: AppModule.attendance,
+      ),
+      AppNavItem(
+        label: 'Reports',
+        route: RouteNames.attendanceReport,
+        icon: LucideIcons.fileText,
+        module: AppModule.attendance,
+      ),
+    ],
   ),
   AppNavItem(
     label: 'Progress Reports',
     route: RouteNames.progressReports,
     icon: LucideIcons.fileBarChart,
     module: AppModule.progressReports,
+  ),
+  AppNavItem(
+    label: 'My Check-In',
+    route: RouteNames.teacherCheckIn,
+    icon: LucideIcons.scanFace,
+    module: AppModule.teacherCheckIn,
   ),
   AppNavItem(
     label: 'Timetable',
@@ -97,6 +122,12 @@ const List<AppNavItem> kAppNavItems = [
     route: RouteNames.finance,
     icon: LucideIcons.wallet,
     module: AppModule.finance,
+  ),
+  AppNavItem(
+    label: 'Fee Setup',
+    route: RouteNames.feeSetup,
+    icon: LucideIcons.fileCog,
+    module: AppModule.feeSetup,
   ),
   AppNavItem(
     label: 'Teachers',
@@ -143,6 +174,7 @@ final Map<String, Set<AppModule>> _rolePermissions = {
     AppModule.accounts,
     AppModule.outstandingDues,
     AppModule.incomeEntry,
+    AppModule.feeSetup,
     AppModule.finance,
     AppModule.transport,
     AppModule.administration,
@@ -153,6 +185,7 @@ final Map<String, Set<AppModule>> _rolePermissions = {
     AppModule.students,
     AppModule.classrooms,
     AppModule.attendance,
+    AppModule.teacherCheckIn,
     AppModule.progressReports,
     AppModule.timetable,
     AppModule.administration,

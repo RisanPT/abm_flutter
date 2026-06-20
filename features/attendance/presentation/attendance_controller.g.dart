@@ -17,7 +17,7 @@ final class AttendanceControllerProvider
         $AsyncNotifierProvider<AttendanceController, List<AttendanceModel>> {
   AttendanceControllerProvider._({
     required AttendanceControllerFamily super.from,
-    required ({DateTime date, String? classroom}) super.argument,
+    required ({DateTime date, String? classroom, String type}) super.argument,
   }) : super(
          retry: null,
          name: r'attendanceControllerProvider',
@@ -52,7 +52,7 @@ final class AttendanceControllerProvider
 }
 
 String _$attendanceControllerHash() =>
-    r'90cc297121240e1cda9041c30e4c940c7375c206';
+    r'ea77946b3d9eba928efbda2a22abfde495568406';
 
 final class AttendanceControllerFamily extends $Family
     with
@@ -61,7 +61,7 @@ final class AttendanceControllerFamily extends $Family
           AsyncValue<List<AttendanceModel>>,
           List<AttendanceModel>,
           FutureOr<List<AttendanceModel>>,
-          ({DateTime date, String? classroom})
+          ({DateTime date, String? classroom, String type})
         > {
   AttendanceControllerFamily._()
     : super(
@@ -75,8 +75,9 @@ final class AttendanceControllerFamily extends $Family
   AttendanceControllerProvider call({
     required DateTime date,
     String? classroom,
+    String type = 'Student',
   }) => AttendanceControllerProvider._(
-    argument: (date: date, classroom: classroom),
+    argument: (date: date, classroom: classroom, type: type),
     from: this,
   );
 
@@ -86,13 +87,16 @@ final class AttendanceControllerFamily extends $Family
 
 abstract class _$AttendanceController
     extends $AsyncNotifier<List<AttendanceModel>> {
-  late final _$args = ref.$arg as ({DateTime date, String? classroom});
+  late final _$args =
+      ref.$arg as ({DateTime date, String? classroom, String type});
   DateTime get date => _$args.date;
   String? get classroom => _$args.classroom;
+  String get type => _$args.type;
 
   FutureOr<List<AttendanceModel>> build({
     required DateTime date,
     String? classroom,
+    String type = 'Student',
   });
   @$mustCallSuper
   @override
@@ -113,7 +117,11 @@ abstract class _$AttendanceController
             >;
     element.handleCreate(
       ref,
-      () => build(date: _$args.date, classroom: _$args.classroom),
+      () => build(
+        date: _$args.date,
+        classroom: _$args.classroom,
+        type: _$args.type,
+      ),
     );
   }
 }

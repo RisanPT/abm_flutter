@@ -87,12 +87,25 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                         children: [
                           Row(
                             children: [
-                              Expanded(
-                                child: Text(
-                                  'Teacher Timetable',
-                                  style: typography.h2.copyWith(color: colors.white),
-                                ),
-                              ),
+                              (() {
+                                String title = 'Global Timetable';
+                                if (_selectedClass != 'All Classes') {
+                                  title = '$_selectedClass Timetable';
+                                } else if (_selectedTeacherId != 'all') {
+                                  final teacherName = data.teachers
+                                      .firstWhere((t) => t.id == _selectedTeacherId, orElse: () => data.teachers.first)
+                                      .fullName;
+                                  title = '$teacherName Timetable';
+                                }
+                                return Expanded(
+                                  child: Text(
+                                    title,
+                                    style: typography.h2.copyWith(color: colors.white),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              })(),
                               if (canEdit)
                                 Row(
                                   children: [
@@ -458,10 +471,33 @@ class _ScheduleBoard extends StatelessWidget {
               Text(day, style: context.typography.h4),
               const Gap(14),
               if (dayEntries.isEmpty)
-                Text(
-                  'No assigned classes for this day.',
-                  style: context.typography.bodyMedium.copyWith(
-                    color: colors.textSecondary,
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: colors.background.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: colors.border, style: BorderStyle.solid),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(LucideIcons.calendarX, size: 32, color: colors.textSecondary.withValues(alpha: 0.5)),
+                      const Gap(12),
+                      Text(
+                        'Free Day',
+                        style: context.typography.bodyLargeSemiBold.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                      const Gap(4),
+                      Text(
+                        'No periods assigned.',
+                        style: context.typography.bodyMedium.copyWith(
+                          color: colors.textSecondary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
                   ),
                 )
               else
@@ -494,10 +530,21 @@ class _ScheduleCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: colors.secondary.withValues(alpha: 0.18),
+              gradient: LinearGradient(
+                colors: [colors.primary, colors.primary.withValues(alpha: 0.8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.primary.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -506,18 +553,18 @@ class _ScheduleCard extends StatelessWidget {
                   Text(
                     'P${entry.period}',
                     style: context.typography.bodySmallSemiBold.copyWith(
-                      color: colors.primary,
-                      fontSize: 10,
+                      color: colors.white,
+                      fontSize: 12,
                     ),
                   ),
-                  const Gap(2),
+                  const Gap(4),
                 ],
                 Text(
                   '${entry.startTime}\n${entry.endTime}',
                   textAlign: TextAlign.center,
-                  style: context.typography.bodySmallSemiBold.copyWith(
-                    color: colors.textPrimary,
-                    height: 1.1,
+                  style: context.typography.bodySmall.copyWith(
+                    color: colors.white.withValues(alpha: 0.9),
+                    height: 1.2,
                   ),
                 ),
               ],
@@ -529,20 +576,41 @@ class _ScheduleCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(entry.subject, style: context.typography.bodyLargeSemiBold),
-                const Gap(4),
-                Text(
-                  '${entry.className} • ${entry.teacherName}',
-                  style: context.typography.bodyMedium.copyWith(
-                    color: colors.textPrimary,
-                  ),
+                const Gap(6),
+                Row(
+                  children: [
+                    Icon(LucideIcons.users, size: 14, color: colors.textSecondary),
+                    const Gap(6),
+                    Text(
+                      entry.className,
+                      style: context.typography.bodyMedium.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                    const Gap(12),
+                    Icon(LucideIcons.userCheck, size: 14, color: colors.textSecondary),
+                    const Gap(6),
+                    Text(
+                      entry.teacherName,
+                      style: context.typography.bodyMedium.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
                 if (entry.room.isNotEmpty) ...[
-                  const Gap(4),
-                  Text(
-                    'Room: ${entry.room}',
-                    style: context.typography.bodySmall.copyWith(
-                      color: colors.textSecondary,
-                    ),
+                  const Gap(6),
+                  Row(
+                    children: [
+                      Icon(LucideIcons.mapPin, size: 14, color: colors.textSecondary),
+                      const Gap(6),
+                      Text(
+                        'Room: ${entry.room}',
+                        style: context.typography.bodySmall.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ],

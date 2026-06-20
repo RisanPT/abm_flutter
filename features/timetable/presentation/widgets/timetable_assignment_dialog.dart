@@ -1,3 +1,4 @@
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/students/domain/classroom_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
@@ -241,7 +242,8 @@ class _TimetableAssignmentDialogState
   Future<void> _loadClassSchedule(String className) async {
     setState(() => _isLoadingSchedule = true);
     try {
-      final timetable = await ref.read(timetableRepositoryProvider).getClassroomTimetable(className);
+      final instituteId = ref.read(selectedInstituteProvider).id;
+      final timetable = await ref.read(timetableRepositoryProvider).getClassroomTimetable(className, instituteId);
       final drafts = timetable.schedule.isEmpty
           ? [
               _PeriodDraft(
@@ -307,8 +309,10 @@ class _TimetableAssignmentDialogState
 
     setState(() => _isSaving = true);
     try {
+      final instituteId = ref.read(selectedInstituteProvider).id;
       await ref.read(timetableRepositoryProvider).updateClassroomTimetable(
             _selectedClassName!,
+            instituteId,
             schedule,
           );
       ref.invalidate(timetableDataProvider);
@@ -414,127 +418,157 @@ class _PeriodEditor extends StatelessWidget {
     ];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: context.colors.background,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.colors.border),
+        color: context.colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.5)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: draft.day,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Day',
-                    border: OutlineInputBorder(),
+              Text(
+                'Period Details',
+                style: context.typography.bodyMediumSemiBold.copyWith(
+                  color: context.colors.textPrimary,
+                ),
+              ),
+              if (canRemove)
+                InkWell(
+                  onTap: onRemove,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: Icon(LucideIcons.trash2, color: Colors.redAccent.withValues(alpha: 0.8), size: 18),
                   ),
-                  items: dayItems
-                      .map((day) => DropdownMenuItem(value: day, child: Text(day)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      draft.day = value;
-                    }
-                  },
                 ),
-              ),
-              const Gap(12),
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  initialValue: draft.period,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Period',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: List.generate(
-                    7,
-                    (index) => DropdownMenuItem(
-                      value: index + 1,
-                      child: Text('Period ${index + 1}'),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    if (value != null) {
-                      draft.period = value;
-                    }
-                  },
-                ),
-              ),
-              const Gap(12),
-              Expanded(
-                child: ABMTextField(
-                  label: 'Start Time',
-                  hint: '08:00',
-                  controller: draft.startTimeController,
-                ),
-              ),
-              const Gap(12),
-              Expanded(
-                child: ABMTextField(
-                  label: 'End Time',
-                  hint: '09:30',
-                  controller: draft.endTimeController,
-                ),
-              ),
-              if (canRemove) ...[
-                const Gap(8),
-                IconButton(
-                  onPressed: onRemove,
-                  icon: const Icon(LucideIcons.trash2, color: Colors.red),
-                ),
-              ],
             ],
           ),
-          const Gap(12),
+          const Gap(16),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: draft.teacherId.isEmpty ? null : draft.teacherId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Teacher',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: teacherItems
-                      .map(
-                        (teacher) => DropdownMenuItem(
-                          value: teacher.id,
-                          child: Text(teacher.fullName),
+                flex: 2,
+                child: Column(
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: draft.day,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Day',
+                        filled: true,
+                      ),
+                      items: dayItems
+                          .map((day) => DropdownMenuItem(value: day, child: Text(day)))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          draft.day = value;
+                        }
+                      },
+                    ),
+                    const Gap(16),
+                    DropdownButtonFormField<int>(
+                      initialValue: draft.period,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Period',
+                        filled: true,
+                      ),
+                      items: List.generate(
+                        7,
+                        (index) => DropdownMenuItem(
+                          value: index + 1,
+                          child: Text('Period ${index + 1}'),
                         ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    draft.teacherId = value ?? '';
-                  },
+                      ),
+                      onChanged: (value) {
+                        if (value != null) {
+                          draft.period = value;
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
-              const Gap(12),
+              const Gap(16),
               Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: draft.subjectName.isEmpty ? null : draft.subjectName,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Subject',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: subjectItems
-                      .map(
-                        (subject) => DropdownMenuItem(
-                          value: subject,
-                          child: Text(subject),
+                flex: 3,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ABMTextField(
+                            label: 'Start Time',
+                            hint: '08:00',
+                            controller: draft.startTimeController,
+                          ),
                         ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    draft.subjectName = value ?? '';
-                  },
+                        const Gap(12),
+                        Expanded(
+                          child: ABMTextField(
+                            label: 'End Time',
+                            hint: '09:30',
+                            controller: draft.endTimeController,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Gap(16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: draft.subjectName.isEmpty ? null : draft.subjectName,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Subject',
+                              filled: true,
+                            ),
+                            items: subjectItems
+                                .map(
+                                  (subject) => DropdownMenuItem(
+                                    value: subject,
+                                    child: Text(subject),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              draft.subjectName = value ?? '';
+                            },
+                          ),
+                        ),
+                        const Gap(12),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: draft.teacherId.isEmpty ? null : draft.teacherId,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Teacher',
+                              filled: true,
+                            ),
+                            items: teacherItems
+                                .map(
+                                  (teacher) => DropdownMenuItem(
+                                    value: teacher.id,
+                                    child: Text(teacher.fullName),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              draft.teacherId = value ?? '';
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],

@@ -14,18 +14,18 @@ class TimetableRepository {
 
   final Dio _dio;
 
-  Future<TimetableData> getTimetable() async {
+  Future<TimetableData> getTimetable(String instituteId) async {
     try {
-      final response = await _dio.get('/timetable');
+      final response = await _dio.get('/timetable', queryParameters: {'instituteId': instituteId});
       return TimetableData.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
       throw Exception('Failed to fetch timetable: $e');
     }
   }
 
-  Future<ClassTimetable> getClassroomTimetable(String className) async {
+  Future<ClassTimetable> getClassroomTimetable(String className, String instituteId) async {
     try {
-      final response = await _dio.get('/timetable/classroom/$className');
+      final response = await _dio.get('/timetable/classroom/$className', queryParameters: {'instituteId': instituteId});
       return ClassTimetable.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
       throw Exception('Failed to fetch classroom timetable: $e');
@@ -34,6 +34,7 @@ class TimetableRepository {
 
   Future<ClassTimetable> updateClassroomTimetable(
     String className,
+    String instituteId,
     List<ClassTimetableEntry> schedule,
   ) async {
     try {
@@ -41,6 +42,7 @@ class TimetableRepository {
         '/timetable/classroom/$className',
         data: {
           'schedule': schedule.map((e) => e.toJson()).toList(),
+          'instituteId': instituteId,
         },
       );
       return ClassTimetable.fromJson(response.data as Map<String, dynamic>);

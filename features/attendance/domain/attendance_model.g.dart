@@ -9,8 +9,10 @@ part of 'attendance_model.dart';
 _AttendanceModel _$AttendanceModelFromJson(Map<String, dynamic> json) =>
     _AttendanceModel(
       id: json['_id'] as String?,
-      studentId: json['studentId'] as String,
+      studentId: json['studentId'] as String?,
       studentName: json['studentName'] as String?,
+      teacherId: json['teacherId'] as String?,
+      teacherName: json['teacherName'] as String?,
       date: DateTime.parse(json['date'] as String),
       status:
           $enumDecodeNullable(_$AttendanceStatusEnumMap, json['status']) ??
@@ -24,6 +26,8 @@ Map<String, dynamic> _$AttendanceModelToJson(_AttendanceModel instance) =>
       '_id': instance.id,
       'studentId': instance.studentId,
       'studentName': instance.studentName,
+      'teacherId': instance.teacherId,
+      'teacherName': instance.teacherName,
       'date': instance.date.toIso8601String(),
       'status': _$AttendanceStatusEnumMap[instance.status]!,
       'markedBy': instance.markedBy,

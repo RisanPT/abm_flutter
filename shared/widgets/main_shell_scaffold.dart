@@ -2,6 +2,7 @@ import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -80,6 +81,95 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                           itemBuilder: (context, index) {
                             final item = navItems[index];
                             final selected = index == selectedIndex;
+                            final hasChildren = item.children != null && item.children!.isNotEmpty;
+                            final isChildSelected = hasChildren && item.children!.any(
+                              (child) => currentLocation == child.route || currentLocation.startsWith('${child.route}/')
+                            );
+                            final isExpanded = selected || isChildSelected;
+
+                            if (hasChildren) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                  child: ExpansionTile(
+                                    initiallyExpanded: isExpanded,
+                                    tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    collapsedShape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    backgroundColor: isExpanded ? colors.white.withValues(alpha: 0.05) : Colors.transparent,
+                                    collapsedBackgroundColor: Colors.transparent,
+                                    iconColor: colors.white.withValues(alpha: 0.75),
+                                    collapsedIconColor: colors.white.withValues(alpha: 0.75),
+                                    title: Row(
+                                      children: [
+                                        Icon(
+                                          item.icon,
+                                          size: 18,
+                                          color: isExpanded ? colors.secondary : colors.white.withValues(alpha: 0.75),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            item.label,
+                                            style: context.typography.bodyMediumSemiBold.copyWith(
+                                              color: isExpanded ? colors.white : colors.white.withValues(alpha: 0.75),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    children: item.children!.map((child) {
+                                      final childSelected = currentLocation == child.route || currentLocation.startsWith('${child.route}/');
+                                      return Padding(
+                                        padding: const EdgeInsets.only(left: 36, bottom: 8, right: 8, top: 4),
+                                        child: InkWell(
+                                          onTap: () => context.go(child.route),
+                                          borderRadius: BorderRadius.circular(14),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                            decoration: BoxDecoration(
+                                              color: childSelected ? colors.white.withValues(alpha: 0.09) : Colors.transparent,
+                                              borderRadius: BorderRadius.circular(14),
+                                              border: Border.all(
+                                                color: childSelected ? colors.secondary.withValues(alpha: 0.45) : Colors.transparent,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  child.icon,
+                                                  size: 16,
+                                                  color: childSelected ? colors.secondary : colors.white.withValues(alpha: 0.65),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    child.label,
+                                                    style: context.typography.bodyMedium.copyWith(
+                                                      color: childSelected ? colors.white : colors.white.withValues(alpha: 0.65),
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              );
+                            }
+
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: InkWell(
@@ -111,12 +201,16 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                                             : colors.white.withValues(alpha: 0.75),
                                       ),
                                       const SizedBox(width: 12),
-                                      Text(
-                                        item.label,
-                                        style: context.typography.bodyMediumSemiBold.copyWith(
-                                          color: selected
-                                              ? colors.white
-                                              : colors.white.withValues(alpha: 0.75),
+                                      Expanded(
+                                        child: Text(
+                                          item.label,
+                                          style: context.typography.bodyMediumSemiBold.copyWith(
+                                            color: selected
+                                                ? colors.white
+                                                : colors.white.withValues(alpha: 0.75),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
@@ -294,6 +388,56 @@ class _MobileShellDrawer extends StatelessWidget {
                   final item = navItems[index];
                   final selected = currentLocation == item.route ||
                       currentLocation.startsWith('${item.route}/');
+                  final hasChildren = item.children != null && item.children!.isNotEmpty;
+                  final isChildSelected = hasChildren && item.children!.any(
+                    (child) => currentLocation == child.route || currentLocation.startsWith('${child.route}/')
+                  );
+                  final isExpanded = selected || isChildSelected;
+
+                  if (hasChildren) {
+                    return Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: isExpanded,
+                        leading: Icon(
+                          item.icon,
+                          color: isExpanded ? colors.primary : colors.textSecondary,
+                        ),
+                        title: Text(
+                          item.label,
+                          style: context.typography.bodyMediumSemiBold.copyWith(
+                            color: isExpanded ? colors.primary : colors.textPrimary,
+                          ),
+                        ),
+                        children: item.children!.map((child) {
+                          final childSelected = currentLocation == child.route || currentLocation.startsWith('${child.route}/');
+                          return ListTile(
+                            contentPadding: const EdgeInsets.only(left: 54, right: 16),
+                            leading: Icon(
+                              child.icon,
+                              size: 20,
+                              color: childSelected ? colors.primary : colors.textSecondary,
+                            ),
+                            title: Text(
+                              child.label,
+                              style: context.typography.bodyMedium.copyWith(
+                                color: childSelected ? colors.primary : colors.textPrimary,
+                              ),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            tileColor: childSelected ? colors.secondary.withValues(alpha: 0.15) : null,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              context.go(child.route);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    );
+                  }
+
                   return ListTile(
                     leading: Icon(
                       item.icon,
@@ -343,81 +487,91 @@ class _SidebarInstituteSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef _) {
     final institute = ref.watch(selectedInstituteProvider);
+    final user = ref.watch(authControllerProvider).value;
+    final canChangeInstitute = user?.role == AppRoles.superAdmin || 
+                               user?.role == AppRoles.itAdmin || 
+                               user?.role == AppRoles.headMaster;
     final colors = context.colors;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: GestureDetector(
-        onTap: () {
-          showModalBottomSheet(
-            context: context,
-            backgroundColor: Colors.transparent,
-            isScrollControlled: true,
-            builder: (_) => _InstitutePickerSheetSidebar(widgetRef: ref),
-          );
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.09),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [colors.secondary, colors.secondary.withValues(alpha: 0.7)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(institute.icon, color: colors.primary, size: 20),
+    Widget content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [colors.secondary, colors.secondary.withValues(alpha: 0.7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(institute.icon, color: colors.primary, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  institute.name,
+                  style: context.typography.bodyMediumSemiBold.copyWith(
+                    color: colors.white,
+                    height: 1.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Row(
                   children: [
-                    Text(
-                      institute.name,
-                      style: context.typography.bodyMediumSemiBold.copyWith(
-                        color: colors.white,
-                        height: 1.2,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Icon(LucideIcons.mapPin, size: 10, color: colors.white.withValues(alpha: 0.55)),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            institute.location,
-                            style: context.typography.bodySmall.copyWith(
-                              color: colors.white.withValues(alpha: 0.55),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    Icon(LucideIcons.mapPin, size: 10, color: colors.white.withValues(alpha: 0.55)),
+                    const SizedBox(width: 3),
+                    Expanded(
+                      child: Text(
+                        institute.location,
+                        style: context.typography.bodySmall.copyWith(
+                          color: colors.white.withValues(alpha: 0.55),
                         ),
-                      ],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 6),
-              Icon(LucideIcons.chevronsUpDown, size: 14, color: colors.white.withValues(alpha: 0.55)),
-            ],
+              ],
+            ),
           ),
-        ),
+          if (canChangeInstitute) ...[
+            const SizedBox(width: 6),
+            Icon(LucideIcons.chevronsUpDown, size: 14, color: colors.white.withValues(alpha: 0.55)),
+          ],
+        ],
       ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: canChangeInstitute
+          ? GestureDetector(
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (_) => _InstitutePickerSheetSidebar(widgetRef: ref),
+                );
+              },
+              child: content,
+            )
+          : content,
     );
   }
 }

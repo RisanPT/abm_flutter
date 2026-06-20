@@ -4,6 +4,7 @@ import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/student_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/widgets/student_list_widgets.dart';
+import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,6 +87,15 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                   ),
                 ),
                 const Gap(8),
+                Container(
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: IconButton(
+                    icon: const Icon(LucideIcons.arrowUpCircle, color: Colors.white, size: 20),
+                    tooltip: 'Promote Eligible Students',
+                    onPressed: () => _handlePromoteStudents(context),
+                  ),
+                ),
+                const Gap(8),
                 studentsAsync.whenData((students) => Container(
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
                   child: IconButton(
@@ -111,6 +121,34 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
         label: const Text('Add Student', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
+  }
+
+  Future<void> _handlePromoteStudents(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Promotion'),
+        content: const Text('Are you sure you want to promote all students who have "Passed" their evaluation? This will increment their grade level.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Promote')),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        final count = await ref.read(studentRepositoryProvider).promoteStudents();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully promoted $count students.')));
+          ref.read(studentControllerProvider.notifier).refresh();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        }
+      }
+    }
   }
 
   Widget _buildFilters(BuildContext context) {

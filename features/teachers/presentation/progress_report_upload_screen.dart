@@ -7,10 +7,13 @@ import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class ProgressReportUploadScreen extends ConsumerStatefulWidget {
-  const ProgressReportUploadScreen({super.key});
+  const ProgressReportUploadScreen({super.key, this.existingReport});
+
+  final Map<String, dynamic>? existingReport;
 
   @override
   ConsumerState<ProgressReportUploadScreen> createState() => _ProgressReportUploadScreenState();
@@ -25,18 +28,32 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
   String _selectedTerm = 'Term 1';
   final List<String> _terms = ['Term 1', 'Term 2', 'Final Term'];
 
-  final List<Map<String, dynamic>> _subjectScores = [
-    {'subject': 'Arabic Grammar', 'mark': 85},
-    {'subject': 'Quran Hifz', 'mark': 90},
-    {'subject': 'Fiqh', 'mark': 75},
-  ];
-
-  final _remarksController = TextEditingController();
+  late List<Map<String, dynamic>> _subjectScores;
+  late final TextEditingController _remarksController;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    
+    if (widget.existingReport != null) {
+      _selectedTerm = widget.existingReport!['term'] ?? 'Term 1';
+      _remarksController = TextEditingController(text: widget.existingReport!['remarks'] ?? '');
+      
+      final grades = widget.existingReport!['grades'] as List<dynamic>? ?? [];
+      _subjectScores = grades.map((g) => {
+        'subject': g['subject'],
+        'mark': g['mark'],
+      }).toList();
+    } else {
+      _remarksController = TextEditingController();
+      _subjectScores = [
+        {'subject': 'Arabic Grammar', 'mark': 85},
+        {'subject': 'Quran Hifz', 'mark': 90},
+        {'subject': 'Fiqh', 'mark': 75},
+      ];
+    }
+
     _loadStudents();
   }
 
@@ -53,6 +70,16 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
       setState(() {
         _students = list;
         _isLoadingStudents = false;
+        
+        if (widget.existingReport != null) {
+          final studentData = widget.existingReport!['studentId'];
+          final idToMatch = studentData is Map ? studentData['_id'] : studentData;
+          try {
+            _selectedStudent = list.firstWhere((s) => s.id == idToMatch);
+          } catch (_) {
+            // Not found
+          }
+        }
       });
     } catch (e) {
       setState(() => _isLoadingStudents = false);
@@ -134,7 +161,11 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
+        // Refresh the list
+        // Note: progressReportsProvider is in progress_report_list_screen.dart
+        // We can just pop, and since it's autoDispose, it might refresh automatically,
+        // but if not, user can pull to refresh or re-enter the tab.
+        context.pop();
       }
     } catch (e) {
       if (mounted) {
@@ -156,8 +187,8 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
       backgroundColor: colors.background,
       body: Column(
         children: [
-          const ABMPageHeader(
-            title: 'Academic Progress',
+          ABMPageHeader(
+            title: widget.existingReport != null ? 'Edit Academic Progress' : 'Academic Progress',
             subtitle: 'Upload marks, grades, and remarks',
           ),
           Expanded(

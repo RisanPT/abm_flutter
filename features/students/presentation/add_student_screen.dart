@@ -1,6 +1,7 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
@@ -353,6 +354,8 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
             });
           }
           String effectiveValue = classNames.contains(_selectedClass) ? _selectedClass! : (classNames.isNotEmpty ? classNames.first : 'No classes available');
+          final user = ref.read(authControllerProvider).value;
+          final canAddClass = user?.role.canEditAdministration == true;
           
           return ABMDropdownField<String>(
             label: 'Classroom',
@@ -363,7 +366,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                 setState(() => _selectedClass = v!);
               }
             },
-            trailing: Material(
+            trailing: canAddClass ? Material(
               color: context.colors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               child: IconButton(
@@ -371,7 +374,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                 onPressed: () => _showAddClassDialog(context),
                 color: context.colors.primary,
               ),
-            ),
+            ) : null,
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
