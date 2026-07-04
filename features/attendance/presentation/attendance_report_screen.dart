@@ -1,8 +1,7 @@
-import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
-import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/shared/widgets/custom_month_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -12,25 +11,26 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-
 // ── Providers ────────────────────────────────────────────────────────────────
 
 class _ReportParams {
-  const _ReportParams({required this.month, required this.instituteId, required this.type});
+  const _ReportParams({required this.month, required this.instituteId, required this.type, this.refreshKey = 0});
   final String month;
   final String instituteId;
-  final String type; // 'student' | 'teacher'
+  final String type;
+  final int refreshKey;   // increment to force re-fetch same month
   @override
   bool operator ==(Object other) =>
       other is _ReportParams &&
       month == other.month &&
       instituteId == other.instituteId &&
-      type == other.type;
+      type == other.type &&
+      refreshKey == other.refreshKey;
   @override
-  int get hashCode => Object.hash(month, instituteId, type);
+  int get hashCode => Object.hash(month, instituteId, type, refreshKey);
 }
 
-final _attendanceReportProvider = FutureProvider.family<Map<String, dynamic>, _ReportParams>(
+final _attendanceReportProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, _ReportParams>(
   (ref, params) async {
     final dio = ref.watch(dioProvider);
     final endpoint =
@@ -46,38 +46,35 @@ final _attendanceReportProvider = FutureProvider.family<Map<String, dynamic>, _R
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 class AttendanceReportScreen extends ConsumerStatefulWidget {
-  const AttendanceReportScreen({super.key});
+  final String reportType; // 'student' or 'teacher'
+
+  const AttendanceReportScreen({
+    super.key,
+    required this.reportType,
+  });
 
   @override
   ConsumerState<AttendanceReportScreen> createState() => _AttendanceReportScreenState();
 }
 
-class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabCtrl;
-  DateTime _selectedMonth = DateTime.now();
+class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen> {
+  DateTime _selectedDate = DateTime.now();
+  // A separate refresh counter so we can force-refetch with same month
+  int _refreshKey = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    final user = ref.read(authControllerProvider).value;
-    final canEditAdmin = user?.role.canEditAdministration == true;
-    _tabCtrl = TabController(length: canEditAdmin ? 2 : 1, vsync: this);
+  String get _monthKey => DateFormat('yyyy-MM').format(_selectedDate);
+  String get _monthLabel => DateFormat('MMM yyyy').format(_selectedDate);
+
+  Future<void> _refresh() async {
+    setState(() => _refreshKey++);
+    ref.invalidate(_attendanceReportProvider);
   }
-
-  @override
-  void dispose() {
-    _tabCtrl.dispose();
-    super.dispose();
-  }
-
-  String get _monthKey => DateFormat('yyyy-MM').format(_selectedMonth);
 
   Future<void> _exportAttendancePdf() async {
     final institute = ref.read(selectedInstituteProvider);
-    final isStudentTab = _tabCtrl.index == 0;
+    final isStudentTab = widget.reportType == 'student';
     final type = isStudentTab ? 'student' : 'teacher';
-    final params = _ReportParams(month: _monthKey, instituteId: institute.id, type: type);
+    final params = _ReportParams(month: _monthKey, instituteId: institute.id, type: type, refreshKey: _refreshKey);
     
     final reportAsync = ref.read(_attendanceReportProvider(params));
     if (!reportAsync.hasValue) {
@@ -89,7 +86,8 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
     
     final data = reportAsync.value!;
     final summary = (data['summary'] as List?) ?? [];
-    if (summary.isEmpty) {
+    final studentSummary = (data['studentSummary'] as List?) ?? [];
+    if (summary.isEmpty && studentSummary.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No attendance data to export for this month.')),
       );
@@ -108,23 +106,62 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 8),
-          pw.Text('Month: ${DateFormat('MMMM yyyy').format(_selectedMonth)}'),
+          pw.Text('Date: ${DateFormat('MMMM yyyy').format(_selectedDate)}'),
           pw.SizedBox(height: 16),
           if (isStudentTab)
-            pw.TableHelper.fromTextArray(
-              headers: ['Classroom', 'Present Days', 'Absent Days', 'Late Days', 'Total Days', 'Attendance Rate'],
-              data: summary.map((row) {
-                final r = row as Map<String, dynamic>;
-                return [
-                  r['classroom']?.toString() ?? '',
-                  r['present']?.toString() ?? '0',
-                  r['absent']?.toString() ?? '0',
-                  r['late']?.toString() ?? '0',
-                  r['total']?.toString() ?? '0',
-                  '${r['rate'] ?? 0}%',
-                ];
-              }).toList(),
-            )
+            if (studentSummary.isNotEmpty)
+              ...() {
+                final Map<String, List<Map<String, dynamic>>> byClass = {};
+                for (final s in studentSummary) {
+                  final c = (s as Map<String, dynamic>)['classroom']?.toString() ?? 'Unknown';
+                  byClass.putIfAbsent(c, () => []).add(s);
+                }
+                
+                final List<pw.Widget> widgets = [];
+                for (final c in byClass.keys.toList()..sort()) {
+                  widgets.add(pw.SizedBox(height: 16));
+                  widgets.add(
+                    pw.Text('Classroom: $c', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold))
+                  );
+                  widgets.add(pw.SizedBox(height: 8));
+                  
+                  final students = byClass[c]!..sort((a, b) => 
+                    (a['fullName']?.toString() ?? '').compareTo(b['fullName']?.toString() ?? ''));
+                  
+                  widgets.add(
+                    pw.TableHelper.fromTextArray(
+                      headers: ['Admn No', 'Student Name', 'Present Days', 'Absent Days', 'Late Days', 'Total Days', 'Rate'],
+                      data: students.map((r) {
+                        return [
+                          r['admissionNumber']?.toString() ?? '',
+                          r['fullName']?.toString() ?? '',
+                          r['present']?.toString() ?? '0',
+                          r['absent']?.toString() ?? '0',
+                          r['late']?.toString() ?? '0',
+                          r['total']?.toString() ?? '0',
+                          '${r['rate'] ?? 0}%',
+                        ];
+                      }).toList(),
+                    )
+                  );
+                }
+                return widgets;
+              }()
+            else
+              pw.TableHelper.fromTextArray(
+                headers: ['Classroom', 'Present Days', 'Absent Days', 'Late Days', 'Total Days', 'Attendance Rate'],
+                data: summary.map((row) {
+                  final r = row as Map<String, dynamic>;
+                  return [
+                    r['classroom']?.toString() ?? '',
+                    r['present']?.toString() ?? '0',
+                    r['absent']?.toString() ?? '0',
+                    r['late']?.toString() ?? '0',
+                    r['total']?.toString() ?? '0',
+                    '${r['rate'] ?? 0}%',
+                  ];
+                }).toList(),
+              )
           else
             pw.TableHelper.fromTextArray(
               headers: ['Employee ID', 'Full Name', 'Present Days', 'Absent Days', 'Late Days', 'Total Days', 'Attendance Rate'],
@@ -152,71 +189,83 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
     final colors = context.colors;
     final typography = context.typography;
     final institute = ref.watch(selectedInstituteProvider);
+    final isStudent = widget.reportType == 'student';
 
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: Text('Attendance Reports', style: typography.h3),
+        title: Text(isStudent ? 'Student Report' : 'Teacher Report', style: typography.h3),
         actions: [
+          // Refresh button
           IconButton(
-            onPressed: _pickMonth,
-            icon: const Icon(LucideIcons.calendar),
-            tooltip: 'Select Month',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh',
           ),
+          // Export PDF button
           IconButton(
             onPressed: _exportAttendancePdf,
             icon: const Icon(LucideIcons.download),
             tooltip: 'Export PDF',
           ),
+          // Custom Month picker button
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.only(right: 12),
             child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: 0.12),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _pickMonth,
                   borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  DateFormat('MMM yyyy').format(_selectedMonth),
-                  style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.calendar, size: 16, color: colors.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          _monthLabel,
+                          style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(LucideIcons.chevronDown, size: 16, color: colors.primary),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabCtrl,
-          labelColor: colors.primary,
-          unselectedLabelColor: colors.textSecondary,
-          indicatorColor: colors.primary,
-          tabs: [
-            const Tab(text: 'Student Report', icon: Icon(LucideIcons.bookOpen, size: 18)),
-            if (ref.watch(authControllerProvider).value?.role.canEditAdministration == true)
-              const Tab(text: 'Teacher Report', icon: Icon(LucideIcons.userCheck, size: 18)),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabCtrl,
-        children: [
-          _StudentReportTab(month: _monthKey, instituteId: institute.id),
-          if (ref.watch(authControllerProvider).value?.role.canEditAdministration == true)
-            _TeacherReportTab(month: _monthKey, instituteId: institute.id),
-        ],
-      ),
+      body: isStudent
+          ? _StudentReportTab(month: _monthKey, instituteId: institute.id)
+          : _TeacherReportTab(month: _monthKey, instituteId: institute.id),
     );
   }
 
   Future<void> _pickMonth() async {
-    final picked = await showDatePicker(
+    final now = DateTime.now();
+    final picked = await CustomMonthPicker.show(
       context: context,
-      initialDate: _selectedMonth,
+      initialDate: _selectedDate,
       firstDate: DateTime(2023),
-      lastDate: DateTime.now(),
-      initialDatePickerMode: DatePickerMode.year,
+      lastDate: now,
     );
-    if (picked != null) setState(() => _selectedMonth = picked);
+    if (picked != null) {
+      if (picked.year != _selectedDate.year || picked.month != _selectedDate.month) {
+        setState(() {
+          _selectedDate = picked;
+          _refreshKey++;
+        });
+      }
+    }
   }
 }
 
@@ -233,7 +282,13 @@ class _StudentReportTab extends ConsumerWidget {
     final reportAsync = ref.watch(_attendanceReportProvider(params));
     return reportAsync.when(
       data: (data) {
-        final summary = (data['summary'] as List?) ?? [];
+        final rawSummary = (data['summary'] as List?) ?? [];
+        final summary = rawSummary.where((row) {
+          final r = row as Map<String, dynamic>;
+          final classroom = r['classroom'] as String?;
+          return classroom != null && classroom.isNotEmpty && classroom.toLowerCase() != 'unknown';
+        }).toList();
+
         final total = data['totalRecords'] as int? ?? 0;
         
         int totalPresent = 0;
@@ -250,11 +305,11 @@ class _StudentReportTab extends ConsumerWidget {
           return _EmptyReport(message: 'No student attendance recorded for $month.');
         }
         return ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           children: [
             _SummaryCard(
-              total: total, 
-              month: month,
+              total: total,
+              date: month,
               totalPresent: totalPresent,
               totalAbsent: totalAbsent,
               totalLate: totalLate,
@@ -285,7 +340,13 @@ class _TeacherReportTab extends ConsumerWidget {
     final reportAsync = ref.watch(_attendanceReportProvider(params));
     return reportAsync.when(
       data: (data) {
-        final summary = (data['summary'] as List?) ?? [];
+        final rawSummary = (data['summary'] as List?) ?? [];
+        final summary = rawSummary.where((row) {
+          final r = row as Map<String, dynamic>;
+          final name = r['fullName'] as String?;
+          return name != null && name.isNotEmpty && name.toLowerCase() != 'unknown';
+        }).toList();
+
         if (summary.isEmpty) {
           return _EmptyReport(message: 'No teacher attendance recorded for $month.');
         }
@@ -309,14 +370,14 @@ class _TeacherReportTab extends ConsumerWidget {
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.total, 
-    required this.month,
+    required this.date,
     required this.totalPresent,
     required this.totalAbsent,
     required this.totalLate,
   });
   
   final int total;
-  final String month;
+  final String date;
   final int totalPresent;
   final int totalAbsent;
   final int totalLate;
@@ -371,7 +432,7 @@ class _SummaryCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(month, style: typography.bodyMediumSemiBold.copyWith(color: Colors.white)),
+                child: Text(date, style: typography.bodyMediumSemiBold.copyWith(color: Colors.white)),
               ),
             ],
           ),

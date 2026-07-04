@@ -62,34 +62,6 @@ class AttendanceRepository {
     }
   }
 
-  Future<void> staffCheckIn({
-    required String instituteId,
-    required double lat,
-    required double lng,
-    required String verificationMethod,
-    String? imagePath,
-  }) async {
-    try {
-      String? base64Image;
-      if (imagePath != null) {
-        final bytes = await File(imagePath).readAsBytes();
-        base64Image = base64Encode(bytes);
-      }
-
-      await _dio.post('/attendance/check-in', data: {
-        'instituteId': instituteId,
-        'location': {
-          'latitude': lat,
-          'longitude': lng,
-        },
-        'verificationMethod': verificationMethod,
-        if (base64Image != null) 'image': 'data:image/jpeg;base64,$base64Image',
-      });
-    } catch (e) {
-      throw Exception('Check-in failed: $e');
-    }
-  }
-
   String _statusToString(AttendanceStatus status) {
     switch (status) {
       case AttendanceStatus.present:

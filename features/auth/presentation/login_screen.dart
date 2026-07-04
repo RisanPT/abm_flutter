@@ -1,6 +1,6 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
-import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
@@ -37,7 +37,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (success && mounted) {
       final user = ref.read(authControllerProvider).value;
       if (user != null) {
-        context.go(user.role.defaultRoute);
+        final allowedModules = ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role);
+        context.go(user.role.defaultRoute(allowedModules));
       }
     }
   }

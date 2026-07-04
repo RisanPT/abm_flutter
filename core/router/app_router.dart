@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/auth/presentation/login_screen.dart';
@@ -14,8 +15,9 @@ import 'package:abm_madrasa/features/students/presentation/parent_portal_screen.
 import 'package:abm_madrasa/features/students/presentation/online_admission_screen.dart';
 import 'package:abm_madrasa/features/attendance/presentation/attendance_mark_screen.dart';
 import 'package:abm_madrasa/features/attendance/presentation/attendance_report_screen.dart';
-import 'package:abm_madrasa/features/attendance/presentation/teacher_check_in_screen.dart';
+
 import 'package:abm_madrasa/features/timetable/presentation/timetable_screen.dart';
+import 'package:abm_madrasa/features/timetable/presentation/shift_planner_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/outstanding_dues_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/income_entry_screen.dart';
@@ -23,6 +25,7 @@ import 'package:abm_madrasa/features/accounts/presentation/fee_structure_setup_s
 import 'package:abm_madrasa/features/finance/presentation/finance_screen.dart' as expenditure;
 import 'package:abm_madrasa/features/events/presentation/event_list_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/settings_screen.dart';
+import 'package:abm_madrasa/features/settings/presentation/role_permissions_screen.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/classroom_management_screen.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/institute_management_screen.dart';
 import 'package:abm_madrasa/features/transportation/presentation/fleet_management_screen.dart';
@@ -59,12 +62,15 @@ GoRouter router(Ref ref) {
         return isLoggingIn ? null : RouteNames.login;
       }
 
+      final permState = ref.read(permissionControllerProvider);
+      final allowedModules = ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role);
+
       if (isLoggingIn) {
-        return user.role.defaultRoute;
+        return user.role.defaultRoute(allowedModules);
       }
 
-      if (module != null && !user.role.canAccess(module)) {
-        return user.role.defaultRoute;
+      if (module != null && !user.role.canAccess(module, allowedModules)) {
+        return user.role.defaultRoute(allowedModules);
       }
 
       return null;
@@ -134,13 +140,18 @@ GoRouter router(Ref ref) {
             builder: (context, state) => const AttendanceMarkScreen(),
           ),
           GoRoute(
-            path: RouteNames.attendanceReport,
-            builder: (context, state) => const AttendanceReportScreen(),
+            path: '/attendance-report',
+            redirect: (context, state) => RouteNames.studentAttendanceReport,
           ),
           GoRoute(
-            path: RouteNames.teacherCheckIn,
-            builder: (context, state) => const TeacherCheckInScreen(),
+            path: RouteNames.studentAttendanceReport,
+            builder: (context, state) => const AttendanceReportScreen(reportType: 'student'),
           ),
+          GoRoute(
+            path: RouteNames.teacherAttendanceReport,
+            builder: (context, state) => const AttendanceReportScreen(reportType: 'teacher'),
+          ),
+
           GoRoute(
             path: RouteNames.progressReports,
             builder: (context, state) => const abm_progress_list.ProgressReportListScreen(),
@@ -159,6 +170,10 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.timetable,
             builder: (context, state) => const TimetableScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.shiftPlanner,
+            builder: (context, state) => const ShiftPlannerScreen(),
           ),
           GoRoute(
             path: RouteNames.accounts,
@@ -195,6 +210,10 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.settings,
             builder: (context, state) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.permissions,
+            builder: (context, state) => const RolePermissionsScreen(),
           ),
           GoRoute(
             path: RouteNames.institutes,

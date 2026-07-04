@@ -25,16 +25,16 @@ class StudentProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncStudent = initialStudent != null
-        ? AsyncValue.data(initialStudent!)
-        : ref.watch(studentDetailsProvider(studentId));
+    final asyncStudent = ref.watch(studentDetailsProvider(studentId));
 
     return asyncStudent.when(
       data: (student) => _StudentProfileBody(student: student),
-      loading: () => Scaffold(
-        backgroundColor: context.colors.background,
-        body: const Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => initialStudent != null
+          ? _StudentProfileBody(student: initialStudent!)
+          : Scaffold(
+              backgroundColor: context.colors.background,
+              body: const Center(child: CircularProgressIndicator()),
+            ),
       error: (error, _) => _ErrorState(message: error.toString()),
     );
   }

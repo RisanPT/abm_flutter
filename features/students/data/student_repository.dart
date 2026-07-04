@@ -24,12 +24,13 @@ class StudentRepository {
     return data;
   }
 
-  Future<List<StudentModel>> getStudents({String? query, String? classroom, String? instituteId}) async {
+  Future<List<StudentModel>> getStudents({String? query, String? classroom, String? instituteId, String? shift}) async {
     try {
       final response = await _dio.get('/students', queryParameters: {
         'search': query,
         'grade': classroom,
         'instituteId': instituteId,
+        'shift': shift,
       }..removeWhere((_ , v) => v == null));
 
       final List<dynamic> data = response.data;

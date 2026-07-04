@@ -15,11 +15,15 @@ class ClassroomController extends _$ClassroomController {
 
   Future<void> addClassroom(String name, {String? description}) async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
+    try {
       final institute = ref.read(selectedInstituteProvider);
       await ref.read(classroomRepositoryProvider).addClassroom(name, description: description, instituteId: institute.id);
-      return ref.read(classroomRepositoryProvider).getClassrooms(instituteId: institute.id);
-    });
+      final classrooms = await ref.read(classroomRepositoryProvider).getClassrooms(instituteId: institute.id);
+      state = AsyncValue.data(classrooms);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {

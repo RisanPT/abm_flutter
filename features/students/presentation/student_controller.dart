@@ -14,14 +14,19 @@ class StudentController extends _$StudentController {
     return _fetchStudents();
   }
 
-  Future<List<StudentModel>> _fetchStudents({String? query, String? classroom}) {
+  Future<List<StudentModel>> _fetchStudents({String? query, String? classroom, String? shift}) {
     final instituteId = ref.read(selectedInstituteProvider).id;
-    return ref.read(studentRepositoryProvider).getStudents(instituteId: instituteId, query: query, classroom: classroom);
+    return ref.read(studentRepositoryProvider).getStudents(instituteId: instituteId, query: query, classroom: classroom, shift: shift);
   }
 
   Future<void> search(String query) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => _fetchStudents(query: query));
+  }
+
+  Future<void> filter(String? classroom, String? shift) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() => _fetchStudents(classroom: classroom, shift: shift));
   }
 
   Future<void> filterByClassroom(String? classroom) async {
@@ -46,6 +51,7 @@ class StudentController extends _$StudentController {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       await ref.read(studentRepositoryProvider).updateStudent(student);
+      ref.invalidate(studentDetailsProvider(student.id));
       return _fetchStudents();
     });
   }

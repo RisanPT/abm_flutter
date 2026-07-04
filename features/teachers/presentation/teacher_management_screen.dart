@@ -14,12 +14,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:intl_phone_field/country_picker_dialog.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:intl_phone_field/phone_number.dart';
+import 'package:intl_phone_field/countries.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-
-
 
 class TeacherManagementScreen extends ConsumerStatefulWidget {
   const TeacherManagementScreen({super.key});
@@ -58,7 +60,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
               t.title,
               t.specialty,
               t.email,
-              'RM ${t.monthlySalary.toStringAsFixed(2)}',
+              'SAR ${t.monthlySalary.toStringAsFixed(2)}',
             ]).toList(),
           ),
         ],
@@ -631,7 +633,7 @@ class _TeacherDetailsCard extends StatelessWidget {
                         ),
                         const Gap(8),
                         Text(
-                          'RM ${teacher.monthlySalary.toStringAsFixed(0)}',
+                          'SAR ${teacher.monthlySalary.toStringAsFixed(0)}',
                           style: context.typography.h2.copyWith(
                             color: Colors.white,
                           ),
@@ -870,16 +872,29 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
   final _employeeIdController = TextEditingController();
   final _fullNameController = TextEditingController();
   final _titleController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _specialtyController = TextEditingController();
   final _salaryController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nationalityController = TextEditingController(text: 'India');
+  final _motherTongueController = TextEditingController();
+  final _qualificationIslamicController = TextEditingController();
+  final _qualificationAcademicsController = TextEditingController();
   final _picker = ImagePicker();
   late List<TeacherScheduleEntry> _currentSchedule;
 
+  String _fullPhone = '';
+  String _fullWhatsapp = '';
+
+  String _phoneCountryCode = 'IN';
+  String _phoneNationalNumber = '';
+  String _whatsappCountryCode = 'IN';
+  String _whatsappNationalNumber = '';
+
   DateTime _joinedDate = DateTime.now();
   bool _isActive = true;
+  bool _shift1 = false;
+  bool _shift2 = false;
   bool _isSaving = false;
   Uint8List? _pickedImageBytes;
   String? _pickedImageName;
@@ -897,12 +912,43 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
       _employeeIdController.text = teacher.employeeId;
       _fullNameController.text = teacher.fullName;
       _titleController.text = teacher.title;
-      _phoneController.text = teacher.phone;
       _emailController.text = teacher.email;
       _specialtyController.text = teacher.specialty;
       _salaryController.text = teacher.monthlySalary.toStringAsFixed(0);
+      
+      _fullPhone = teacher.phone;
+      _fullWhatsapp = teacher.whatsappNumber ?? '';
+
+      void parsePhone(String fullPhone, void Function(String, String) onParsed) {
+        if (fullPhone.isNotEmpty && fullPhone.startsWith('+')) {
+          try {
+            final phone = PhoneNumber.fromCompleteNumber(completeNumber: fullPhone);
+            onParsed(phone.countryISOCode, phone.number);
+          } catch (_) {
+            onParsed('IN', fullPhone);
+          }
+        } else {
+          onParsed('IN', fullPhone);
+        }
+      }
+
+      parsePhone(_fullPhone, (c, n) {
+        _phoneCountryCode = c;
+        _phoneNationalNumber = n;
+      });
+      parsePhone(_fullWhatsapp, (c, n) {
+        _whatsappCountryCode = c;
+        _whatsappNationalNumber = n;
+      });
+
+      _nationalityController.text = teacher.nationality;
+      _motherTongueController.text = teacher.motherTongue ?? '';
+      _qualificationIslamicController.text = teacher.qualificationIslamic ?? '';
+      _qualificationAcademicsController.text = teacher.qualificationAcademics ?? '';
       _joinedDate = teacher.joinedDate;
       _isActive = teacher.isActive;
+      _shift1 = teacher.shift.contains('Shift-1');
+      _shift2 = teacher.shift.contains('Shift-2');
       _photoUrl = teacher.photoUrl;
     }
   }
@@ -912,11 +958,14 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
     _employeeIdController.dispose();
     _fullNameController.dispose();
     _titleController.dispose();
-    _phoneController.dispose();
     _emailController.dispose();
     _specialtyController.dispose();
     _salaryController.dispose();
     _passwordController.dispose();
+    _nationalityController.dispose();
+    _motherTongueController.dispose();
+    _qualificationIslamicController.dispose();
+    _qualificationAcademicsController.dispose();
     super.dispose();
   }
 
@@ -1004,13 +1053,20 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
 
   Widget _buildFormGrid(BuildContext context) {
     final children = <Widget>[
-      ABMTextField(
-        label: 'Employee ID',
-        hint: 'T001',
-        controller: _employeeIdController,
-        validator: (value) =>
-            (value == null || value.trim().isEmpty) ? 'Employee ID is required' : null,
-      ),
+      if (_isEdit)
+        ABMTextField(
+          label: 'Employee ID',
+          hint: 'T001',
+          controller: _employeeIdController,
+          enabled: false,
+        )
+      else
+        ABMTextField(
+          label: 'Employee ID',
+          hint: 'Auto-generated',
+          controller: _employeeIdController,
+          enabled: false,
+        ),
       ABMTextField(
         label: 'Full Name',
         hint: 'Enter teacher name',
@@ -1025,12 +1081,27 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
         validator: (value) =>
             (value == null || value.trim().isEmpty) ? 'Title is required' : null,
       ),
-      ABMTextField(
-        label: 'Phone',
-        hint: '+60 12 345 6789',
-        controller: _phoneController,
-        validator: (value) =>
-            (value == null || value.trim().isEmpty) ? 'Phone is required' : null,
+      IntlPhoneField(
+        initialCountryCode: _phoneCountryCode,
+        initialValue: _phoneNationalNumber,
+        decoration: InputDecoration(
+          labelText: 'Phone',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        onChanged: (phone) {
+          _fullPhone = phone.number.isEmpty ? '' : phone.completeNumber;
+        },
+      ),
+      IntlPhoneField(
+        initialCountryCode: _whatsappCountryCode,
+        initialValue: _whatsappNationalNumber,
+        decoration: InputDecoration(
+          labelText: 'WhatsApp Number',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        onChanged: (phone) {
+          _fullWhatsapp = phone.number.isEmpty ? '' : phone.completeNumber;
+        },
       ),
       ABMTextField(
         label: 'Email',
@@ -1038,6 +1109,42 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
         controller: _emailController,
         validator: (value) =>
             (value == null || value.trim().isEmpty) ? 'Email is required' : null,
+      ),
+      Autocomplete<String>(
+        initialValue: TextEditingValue(text: _nationalityController.text),
+        optionsBuilder: (TextEditingValue textEditingValue) {
+          if (textEditingValue.text.isEmpty) {
+            return countries.map((c) => c.name);
+          }
+          return countries.map((c) => c.name).where((name) => name.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+        },
+        onSelected: (String selection) {
+          _nationalityController.text = selection;
+        },
+        fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+          return ABMTextField(
+            label: 'Nationality',
+            hint: 'India',
+            controller: textEditingController,
+            focusNode: focusNode,
+            onChanged: (val) => _nationalityController.text = val,
+          );
+        },
+      ),
+      ABMTextField(
+        label: 'Mother Tongue',
+        hint: 'Malayalam',
+        controller: _motherTongueController,
+      ),
+      ABMTextField(
+        label: 'Qualification (Islamic)',
+        hint: 'Aalim, Hifz, etc.',
+        controller: _qualificationIslamicController,
+      ),
+      ABMTextField(
+        label: 'Qualification (Academics)',
+        hint: 'BA, MA, B.Ed, etc.',
+        controller: _qualificationAcademicsController,
       ),
       ABMTextField(
         label: 'Specialty',
@@ -1077,6 +1184,28 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
           }
           return null;
         },
+      ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Shifts', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Gap(8),
+          Row(
+            children: [
+              Checkbox(
+                value: _shift1,
+                onChanged: (val) => setState(() => _shift1 = val ?? false),
+              ),
+              const Text('Shift-1'),
+              const Gap(16),
+              Checkbox(
+                value: _shift2,
+                onChanged: (val) => setState(() => _shift2 = val ?? false),
+              ),
+              const Text('Shift-2'),
+            ],
+          ),
+        ],
       ),
     ];
 
@@ -1164,12 +1293,16 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
         for (final entry in schedule) entry.className,
       }.toList();
 
+      final shiftList = <String>[];
+      if (_shift1) shiftList.add('Shift-1');
+      if (_shift2) shiftList.add('Shift-2');
+
       final teacher = TeacherModel(
         id: widget.existingTeacher?.id ?? '',
         employeeId: _employeeIdController.text.trim(),
         fullName: _fullNameController.text.trim(),
         title: _titleController.text.trim(),
-        phone: _phoneController.text.trim(),
+        phone: _fullPhone,
         email: _emailController.text.trim(),
         specialty: _specialtyController.text.trim(),
         joinedDate: _joinedDate,
@@ -1181,6 +1314,12 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
         isActive: _isActive,
         password: _passwordController.text.trim().isEmpty ? null : _passwordController.text.trim(),
         instituteId: widget.instituteId,
+        whatsappNumber: _fullWhatsapp,
+        nationality: _nationalityController.text.trim().isEmpty ? 'India' : _nationalityController.text.trim(),
+        motherTongue: _motherTongueController.text.trim(),
+        qualificationIslamic: _qualificationIslamicController.text.trim(),
+        qualificationAcademics: _qualificationAcademicsController.text.trim(),
+        shift: shiftList,
       );
 
       if (_isEdit) {
@@ -1190,6 +1329,7 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
       }
 
       ref.invalidate(timetableDataProvider);
+      ref.invalidate(teacherListProvider);
 
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -1239,41 +1379,86 @@ class _PhotoPicker extends StatelessWidget {
       imageProvider = NetworkImage(photoUrl!);
     }
 
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 40,
-          backgroundColor: colors.background,
-          backgroundImage: imageProvider,
-          child: imageProvider == null
-              ? Text(
-                  teacherName.isEmpty ? 'T' : teacherName[0].toUpperCase(),
-                  style: context.typography.h3,
-                )
-              : null,
-        ),
-        const Gap(16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Teacher Image', style: context.typography.h4),
-            const Gap(6),
-            Text(
-              'Upload a profile image for the teacher record.',
-              style: context.typography.bodySmall.copyWith(
-                color: colors.textSecondary,
+    return context.isMobile
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: colors.background,
+                    backgroundImage: imageProvider,
+                    child: imageProvider == null
+                        ? Text(
+                            teacherName.isEmpty ? 'T' : teacherName[0].toUpperCase(),
+                            style: context.typography.h3,
+                          )
+                        : null,
+                  ),
+                  const Gap(16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Teacher Image', style: context.typography.h4),
+                        const Gap(6),
+                        Text(
+                          'Upload a profile image for the teacher record.',
+                          style: context.typography.bodySmall.copyWith(
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const Gap(10),
-            OutlinedButton.icon(
-              onPressed: onPick,
-              icon: const Icon(Icons.image_outlined),
-              label: const Text('Choose Image'),
-            ),
-          ],
-        ),
-      ],
-    );
+              const Gap(16),
+              OutlinedButton.icon(
+                onPressed: onPick,
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('Choose Image'),
+              ),
+            ],
+          )
+        : Row(
+            children: [
+              CircleAvatar(
+                radius: 40,
+                backgroundColor: colors.background,
+                backgroundImage: imageProvider,
+                child: imageProvider == null
+                    ? Text(
+                        teacherName.isEmpty ? 'T' : teacherName[0].toUpperCase(),
+                        style: context.typography.h3,
+                      )
+                    : null,
+              ),
+              const Gap(16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Teacher Image', style: context.typography.h4),
+                    const Gap(6),
+                    Text(
+                      'Upload a profile image for the teacher record.',
+                      style: context.typography.bodySmall.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                    const Gap(10),
+                    OutlinedButton.icon(
+                      onPressed: onPick,
+                      icon: const Icon(Icons.image_outlined),
+                      label: const Text('Choose Image'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
   }
 }
 

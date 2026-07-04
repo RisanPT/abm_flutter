@@ -2,6 +2,7 @@ import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/timetable/domain/timetable_model.dart';
 import 'package:abm_madrasa/features/timetable/presentation/timetable_controller.dart';
 import 'package:abm_madrasa/features/timetable/presentation/widgets/timetable_assignment_dialog.dart';
@@ -40,7 +41,8 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
     final typography = context.typography;
     final timetableAsync = ref.watch(timetableDataProvider);
     final userRole = ref.watch(authControllerProvider).asData?.value?.role;
-    final canEdit = userRole?.canEditTimetable ?? false;
+    final allowedModules = userRole != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(userRole) : <String>{};
+    final canEdit = userRole?.canEditTimetable(allowedModules) ?? false;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -171,6 +173,16 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                                       ),
                                       icon: const Icon(LucideIcons.userPlus, size: 18),
                                       label: const Text('Manage Assignments'),
+                                    ),
+                                    const Gap(12),
+                                    ElevatedButton.icon(
+                                      onPressed: () => context.push(RouteNames.shiftPlanner),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: colors.white,
+                                        foregroundColor: colors.primary,
+                                      ),
+                                      icon: const Icon(LucideIcons.calendarCheck, size: 18),
+                                      label: const Text('Shift Planner'),
                                     ),
                                   ],
                                 ),

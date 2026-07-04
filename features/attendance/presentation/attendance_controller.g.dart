@@ -17,7 +17,8 @@ final class AttendanceControllerProvider
         $AsyncNotifierProvider<AttendanceController, List<AttendanceModel>> {
   AttendanceControllerProvider._({
     required AttendanceControllerFamily super.from,
-    required ({DateTime date, String? classroom, String type}) super.argument,
+    required ({DateTime date, String? classroom, String type, String shift})
+    super.argument,
   }) : super(
          retry: null,
          name: r'attendanceControllerProvider',
@@ -52,7 +53,7 @@ final class AttendanceControllerProvider
 }
 
 String _$attendanceControllerHash() =>
-    r'ea77946b3d9eba928efbda2a22abfde495568406';
+    r'61b7a4f9a6a9af8f04013ade3e43120f59253032';
 
 final class AttendanceControllerFamily extends $Family
     with
@@ -61,7 +62,7 @@ final class AttendanceControllerFamily extends $Family
           AsyncValue<List<AttendanceModel>>,
           List<AttendanceModel>,
           FutureOr<List<AttendanceModel>>,
-          ({DateTime date, String? classroom, String type})
+          ({DateTime date, String? classroom, String type, String shift})
         > {
   AttendanceControllerFamily._()
     : super(
@@ -76,8 +77,9 @@ final class AttendanceControllerFamily extends $Family
     required DateTime date,
     String? classroom,
     String type = 'Student',
+    required String shift,
   }) => AttendanceControllerProvider._(
-    argument: (date: date, classroom: classroom, type: type),
+    argument: (date: date, classroom: classroom, type: type, shift: shift),
     from: this,
   );
 
@@ -88,15 +90,18 @@ final class AttendanceControllerFamily extends $Family
 abstract class _$AttendanceController
     extends $AsyncNotifier<List<AttendanceModel>> {
   late final _$args =
-      ref.$arg as ({DateTime date, String? classroom, String type});
+      ref.$arg
+          as ({DateTime date, String? classroom, String type, String shift});
   DateTime get date => _$args.date;
   String? get classroom => _$args.classroom;
   String get type => _$args.type;
+  String get shift => _$args.shift;
 
   FutureOr<List<AttendanceModel>> build({
     required DateTime date,
     String? classroom,
     String type = 'Student',
+    required String shift,
   });
   @$mustCallSuper
   @override
@@ -121,6 +126,7 @@ abstract class _$AttendanceController
         date: _$args.date,
         classroom: _$args.classroom,
         type: _$args.type,
+        shift: _$args.shift,
       ),
     );
   }

@@ -1,8 +1,10 @@
+
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
 import 'package:abm_madrasa/shared/widgets/institute_banner_chip.dart';
 import 'package:flutter/material.dart';
@@ -51,6 +53,18 @@ class _IncomeFilter {
   final String instituteId;
   final String segment;
   const _IncomeFilter(this.month, this.instituteId, this.segment);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _IncomeFilter &&
+          runtimeType == other.runtimeType &&
+          month == other.month &&
+          instituteId == other.instituteId &&
+          segment == other.segment;
+
+  @override
+  int get hashCode => Object.hash(month, instituteId, segment);
 }
 
 final _incomeEntriesProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, _IncomeFilter>(
@@ -114,7 +128,8 @@ class _IncomeEntryScreenState extends ConsumerState<IncomeEntryScreen> {
     final typography = context.typography;
     final institute = ref.watch(selectedInstituteProvider);
     final user = ref.watch(authControllerProvider).asData?.value;
-    final canEdit = user?.role.canEditFinance ?? false;
+    final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
+    final canEdit = user?.role.canEditFinance(allowedModules) ?? false;
     final monthStr = DateFormat('yyyy-MM').format(_selectedMonth);
     final filter = _IncomeFilter(monthStr, institute.id, _selectedSegment);
     final asyncData = ref.watch(_incomeEntriesProvider(filter));
@@ -228,7 +243,7 @@ class _IncomeEntryScreenState extends ConsumerState<IncomeEntryScreen> {
             ),
             const Gap(20),
 
-            Text(DateFormat('MMMM yyyy').format(_selectedMonth) + ' Income Entries', style: typography.h4),
+            Text('${DateFormat('MMMM yyyy').format(_selectedMonth)} Income Entries', style: typography.h4),
             const Gap(12),
 
             // Entries list
@@ -475,7 +490,7 @@ class _AddIncomeDialogState extends ConsumerState<_AddIncomeDialog> {
             ),
             const Gap(16),
             DropdownButtonFormField<String>(
-              value: _segment,
+              initialValue: _segment,
               decoration: const InputDecoration(labelText: 'Account Segment', border: OutlineInputBorder()),
               items: ['Organization', 'Madrasa', 'CRE']
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))

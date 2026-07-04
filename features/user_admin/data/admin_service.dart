@@ -57,7 +57,7 @@ class AdminService {
         'username': username,
         'password': password,
         'role': role,
-        if (instituteId != null) 'instituteId': instituteId,
+        'instituteId': ?instituteId,
       });
       return AdminUser.fromJson(response.data);
     } catch (e) {

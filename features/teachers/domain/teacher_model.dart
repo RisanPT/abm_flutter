@@ -54,6 +54,12 @@ class TeacherModel {
     this.isActive = true,
     this.password,
     this.instituteId,
+    this.whatsappNumber,
+    this.nationality = 'India',
+    this.motherTongue,
+    this.qualificationIslamic,
+    this.qualificationAcademics,
+    this.shift = const [],
   });
 
   final String id;
@@ -72,6 +78,12 @@ class TeacherModel {
   final bool isActive;
   final String? password;
   final String? instituteId;
+  final String? whatsappNumber;
+  final String nationality;
+  final String? motherTongue;
+  final String? qualificationIslamic;
+  final String? qualificationAcademics;
+  final List<String> shift;
 
   factory TeacherModel.fromJson(Map<String, dynamic> json) {
     return TeacherModel(
@@ -98,6 +110,14 @@ class TeacherModel {
       photoUrl: json['photoUrl'] as String?,
       isActive: json['isActive'] as bool? ?? true,
       instituteId: json['instituteId'] as String?,
+      whatsappNumber: json['whatsappNumber'] as String?,
+      nationality: json['nationality'] as String? ?? 'India',
+      motherTongue: json['motherTongue'] as String?,
+      qualificationIslamic: json['qualificationIslamic'] as String?,
+      qualificationAcademics: json['qualificationAcademics'] as String?,
+      shift: (json['shift'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
     );
   }
 
@@ -118,5 +138,11 @@ class TeacherModel {
         'isActive': isActive,
         if (password != null) 'password': password,
         if (instituteId != null) 'instituteId': instituteId,
+        'whatsappNumber': whatsappNumber,
+        'nationality': nationality,
+        'motherTongue': motherTongue,
+        'qualificationIslamic': qualificationIslamic,
+        'qualificationAcademics': qualificationAcademics,
+        'shift': shift,
       };
 }

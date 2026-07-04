@@ -37,6 +37,9 @@ class ClassroomRepository {
       );
       return ClassroomModel.fromJson(response.data);
     } catch (e) {
+      if (e is DioException) {
+        rethrow;
+      }
       throw Exception('Failed to add classroom: $e');
     }
   }

@@ -58,7 +58,7 @@ class ProgressReportListScreen extends ConsumerWidget {
                 return ListView.separated(
                   padding: const EdgeInsets.all(24),
                   itemCount: reports.length,
-                  separatorBuilder: (_, __) => const Gap(16),
+                  separatorBuilder: (_, _) => const Gap(16),
                   itemBuilder: (context, index) {
                     final report = reports[index] as Map<String, dynamic>;
                     final student = report['studentId'] as Map<String, dynamic>? ?? {};

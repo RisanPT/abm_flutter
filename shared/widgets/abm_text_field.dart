@@ -12,6 +12,8 @@ class ABMTextField extends StatelessWidget {
   final Function(String)? onChanged;
   final TextInputType? keyboardType;
   final int? maxLines;
+  final bool enabled;
+  final FocusNode? focusNode;
 
   const ABMTextField({
     super.key,
@@ -24,6 +26,8 @@ class ABMTextField extends StatelessWidget {
     this.onChanged,
     this.keyboardType,
     this.maxLines = 1,
+    this.enabled = true,
+    this.focusNode,
   });
 
   @override
@@ -44,12 +48,14 @@ class ABMTextField extends StatelessWidget {
         const Gap(8),
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           obscureText: isPassword,
           style: typography.bodyLarge,
           validator: validator,
           onChanged: onChanged,
           keyboardType: keyboardType,
           maxLines: maxLines,
+          enabled: enabled,
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: colors.primary) : null,

@@ -4,6 +4,7 @@ import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
@@ -18,7 +19,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:intl_phone_field/country_picker_dialog.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:intl_phone_field/phone_number.dart';
+import 'package:intl_phone_field/countries.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class AddStudentScreen extends ConsumerStatefulWidget {
@@ -37,12 +44,29 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   late TextEditingController _nameController;
   late TextEditingController _admissionController;
   late TextEditingController _guardianNameController;
-  late TextEditingController _guardianContactController;
   late TextEditingController _addressController;
   late TextEditingController _bloodGroupController;
-  late TextEditingController _parentPassportController;
+  late TextEditingController _countryController;
+  late TextEditingController _stateController;
+  late TextEditingController _studentIqamaController;
   late TextEditingController _parentIqamaController;
+  late TextEditingController _parentPassportController;
+  late TextEditingController _fatherOccupationController;
+  late TextEditingController _motherOccupationController;
+  late TextEditingController _numberOfChildrenController;
   late TextEditingController _transportFeeController;
+  late List<TextEditingController> _childrenAgeControllers;
+
+  String _fullGuardianContact = '';
+  String _fullFatherWhatsapp = '';
+  String _fullMotherWhatsapp = '';
+
+  String _guardianCountryCode = 'IN';
+  String _guardianNationalNumber = '';
+  String _fatherWhatsappCountryCode = 'IN';
+  String _fatherWhatsappNationalNumber = '';
+  String _motherWhatsappCountryCode = 'IN';
+  String _motherWhatsappNationalNumber = '';
 
   // State
   DateTime _dob = DateTime(2015);
@@ -50,6 +74,10 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   String? _selectedClass;
   Uint8List? _pickedImageBytes;
   String? _photoUrl;
+  Uint8List? _studentIqamaImageBytes;
+  String? _studentIqamaUrl;
+  String _shift = 'Shift-1';
+  DateTime _admissionDate = DateTime.now();
   bool _isSaving = false;
   bool _needsTransportation = false;
   String _selectedInstituteId = '664c39f00000000000000001';
@@ -66,13 +94,57 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     _nameController = TextEditingController(text: s?.fullName ?? '');
     _admissionController = TextEditingController(text: s?.admissionNumber ?? '');
     _guardianNameController = TextEditingController(text: s?.guardianName ?? '');
-    _guardianContactController = TextEditingController(text: s?.guardianContact ?? '');
     _addressController = TextEditingController(text: s?.address ?? '');
     _bloodGroupController = TextEditingController(text: s?.bloodGroup ?? '');
-    _parentPassportController = TextEditingController(text: s?.parentPassportId ?? '');
     _parentIqamaController = TextEditingController(text: s?.parentIqamaId ?? '');
+    _parentPassportController = TextEditingController(text: s?.parentPassportId ?? '');
+    
+    _fullGuardianContact = s?.guardianContact ?? '';
+    _fullFatherWhatsapp = s?.fatherWhatsapp ?? '';
+    _fullMotherWhatsapp = s?.motherWhatsapp ?? '';
+
+    void parsePhone(String fullPhone, void Function(String, String) onParsed) {
+      if (fullPhone.isNotEmpty && fullPhone.startsWith('+')) {
+        try {
+          final phone = PhoneNumber.fromCompleteNumber(completeNumber: fullPhone);
+          onParsed(phone.countryISOCode, phone.number);
+        } catch (_) {
+          onParsed('IN', fullPhone);
+        }
+      } else {
+        onParsed('IN', fullPhone);
+      }
+    }
+
+    parsePhone(_fullGuardianContact, (c, n) {
+      _guardianCountryCode = c;
+      _guardianNationalNumber = n;
+    });
+    parsePhone(_fullFatherWhatsapp, (c, n) {
+      _fatherWhatsappCountryCode = c;
+      _fatherWhatsappNationalNumber = n;
+    });
+    parsePhone(_fullMotherWhatsapp, (c, n) {
+      _motherWhatsappCountryCode = c;
+      _motherWhatsappNationalNumber = n;
+    });
+
+    _countryController = TextEditingController(text: s?.country ?? 'India');
+    _stateController = TextEditingController(text: s?.state ?? '');
+    _studentIqamaController = TextEditingController(text: s?.studentIqamaNumber ?? '');
+    _fatherOccupationController = TextEditingController(text: s?.fatherOccupation ?? '');
+    _motherOccupationController = TextEditingController(text: s?.motherOccupation ?? '');
+    _numberOfChildrenController = TextEditingController(text: s?.numberOfChildren.toString() ?? '0');
     _transportFeeController = TextEditingController(text: s?.transportationFee.toString() ?? '0');
     _needsTransportation = s?.needsTransportation ?? false;
+    _shift = s?.shift ?? 'Shift-1';
+    _admissionDate = s?.admissionDate ?? DateTime.now();
+    _childrenAgeControllers = [];
+
+    final childrenAges = s?.childrenAges ?? [];
+    for (var age in childrenAges) {
+      _childrenAgeControllers.add(TextEditingController(text: age));
+    }
 
     // Resolve institute: non-admin roles are locked to their own institute.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -104,12 +176,20 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     _nameController.dispose();
     _admissionController.dispose();
     _guardianNameController.dispose();
-    _guardianContactController.dispose();
     _addressController.dispose();
     _bloodGroupController.dispose();
-    _parentPassportController.dispose();
     _parentIqamaController.dispose();
+    _parentPassportController.dispose();
+    _countryController.dispose();
+    _stateController.dispose();
+    _studentIqamaController.dispose();
+    _fatherOccupationController.dispose();
+    _motherOccupationController.dispose();
+    _numberOfChildrenController.dispose();
     _transportFeeController.dispose();
+    for (var c in _childrenAgeControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -122,10 +202,35 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     }
   }
 
+  Future<void> _pickIqamaImage() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      setState(() => _studentIqamaImageBytes = bytes);
+    }
+  }
+
+  void _onNumberOfChildrenChanged(String value) {
+    int count = int.tryParse(value) ?? 0;
+    if (count < 0) count = 0;
+    
+    setState(() {
+      if (count > _childrenAgeControllers.length) {
+        for (int i = _childrenAgeControllers.length; i < count; i++) {
+          _childrenAgeControllers.add(TextEditingController());
+        }
+      } else if (count < _childrenAgeControllers.length) {
+        for (int i = _childrenAgeControllers.length - 1; i >= count; i--) {
+          _childrenAgeControllers[i].dispose();
+          _childrenAgeControllers.removeAt(i);
+        }
+      }
+    });
+  }
+
   Future<void> _checkConcession(String value) async {
-    final familyId = _parentPassportController.text.trim().isNotEmpty
-        ? _parentPassportController.text.trim()
-        : _parentIqamaController.text.trim();
+    final familyId = _parentIqamaController.text.trim();
     if (familyId.length < 4) {
       setState(() { _showConcessionBanner = false; _siblingCount = 0; });
       return;
@@ -161,30 +266,53 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
         );
       }
 
+      String? finalIqamaUrl = _studentIqamaUrl;
+      if (_studentIqamaImageBytes != null) {
+        finalIqamaUrl = await ref.read(studentRepositoryProvider).uploadStudentImage(
+          bytes: _studentIqamaImageBytes!,
+          fileName: '${_nameController.text.trim()}_iqama',
+        );
+      }
+
       final student = StudentModel(
         id: widget.existingStudent?.id ?? '',
         fullName: _nameController.text.trim(),
-        admissionNumber: _admissionController.text.trim(),
+        admissionNumber: _isEdit ? _admissionController.text.trim() : '',
         dateOfBirth: _dob,
         gender: _gender,
         classroom: _selectedClass!,
         guardianName: _guardianNameController.text.trim(),
-        guardianContact: _guardianContactController.text.trim(),
+        guardianContact: _fullGuardianContact,
         address: _addressController.text.trim(),
         bloodGroup: _bloodGroupController.text.trim(),
-        parentPassportId: _parentPassportController.text.trim(),
         parentIqamaId: _parentIqamaController.text.trim(),
+        parentPassportId: _parentPassportController.text.trim(),
+        fatherWhatsapp: _fullFatherWhatsapp,
+        motherWhatsapp: _fullMotherWhatsapp,
+        country: _countryController.text.trim().isEmpty ? 'India' : _countryController.text.trim(),
+        state: _stateController.text.trim(),
+        studentIqamaNumber: _studentIqamaController.text.trim(),
+        studentIqamaUrl: finalIqamaUrl,
+        fatherOccupation: _fatherOccupationController.text.trim(),
+        motherOccupation: _motherOccupationController.text.trim(),
+        numberOfChildren: int.tryParse(_numberOfChildrenController.text.trim()) ?? 0,
+        childrenAges: _childrenAgeControllers.map((c) => c.text.trim()).toList(),
+        shift: _shift,
         needsTransportation: _needsTransportation,
         transportationFee: double.tryParse(_transportFeeController.text.trim()) ?? 0,
         photoUrl: finalPhotoUrl,
         instituteId: _selectedInstituteId,
-        admissionDate: widget.existingStudent?.admissionDate ?? DateTime.now(),
+        admissionDate: _admissionDate,
       );
 
       if (_isEdit) {
         await ref.read(studentControllerProvider.notifier).updateStudent(student);
       } else {
         await ref.read(studentControllerProvider.notifier).addStudent(student);
+      }
+
+      if (ref.read(studentControllerProvider).hasError) {
+        throw ref.read(studentControllerProvider).error ?? Exception('Failed to save student');
       }
 
       if (mounted) {
@@ -234,10 +362,16 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                         const Gap(32),
                         const SectionHeader(title: 'Basic Information'),
                         const Gap(24),
-                        _ResponsiveRow([
-                          ABMTextField(label: 'Full Name', hint: 'Enter full name', controller: _nameController, onChanged: (_) => setState(() {}), validator: (v) => v?.isEmpty == true ? 'Required' : null),
-                          ABMTextField(label: 'Admission Number', hint: 'ABM/000', controller: _admissionController, validator: (v) => v?.isEmpty == true ? 'Required' : null),
-                        ]),
+                        if (_isEdit)
+                          _ResponsiveRow([
+                            ABMTextField(label: 'Full Name', hint: 'Enter full name', controller: _nameController, onChanged: (_) => setState(() {}), validator: (v) => v?.isEmpty == true ? 'Required' : null),
+                            ABMTextField(label: 'Admission Number', hint: 'Auto-generated', controller: _admissionController, enabled: false),
+                          ])
+                        else
+                          _ResponsiveRow([
+                            ABMTextField(label: 'Full Name', hint: 'Enter full name', controller: _nameController, onChanged: (_) => setState(() {}), validator: (v) => v?.isEmpty == true ? 'Required' : null),
+                            ABMTextField(label: 'Admission Number', hint: 'Auto-generated', controller: _admissionController, enabled: false),
+                          ]),
                         const Gap(24),
                         _ResponsiveRow([
                           ABMDropdownField<Gender>(
@@ -262,25 +396,84 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                         const Gap(24),
                         _ResponsiveRow([
                           ABMTextField(label: 'Guardian Name', hint: "Father/Mother's name", controller: _guardianNameController, validator: (v) => v?.isEmpty == true ? 'Required' : null),
-                          ABMTextField(label: 'Contact Number', hint: '+91 XXXXX XXXXX', controller: _guardianContactController, keyboardType: TextInputType.phone, validator: (v) => v?.isEmpty == true ? 'Required' : null),
+                          IntlPhoneField(
+                            initialCountryCode: _guardianCountryCode,
+                            initialValue: _guardianNationalNumber,
+                            decoration: InputDecoration(
+                              labelText: 'Guardian Contact',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onChanged: (phone) {
+                              _fullGuardianContact = phone.number.isEmpty ? '' : phone.completeNumber;
+                            },
+                          ),
+                        ]),
+                        const Gap(24),
+                        _ResponsiveRow([
+                          IntlPhoneField(
+                            initialCountryCode: _fatherWhatsappCountryCode,
+                            initialValue: _fatherWhatsappNationalNumber,
+                            decoration: InputDecoration(
+                              labelText: "Father's WhatsApp",
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onChanged: (phone) {
+                              _fullFatherWhatsapp = phone.number.isEmpty ? '' : phone.completeNumber;
+                            },
+                          ),
+                          IntlPhoneField(
+                            initialCountryCode: _motherWhatsappCountryCode,
+                            initialValue: _motherWhatsappNationalNumber,
+                            decoration: InputDecoration(
+                              labelText: "Mother's WhatsApp",
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onChanged: (phone) {
+                              _fullMotherWhatsapp = phone.number.isEmpty ? '' : phone.completeNumber;
+                            },
+                          ),
                         ]),
                         const Gap(24),
                         ABMTextField(label: 'Full Address', hint: 'Residential address', controller: _addressController, maxLines: 3, validator: (v) => v?.isEmpty == true ? 'Required' : null),
-                        const Gap(32),
-                        const SectionHeader(title: 'Parent IDs & Transportation'),
                         const Gap(24),
                         _ResponsiveRow([
-                          ABMTextField(
-                            label: 'Parent Passport ID',
-                            hint: 'Enter passport number',
-                            controller: _parentPassportController,
-                            onChanged: _checkConcession,
+                          Autocomplete<String>(
+                            initialValue: TextEditingValue(text: _countryController.text),
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              if (textEditingValue.text.isEmpty) {
+                                return countries.map((c) => c.name);
+                              }
+                              return countries.map((c) => c.name).where((name) => name.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                            },
+                            onSelected: (String selection) {
+                              _countryController.text = selection;
+                            },
+                            fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                              return ABMTextField(
+                                label: 'Country',
+                                hint: 'India',
+                                controller: textEditingController,
+                                focusNode: focusNode,
+                                onChanged: (val) => _countryController.text = val,
+                              );
+                            },
                           ),
+                          ABMTextField(label: 'State', hint: 'State name', controller: _stateController),
+                        ]),
+                        const Gap(32),
+                        const SectionHeader(title: 'IDs & Family Details'),
+                        const Gap(24),
+                        _ResponsiveRow([
                           ABMTextField(
                             label: 'Parent Iqama ID',
                             hint: 'Enter iqama number',
                             controller: _parentIqamaController,
                             onChanged: _checkConcession,
+                          ),
+                          ABMTextField(
+                            label: 'Student Iqama Number',
+                            hint: 'Enter student iqama number',
+                            controller: _studentIqamaController,
                           ),
                         ]),
                         if (_showConcessionBanner) ...[  
@@ -307,7 +500,63 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                           ),
                         ],
                         const Gap(24),
+                        const Text('Student Iqama Upload', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                        const Gap(16),
+                        PhotoPickerCard(imageBytes: _studentIqamaImageBytes, photoUrl: _studentIqamaUrl, studentName: 'Iqama', onPick: _pickIqamaImage),
+                        const Gap(24),
+                        _ResponsiveRow([
+                          ABMTextField(label: 'Father Occupation', hint: 'e.g., Engineer', controller: _fatherOccupationController),
+                          ABMTextField(label: 'Mother Occupation', hint: 'e.g., Teacher', controller: _motherOccupationController),
+                        ]),
+                        const Gap(24),
+                        ABMTextField(
+                          label: 'No of Children', 
+                          hint: '0', 
+                          controller: _numberOfChildrenController, 
+                          keyboardType: TextInputType.number,
+                          onChanged: _onNumberOfChildrenChanged,
+                        ),
+                        if (_childrenAgeControllers.isNotEmpty) ...[
+                          const Gap(16),
+                          const Text('Ages of Children', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey)),
+                          const Gap(8),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: List.generate(_childrenAgeControllers.length, (index) {
+                              return SizedBox(
+                                width: 80,
+                                child: ABMTextField(
+                                  label: 'Child ${index + 1}',
+                                  hint: 'Age',
+                                  controller: _childrenAgeControllers[index],
+                                  keyboardType: TextInputType.number,
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                        const Gap(32),
+                        const SectionHeader(title: 'Enrollment & Transportation'),
+                        const Gap(24),
                         _buildInstituteDropdown(),
+                        const Gap(24),
+                        _ResponsiveRow([
+                          ABMDropdownField<String>(
+                            label: 'Shift',
+                            value: _shift,
+                            items: const ['Shift-1', 'Shift-2'],
+                            onChanged: (v) => setState(() => _shift = v!),
+                          ),
+                          ABMDatePickerField(
+                            label: 'Date of Joining',
+                            date: _admissionDate,
+                            onTap: () async {
+                              final picked = await showDatePicker(context: context, initialDate: _admissionDate, firstDate: DateTime(2000), lastDate: DateTime.now().add(const Duration(days: 365)));
+                              if (picked != null) setState(() => _admissionDate = picked);
+                            },
+                          ),
+                        ]),
                         const Gap(24),
                         SwitchListTile(
                           title: const Text('Needs Transportation', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -355,7 +604,8 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           }
           String effectiveValue = classNames.contains(_selectedClass) ? _selectedClass! : (classNames.isNotEmpty ? classNames.first : 'No classes available');
           final user = ref.read(authControllerProvider).value;
-          final canAddClass = user?.role.canEditAdministration == true;
+          final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
+          final canAddClass = user?.role.canEditAdministration(allowedModules) ?? false;
           
           return ABMDropdownField<String>(
             label: 'Classroom',

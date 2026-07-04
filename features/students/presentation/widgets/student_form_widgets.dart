@@ -35,50 +35,100 @@ class PhotoPickerCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colors.border),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: const Color(0xFFDCE7E0),
-            backgroundImage: provider,
-            child: provider == null
-                ? Text(
-                    (studentName.isEmpty ? 'S' : studentName[0]).toUpperCase(),
-                    style: context.typography.h3.copyWith(
-                      color: const Color(0xFF163D32),
-                    ),
-                  )
-                : null,
-          ),
-          const Gap(16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: context.isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Upload student photo',
-                  style: context.typography.bodyLargeSemiBold.copyWith(
-                    color: const Color(0xFF163D32),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor: const Color(0xFFDCE7E0),
+                      backgroundImage: provider,
+                      child: provider == null
+                          ? Text(
+                              (studentName.isEmpty ? 'S' : studentName[0]).toUpperCase(),
+                              style: context.typography.h3.copyWith(
+                                color: const Color(0xFF163D32),
+                              ),
+                            )
+                          : null,
+                    ),
+                    const Gap(16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Upload student photo',
+                            style: context.typography.bodyLargeSemiBold.copyWith(
+                              color: const Color(0xFF163D32),
+                            ),
+                          ),
+                          const Gap(6),
+                          Text(
+                            'Images will be uploaded to Cloudinary and stored in the student record.',
+                            style: context.typography.bodyMedium.copyWith(
+                              color: const Color(0xFF6F7A75),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Gap(16),
+                OutlinedButton.icon(
+                  onPressed: onPick,
+                  icon: const Icon(Icons.upload_rounded),
+                  label: const Text('Choose Image'),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: const Color(0xFFDCE7E0),
+                  backgroundImage: provider,
+                  child: provider == null
+                      ? Text(
+                          (studentName.isEmpty ? 'S' : studentName[0]).toUpperCase(),
+                          style: context.typography.h3.copyWith(
+                            color: const Color(0xFF163D32),
+                          ),
+                        )
+                      : null,
+                ),
+                const Gap(16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Upload student photo',
+                        style: context.typography.bodyLargeSemiBold.copyWith(
+                          color: const Color(0xFF163D32),
+                        ),
+                      ),
+                      const Gap(6),
+                      Text(
+                        'Images will be uploaded to Cloudinary and stored in the student record.',
+                        style: context.typography.bodyMedium.copyWith(
+                          color: const Color(0xFF6F7A75),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const Gap(6),
-                Text(
-                  'Images will be uploaded to Cloudinary and stored in the student record.',
-                  style: context.typography.bodyMedium.copyWith(
-                    color: const Color(0xFF6F7A75),
-                  ),
+                const Gap(16),
+                OutlinedButton.icon(
+                  onPressed: onPick,
+                  icon: const Icon(Icons.upload_rounded),
+                  label: const Text('Choose Image'),
                 ),
               ],
             ),
-          ),
-          const Gap(16),
-          OutlinedButton.icon(
-            onPressed: onPick,
-            icon: const Icon(Icons.upload_rounded),
-            label: const Text('Choose Image'),
-          ),
-        ],
-      ),
     );
   }
 }

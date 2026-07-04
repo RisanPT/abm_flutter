@@ -4,6 +4,7 @@ import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,7 +26,9 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final user = ref.watch(authControllerProvider).value;
-    final navItems = user?.role.navigationItems ??
+    final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
+    
+    final navItems = user?.role.navigationItems(allowedModules) ??
         const [
           AppNavItem(
             label: 'Dashboard',
@@ -347,6 +350,82 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
   }
 
   Future<void> _logout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.all(0),
+        content: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.logout_rounded, color: Colors.red, size: 28),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Logout',
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Are you sure you want to logout? You will need to sign in again to continue.',
+                textAlign: TextAlign.center,
+                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text('Logout'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!context.mounted) return;
     await ref.read(authControllerProvider.notifier).logout();
     if (!context.mounted) return;
     context.go(RouteNames.login);
@@ -754,41 +833,37 @@ class _DrawerInstituteHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final institute = ref.watch(selectedInstituteProvider);
+    final user = ref.watch(authControllerProvider).value;
+    final canChangeInstitute = user?.role == AppRoles.superAdmin || 
+                               user?.role == AppRoles.itAdmin || 
+                               user?.role == AppRoles.headMaster;
 
-    return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          backgroundColor: Colors.transparent,
-          isScrollControlled: true,
-          builder: (_) => _InstitutePickerSheetSidebar(widgetRef: ref),
-        );
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(20, 36, 20, 20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [colors.primary, colors.primary.withValues(alpha: 0.85)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+    final content = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 36, 20, 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [colors.primary, colors.primary.withValues(alpha: 0.85)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: colors.secondary,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(institute.icon, color: colors.primary, size: 22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: colors.secondary,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const Spacer(),
+                child: Icon(institute.icon, color: colors.primary, size: 22),
+              ),
+              const Spacer(),
+              if (canChangeInstitute)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -804,44 +879,57 @@ class _DrawerInstituteHeader extends ConsumerWidget {
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              institute.name,
-              style: context.typography.bodyLargeSemiBold.copyWith(color: colors.white, height: 1.2),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 3),
-            Row(
-              children: [
-                Icon(LucideIcons.mapPin, size: 11, color: colors.white.withValues(alpha: 0.6)),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    institute.location,
-                    style: context.typography.bodySmall.copyWith(color: colors.white.withValues(alpha: 0.6)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.person_outline_rounded, size: 13, color: colors.white.withValues(alpha: 0.6)),
-                const SizedBox(width: 5),
-                Text(
-                  userName,
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            institute.name,
+            style: context.typography.bodyLargeSemiBold.copyWith(color: colors.white, height: 1.2),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 3),
+          Row(
+            children: [
+              Icon(LucideIcons.mapPin, size: 11, color: colors.white.withValues(alpha: 0.6)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  institute.location,
                   style: context.typography.bodySmall.copyWith(color: colors.white.withValues(alpha: 0.6)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.person_outline_rounded, size: 13, color: colors.white.withValues(alpha: 0.6)),
+              const SizedBox(width: 5),
+              Text(
+                userName,
+                style: context.typography.bodySmall.copyWith(color: colors.white.withValues(alpha: 0.6)),
+              ),
+            ],
+          ),
+        ],
       ),
     );
+
+    return canChangeInstitute
+        ? GestureDetector(
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.transparent,
+                isScrollControlled: true,
+                builder: (_) => _InstitutePickerSheetSidebar(widgetRef: ref),
+              );
+            },
+            child: content,
+          )
+        : content;
   }
 }

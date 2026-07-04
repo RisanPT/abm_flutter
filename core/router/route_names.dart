@@ -7,9 +7,11 @@ class RouteNames {
   static const String editStudent = '/edit-student';
   static const String studentProfile = '/student-profile';
   static const String attendance = '/attendance';
-  static const String attendanceReport = '/attendance-report';
-  static const String teacherCheckIn = '/teacher-check-in';
+  static const String studentAttendanceReport = '/attendance-report/student';
+  static const String teacherAttendanceReport = '/attendance-report/teacher';
+
   static const String timetable = '/timetable';
+  static const String shiftPlanner = '/shift-planner';
   static const String accounts = '/accounts';
   static const String outstandingDues = '/outstanding-dues';
   static const String incomeEntry = '/income-entry';
@@ -23,6 +25,7 @@ class RouteNames {
   static const String transport = '/transport';
   static const String admin = '/admin';
   static const String settings = '/settings';
+  static const String permissions = '/permissions';
   static const String institutes = '/institutes';
   static const String parentPortal = '/parent-portal';
   static const String onlineAdmission = '/online-admission';

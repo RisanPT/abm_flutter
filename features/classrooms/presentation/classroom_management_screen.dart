@@ -1,12 +1,14 @@
 import 'package:abm_madrasa/core/router/route_names.dart';
-import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
-import 'package:abm_madrasa/features/classrooms/presentation/widgets/classroom_widgets.dart';
+
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/student_controller.dart';
 import 'package:dio/dio.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
+import 'package:abm_madrasa/features/classrooms/presentation/widgets/classroom_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -55,6 +57,10 @@ class ClassroomManagementScreen extends ConsumerWidget {
     final colors = context.colors;
     final classroomsAsync = ref.watch(classroomControllerProvider);
     final studentsAsync = ref.watch(studentControllerProvider);
+    
+    final user = ref.watch(authControllerProvider).value;
+    final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
+    final canEditAdmin = user?.role.canEditAdministration(allowedModules) ?? false;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -88,7 +94,7 @@ class ClassroomManagementScreen extends ConsumerWidget {
             ),
           ),
       ]),
-      floatingActionButton: ref.watch(authControllerProvider).value?.role.canEditAdministration == true
+      floatingActionButton: canEditAdmin
           ? FloatingActionButton.extended(
               onPressed: () => _showAddClassDialog(context, ref),
               label: const Text('Add Classroom'),

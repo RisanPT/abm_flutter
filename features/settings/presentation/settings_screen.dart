@@ -1,3 +1,4 @@
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
@@ -7,6 +8,7 @@ import 'package:gap/gap.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/user_management_screen.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -46,6 +48,13 @@ class SettingsScreen extends ConsumerWidget {
                     );
                   },
                 ),
+                const Gap(12),
+                _SettingsTile(
+                  icon: Icons.admin_panel_settings_outlined,
+                  title: 'Module Permissions',
+                  subtitle: 'Configure module access per role',
+                  onTap: () => context.push(RouteNames.permissions),
+                ),
                 const Gap(32),
               ],
               Text('App Settings', style: typography.h4.copyWith(color: colors.textPrimary)),
@@ -75,13 +84,92 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () {},
               ),
               const Gap(32),
-              ElevatedButton(
-                onPressed: () => ref.read(authControllerProvider.notifier).logout(),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    barrierDismissible: true,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      contentPadding: EdgeInsets.zero,
+                      content: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.logout_rounded, color: Colors.red, size: 28),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Logout',
+                              style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Are you sure you want to logout? You will need to sign in again to continue.',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(ctx).pop(false),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: const Text('Cancel'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () => Navigator.of(ctx).pop(true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: const Text('Logout'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                  if (confirmed == true) {
+                    await ref.read(authControllerProvider.notifier).logout();
+                  }
+                },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Logout'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colors.red.withValues(alpha: 0.1),
                   foregroundColor: colors.red,
+                  elevation: 0,
                 ),
-                child: const Text('Logout'),
               ),
             ],
           );

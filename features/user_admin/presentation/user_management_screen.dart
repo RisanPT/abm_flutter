@@ -393,7 +393,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                       );
                     },
                     loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (_, __) => const Text('Error loading institutes'),
+                    error: (_, _) => const Text('Error loading institutes'),
                   ),
               ],
               const Gap(16),

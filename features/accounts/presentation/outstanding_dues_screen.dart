@@ -74,10 +74,26 @@ class _DuesSummary {
 
 // ─── Provider ──────────────────────────────────────────────────────────────────
 
-final _outstandingDuesProvider = FutureProvider.autoDispose.family<_DuesSummary, String>((ref, instituteId) async {
+class _DuesParams {
+  const _DuesParams({required this.instituteId, required this.month});
+  final String instituteId;
+  final String month;
+  
+  @override
+  bool operator ==(Object other) =>
+      other is _DuesParams &&
+      instituteId == other.instituteId &&
+      month == other.month;
+      
+  @override
+  int get hashCode => Object.hash(instituteId, month);
+}
+
+final _outstandingDuesProvider = FutureProvider.autoDispose.family<_DuesSummary, _DuesParams>((ref, params) async {
   final dio = ref.read(dioProvider);
   final response = await dio.get('/accounts/outstanding-dues', queryParameters: {
-    if (instituteId.isNotEmpty) 'instituteId': instituteId,
+    if (params.instituteId.isNotEmpty) 'instituteId': params.instituteId,
+    'month': params.month,
   });
   final data = response.data as Map<String, dynamic>;
   final summary = data['summary'] as Map<String, dynamic>;
@@ -102,13 +118,22 @@ class OutstandingDuesScreen extends ConsumerStatefulWidget {
 
 class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
   String _search = '';
+  DateTime _selectedDate = DateTime.now();
+  
+  String get _monthKey => "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}";
+  String get _monthLabel => "${_monthNames[_selectedDate.month - 1]} ${_selectedDate.year}";
+  
+  static const _monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
     final institute = ref.watch(selectedInstituteProvider);
-    final asyncData = ref.watch(_outstandingDuesProvider(institute.id));
+    final asyncData = ref.watch(_outstandingDuesProvider(_DuesParams(
+      instituteId: institute.id, 
+      month: _monthKey,
+    )));
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -121,7 +146,41 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
             icon: const Icon(LucideIcons.download),
             tooltip: 'Export PDF',
           )).value ?? const SizedBox.shrink(),
-          const Gap(8),
+          
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _pickMonth,
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.calendar, size: 16, color: colors.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          _monthLabel,
+                          style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(LucideIcons.chevronDown, size: 16, color: colors.primary),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const Gap(4),
         ],
       ),
       body: asyncData.when(
@@ -218,7 +277,7 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
                     itemCount: filtered.length,
                     itemBuilder: (context, index) => _DueCard(
                       student: filtered[index],
-                      onTap: () => context.push('${RouteNames.accounts}'),
+                      onTap: () => context.push(RouteNames.accounts),
                     ),
                   ),
           ),
@@ -254,6 +313,26 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
       ),
     );
     await Printing.layoutPdf(onLayout: (_) => pdf.save());
+  }
+
+  Future<void> _pickMonth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(_selectedDate.year, _selectedDate.month, 1),
+      firstDate: DateTime(2023),
+      lastDate: now,
+      initialDatePickerMode: DatePickerMode.year,
+      helpText: 'Select Month',
+    );
+    if (picked != null) {
+      final newMonth = DateTime(picked.year, picked.month, 1);
+      if (newMonth.year != _selectedDate.year || newMonth.month != _selectedDate.month) {
+        setState(() {
+          _selectedDate = newMonth;
+        });
+      }
+    }
   }
 }
 

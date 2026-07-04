@@ -52,7 +52,7 @@ final class ClassTimetableControllerProvider
 }
 
 String _$classTimetableControllerHash() =>
-    r'cd0cd9ae1724cd65b215fdeaad11d663eaf6b07f';
+    r'70b43cc59f34fb93bc281ffd1726c720f274b7fb';
 
 final class ClassTimetableControllerFamily extends $Family
     with

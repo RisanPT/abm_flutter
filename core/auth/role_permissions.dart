@@ -16,7 +16,6 @@ enum AppModule {
   feeSetup,
   expenditure,
   teachers,
-  teacherCheckIn,
   progressReports,
   transport,
   administration,
@@ -74,9 +73,15 @@ const List<AppNavItem> kAppNavItems = [
         module: AppModule.attendance,
       ),
       AppNavItem(
-        label: 'Reports',
-        route: RouteNames.attendanceReport,
-        icon: LucideIcons.fileText,
+        label: 'Student Reports',
+        route: RouteNames.studentAttendanceReport,
+        icon: LucideIcons.bookOpen,
+        module: AppModule.attendance,
+      ),
+      AppNavItem(
+        label: 'Teacher Reports',
+        route: RouteNames.teacherAttendanceReport,
+        icon: LucideIcons.userCheck,
         module: AppModule.attendance,
       ),
     ],
@@ -87,12 +92,7 @@ const List<AppNavItem> kAppNavItems = [
     icon: LucideIcons.fileBarChart,
     module: AppModule.progressReports,
   ),
-  AppNavItem(
-    label: 'My Check-In',
-    route: RouteNames.teacherCheckIn,
-    icon: LucideIcons.scanFace,
-    module: AppModule.teacherCheckIn,
-  ),
+
   AppNavItem(
     label: 'Timetable',
     route: RouteNames.timetable,
@@ -162,63 +162,6 @@ const List<AppNavItem> kAppNavItems = [
   ),
 ];
 
-final Map<String, Set<AppModule>> _rolePermissions = {
-  AppRoles.superAdmin: AppModule.values.toSet(),
-  AppRoles.itAdmin: AppModule.values.toSet(),
-  AppRoles.headMaster: {
-    AppModule.dashboard,
-    AppModule.students,
-    AppModule.classrooms,
-    AppModule.attendance,
-    AppModule.timetable,
-    AppModule.accounts,
-    AppModule.outstandingDues,
-    AppModule.incomeEntry,
-    AppModule.feeSetup,
-    AppModule.finance,
-    AppModule.transport,
-    AppModule.administration,
-    AppModule.settings,
-    AppModule.institutes,
-  },
-  AppRoles.teacher: {
-    AppModule.students,
-    AppModule.classrooms,
-    AppModule.attendance,
-    AppModule.teacherCheckIn,
-    AppModule.progressReports,
-    AppModule.timetable,
-    AppModule.administration,
-  },
-  AppRoles.treasurer: {
-    AppModule.dashboard,
-    AppModule.students,
-    AppModule.classrooms,
-    AppModule.attendance,
-    AppModule.timetable,
-    AppModule.accounts,
-    AppModule.outstandingDues,
-    AppModule.incomeEntry,
-    AppModule.finance,
-    AppModule.transport,
-    AppModule.administration,
-    AppModule.settings,
-  },
-  AppRoles.staff: {
-    AppModule.dashboard,
-    AppModule.students,
-    AppModule.classrooms,
-    AppModule.attendance,
-    AppModule.timetable,
-    AppModule.accounts,
-    AppModule.outstandingDues,
-    AppModule.finance,
-    AppModule.transport,
-    AppModule.administration,
-    AppModule.settings,
-  },
-};
-
 extension RoleStringExtension on String {
   String get label {
     switch (this) {
@@ -239,27 +182,29 @@ extension RoleStringExtension on String {
     }
   }
 
-  bool canAccess(AppModule module) {
-    return _rolePermissions[this]?.contains(module) ?? false;
+  bool canAccess(AppModule module, Set<String> allowedModules) {
+    if (this == AppRoles.superAdmin || this == AppRoles.itAdmin) return true;
+    return allowedModules.contains(module.name);
   }
 
-  // Permission Logic Helpers based on the Roles Matrix image
-  bool get canEditStudentData => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.staff;
-  bool get canEditAdministration => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.staff;
-  bool get canEditAttendance => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster || this == AppRoles.teacher;
-  bool get canEditTimetable => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster;
-  bool get canEditAccounts => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.treasurer || this == AppRoles.staff;
-  bool get canEditFinance => this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.treasurer;
+  // Permission Logic Helpers based on dynamic modules
+  bool canEditStudentData(Set<String> allowedModules) => canAccess(AppModule.students, allowedModules);
+  bool canEditAdministration(Set<String> allowedModules) => canAccess(AppModule.administration, allowedModules);
+  bool canEditAttendance(Set<String> allowedModules) => canAccess(AppModule.attendance, allowedModules);
+  bool canEditTimetable(Set<String> allowedModules) => canAccess(AppModule.timetable, allowedModules);
+  bool canEditAccounts(Set<String> allowedModules) => canAccess(AppModule.accounts, allowedModules);
+  bool canEditFinance(Set<String> allowedModules) => canAccess(AppModule.finance, allowedModules);
 
-  List<AppNavItem> get navigationItems {
-    return kAppNavItems.where((item) => canAccess(item.module)).toList();
+  List<AppNavItem> navigationItems(Set<String> allowedModules) {
+    return kAppNavItems.where((item) => canAccess(item.module, allowedModules)).toList();
   }
 
-  String get defaultRoute {
-    if (canAccess(AppModule.dashboard)) {
+  String defaultRoute(Set<String> allowedModules) {
+    if (canAccess(AppModule.dashboard, allowedModules)) {
       return RouteNames.dashboard;
     }
-    return navigationItems.isNotEmpty ? navigationItems.first.route : RouteNames.dashboard;
+    final items = navigationItems(allowedModules);
+    return items.isNotEmpty ? items.first.route : RouteNames.dashboard;
   }
 }
 
@@ -283,8 +228,8 @@ AppModule? moduleForRoute(String location) {
       location.startsWith(RouteNames.editStudent)) {
     return AppModule.students;
   }
-  if (location.startsWith(RouteNames.attendanceReport) ||
-      location.startsWith(RouteNames.teacherCheckIn)) {
+  if (location.startsWith(RouteNames.studentAttendanceReport) ||
+      location.startsWith(RouteNames.teacherAttendanceReport)) {
     return AppModule.attendance;
   }
   return null;

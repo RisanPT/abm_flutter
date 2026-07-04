@@ -279,10 +279,11 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
 
   late final TextEditingController _admissionFeeCtrl;
   late final TextEditingController _monthlyFeeCtrl;
-  late final TextEditingController _annualFeeCtrl;
-  late final TextEditingController _examFeeCtrl;
-  late bool _hasTransport;
-  late final TextEditingController _transportFeeCtrl;
+  late final TextEditingController _sportsFeeCtrl;
+  late final TextEditingController _artsFeeCtrl;
+  late final TextEditingController _exam1FeeCtrl;
+  late final TextEditingController _exam2FeeCtrl;
+  late final TextEditingController _tourFeeCtrl;
   bool _isSubmitting = false;
 
   bool get _isEdit => widget.existing != null;
@@ -300,27 +301,37 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
     // On edit, pre-select the existing grade
     _selectedGrade = e?.grade;
     _customGradeCtrl = TextEditingController(text: e?.grade ?? '');
-    _hasTransport = e?.hasTransport ?? false;
 
     // Pre-fill from existing line items
-    double admission = 0, monthly = 0, annual = 0, exam = 0, transport = 0;
+    double admission = 0, monthly = 0, sports = 0, arts = 0, exam1 = 0, exam2 = 0, tour = 0;
     if (e != null) {
       for (final item in e.lineItems) {
         final name = item.title.toLowerCase();
-        if (name.contains('admission')) admission = item.amount;
-        else if (name.contains('monthly') || name.contains('tuition')) monthly = item.amount;
-        else if (name.contains('annual')) annual = item.amount;
-        else if (name.contains('exam')) exam = item.amount;
-        else if (name.contains('transport')) transport = item.amount;
+        if (name.contains('admission')) {
+          admission = item.amount;
+        } else if (name.contains('monthly') || name.contains('tuition')) {
+          monthly = item.amount;
+        } else if (name.contains('sports')) {
+          sports = item.amount;
+        } else if (name.contains('arts')) {
+          arts = item.amount;
+        } else if (name.contains('exam-1') || name == 'exam-1 fee' || name == 'exam 1 fee') {
+          exam1 = item.amount;
+        } else if (name.contains('exam-2') || name == 'exam-2 fee' || name == 'exam 2 fee') {
+          exam2 = item.amount;
+        } else if (name.contains('tour')) {
+          tour = item.amount;
+        }
       }
-      if (transport == 0) transport = e.transportFeeAmount;
     }
 
     _admissionFeeCtrl = TextEditingController(text: admission > 0 ? admission.toStringAsFixed(0) : '');
     _monthlyFeeCtrl = TextEditingController(text: monthly > 0 ? monthly.toStringAsFixed(0) : '');
-    _annualFeeCtrl = TextEditingController(text: annual > 0 ? annual.toStringAsFixed(0) : '');
-    _examFeeCtrl = TextEditingController(text: exam > 0 ? exam.toStringAsFixed(0) : '');
-    _transportFeeCtrl = TextEditingController(text: transport > 0 ? transport.toStringAsFixed(0) : '');
+    _sportsFeeCtrl = TextEditingController(text: sports > 0 ? sports.toStringAsFixed(0) : '');
+    _artsFeeCtrl = TextEditingController(text: arts > 0 ? arts.toStringAsFixed(0) : '');
+    _exam1FeeCtrl = TextEditingController(text: exam1 > 0 ? exam1.toStringAsFixed(0) : '');
+    _exam2FeeCtrl = TextEditingController(text: exam2 > 0 ? exam2.toStringAsFixed(0) : '');
+    _tourFeeCtrl = TextEditingController(text: tour > 0 ? tour.toStringAsFixed(0) : '');
   }
 
   @override
@@ -328,9 +339,11 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
     _customGradeCtrl.dispose();
     _admissionFeeCtrl.dispose();
     _monthlyFeeCtrl.dispose();
-    _annualFeeCtrl.dispose();
-    _examFeeCtrl.dispose();
-    _transportFeeCtrl.dispose();
+    _sportsFeeCtrl.dispose();
+    _artsFeeCtrl.dispose();
+    _exam1FeeCtrl.dispose();
+    _exam2FeeCtrl.dispose();
+    _tourFeeCtrl.dispose();
     super.dispose();
   }
 
@@ -434,31 +447,34 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
             ),
             const Gap(12),
             TextField(
-              controller: _annualFeeCtrl,
-              decoration: const InputDecoration(labelText: 'Annual Fee (SAR)', hintText: '0'),
+              controller: _sportsFeeCtrl,
+              decoration: const InputDecoration(labelText: 'Sports Fee (SAR)', hintText: '0'),
               keyboardType: TextInputType.number,
             ),
             const Gap(12),
             TextField(
-              controller: _examFeeCtrl,
-              decoration: const InputDecoration(labelText: 'Examination Fee (SAR)', hintText: '0'),
+              controller: _artsFeeCtrl,
+              decoration: const InputDecoration(labelText: 'Arts Fee (SAR)', hintText: '0'),
               keyboardType: TextInputType.number,
             ),
-            const Gap(16),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Includes Transport?'),
-              value: _hasTransport,
-              onChanged: (val) => setState(() => _hasTransport = val),
+            const Gap(12),
+            TextField(
+              controller: _exam1FeeCtrl,
+              decoration: const InputDecoration(labelText: 'Exam-1 Fee (SAR)', hintText: '0'),
+              keyboardType: TextInputType.number,
             ),
-            if (_hasTransport) ...[
-              const Gap(8),
-              TextField(
-                controller: _transportFeeCtrl,
-                decoration: const InputDecoration(labelText: 'Transport Fee (SAR)', hintText: '0'),
-                keyboardType: TextInputType.number,
-              ),
-            ]
+            const Gap(12),
+            TextField(
+              controller: _exam2FeeCtrl,
+              decoration: const InputDecoration(labelText: 'Exam-2 Fee (SAR)', hintText: '0'),
+              keyboardType: TextInputType.number,
+            ),
+            const Gap(12),
+            TextField(
+              controller: _tourFeeCtrl,
+              decoration: const InputDecoration(labelText: 'Tour Fee (SAR)', hintText: '0'),
+              keyboardType: TextInputType.number,
+            ),
           ],
         ),
       ),
@@ -482,12 +498,13 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
 
     final admissionFee = double.tryParse(_admissionFeeCtrl.text.trim()) ?? 0;
     final monthlyFee = double.tryParse(_monthlyFeeCtrl.text.trim()) ?? 0;
-    final annualFee = double.tryParse(_annualFeeCtrl.text.trim()) ?? 0;
-    final examFee = double.tryParse(_examFeeCtrl.text.trim()) ?? 0;
-    final transportFee = double.tryParse(_transportFeeCtrl.text.trim()) ?? 0;
+    final sportsFee = double.tryParse(_sportsFeeCtrl.text.trim()) ?? 0;
+    final artsFee = double.tryParse(_artsFeeCtrl.text.trim()) ?? 0;
+    final exam1Fee = double.tryParse(_exam1FeeCtrl.text.trim()) ?? 0;
+    final exam2Fee = double.tryParse(_exam2FeeCtrl.text.trim()) ?? 0;
+    final tourFee = double.tryParse(_tourFeeCtrl.text.trim()) ?? 0;
 
-    final hasAnyFee = admissionFee > 0 || monthlyFee > 0 || annualFee > 0 || examFee > 0 ||
-        (_hasTransport && transportFee > 0);
+    final hasAnyFee = admissionFee > 0 || monthlyFee > 0 || sportsFee > 0 || artsFee > 0 || exam1Fee > 0 || exam2Fee > 0 || tourFee > 0;
 
     if (grade.isEmpty || !hasAnyFee) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -500,10 +517,12 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
 
     final lineItems = <AccountLineItem>[];
     if (admissionFee > 0) lineItems.add(AccountLineItem(title: 'Admission Fee', amount: admissionFee));
-    if (monthlyFee > 0) lineItems.add(AccountLineItem(title: 'Monthly Fee', amount: monthlyFee));
-    if (annualFee > 0) lineItems.add(AccountLineItem(title: 'Annual Fee', amount: annualFee));
-    if (examFee > 0) lineItems.add(AccountLineItem(title: 'Examination Fee', amount: examFee));
-    if (_hasTransport && transportFee > 0) lineItems.add(AccountLineItem(title: 'Transport Fee', amount: transportFee));
+    if (monthlyFee > 0) lineItems.add(AccountLineItem(title: 'Monthly Tuition Fee', amount: monthlyFee));
+    if (sportsFee > 0) lineItems.add(AccountLineItem(title: 'Sports Fee', amount: sportsFee));
+    if (artsFee > 0) lineItems.add(AccountLineItem(title: 'Arts Fee', amount: artsFee));
+    if (exam1Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-1 Fee', amount: exam1Fee));
+    if (exam2Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-2 Fee', amount: exam2Fee));
+    if (tourFee > 0) lineItems.add(AccountLineItem(title: 'Tour Fee', amount: tourFee));
 
     final totalAmount = lineItems.fold(0.0, (sum, item) => sum + item.amount);
 
@@ -512,8 +531,6 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
         id: widget.existing?.id ?? '',
         instituteId: widget.existing?.instituteId ?? '664c39f00000000000000001',
         grade: grade,
-        hasTransport: _hasTransport,
-        transportFeeAmount: _hasTransport ? transportFee : 0,
         totalAmount: totalAmount,
         lineItems: lineItems,
       );

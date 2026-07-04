@@ -152,8 +152,6 @@ class FeeStructureModel {
     required this.id,
     required this.instituteId,
     required this.grade,
-    required this.hasTransport,
-    required this.transportFeeAmount,
     required this.totalAmount,
     required this.lineItems,
   });
@@ -161,17 +159,17 @@ class FeeStructureModel {
   final String id;
   final String instituteId;
   final String grade;
-  final bool hasTransport;
-  final double transportFeeAmount;
   final double totalAmount;
   final List<AccountLineItem> lineItems;
+
+  bool get hasTransport => lineItems.any((item) => 
+      item.title.toLowerCase().contains('transport') || 
+      item.title.toLowerCase().contains('bus'));
 
   factory FeeStructureModel.fromJson(Map<String, dynamic> json) => FeeStructureModel(
         id: json['_id'] as String,
         instituteId: json['instituteId'] as String,
         grade: json['grade'] as String,
-        hasTransport: json['hasTransport'] as bool? ?? false,
-        transportFeeAmount: (json['transportFeeAmount'] as num?)?.toDouble() ?? 0,
         totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
         lineItems: ((json['lineItems'] as List?) ?? [])
             .map((item) => AccountLineItem.fromJson(item as Map<String, dynamic>))
@@ -182,8 +180,6 @@ class FeeStructureModel {
         if (id.isNotEmpty) '_id': id,
         'instituteId': instituteId,
         'grade': grade,
-        'hasTransport': hasTransport,
-        'transportFeeAmount': transportFeeAmount,
         'totalAmount': totalAmount,
         'lineItems': lineItems.map((e) => {'title': e.title, 'amount': e.amount}).toList(),
       };

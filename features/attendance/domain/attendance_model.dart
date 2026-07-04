@@ -18,6 +18,7 @@ abstract class AttendanceModel with _$AttendanceModel {
     @JsonKey(name: '_id') String? id,
     String? studentId,
     String? studentName, // Populated from studentId object if available
+    String? admissionNumber, // The student's roll number or admission ID
     String? teacherId,
     String? teacherName, // Populated from teacherId object if available
     required DateTime date,
@@ -36,6 +37,7 @@ abstract class AttendanceModel with _$AttendanceModel {
       final studentMap = modifiedJson['studentId'] as Map<String, dynamic>;
       modifiedJson['studentId'] = studentMap['_id'] ?? '';
       modifiedJson['studentName'] = studentMap['fullName'] ?? studentMap['name'] ?? '';
+      modifiedJson['admissionNumber'] = studentMap['studentId']?.toString() ?? studentMap['admissionNumber']?.toString() ?? '';
     }
     
     if (modifiedJson['teacherId'] is Map<String, dynamic>) {

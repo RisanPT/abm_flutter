@@ -66,9 +66,6 @@ class InstituteManagementScreen extends ConsumerWidget {
     final addressController = TextEditingController(text: institute?.address);
     final contactController = TextEditingController(text: institute?.contactNumber);
     final emailController = TextEditingController(text: institute?.email);
-    final latController = TextEditingController(text: institute?.latitude.toString() ?? '25.2048');
-    final lngController = TextEditingController(text: institute?.longitude.toString() ?? '55.2708');
-    final radiusController = TextEditingController(text: institute?.radius.toString() ?? '500');
     String selectedIcon = institute?.iconName ?? 'school';
 
     showDialog(
@@ -105,23 +102,6 @@ class InstituteManagementScreen extends ConsumerWidget {
                   decoration: const InputDecoration(labelText: 'Email'),
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: latController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Latitude (for face/GPS check-in)'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: lngController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Longitude (for face/GPS check-in)'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: radiusController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: false),
-                  decoration: const InputDecoration(labelText: 'Allowed Radius (meters)'),
-                ),
                 const SizedBox(height: 16),
                 const Text('Select Icon'),
                 Row(
@@ -146,9 +126,6 @@ class InstituteManagementScreen extends ConsumerWidget {
                   'contactNumber': contactController.text,
                   'email': emailController.text,
                   'iconName': selectedIcon,
-                  'latitude': double.tryParse(latController.text) ?? 25.2048,
-                  'longitude': double.tryParse(lngController.text) ?? 55.2708,
-                  'radius': double.tryParse(radiusController.text) ?? 500.0,
                 };
 
                 if (institute == null) {

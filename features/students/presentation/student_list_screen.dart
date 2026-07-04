@@ -25,6 +25,7 @@ class StudentListScreen extends ConsumerStatefulWidget {
 
 class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   String? selectedClass;
+  String? selectedShift;
 
   @override
   void initState() {
@@ -32,7 +33,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     if (widget.initialClass != null) {
       selectedClass = widget.initialClass;
       Future.microtask(() {
-        ref.read(studentControllerProvider.notifier).filterByClassroom(selectedClass);
+        ref.read(studentControllerProvider.notifier).filter(selectedClass, selectedShift);
       });
     }
   }
@@ -159,38 +160,77 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       child: classroomsAsync.when(
         data: (classes) {
           final filterOptions = ['All', ...classes.map((c) => c.name)];
+          final shiftOptions = ['All', 'Shift-1', 'Shift-2'];
+          
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: filterOptions.map((c) {
-                  final isSelected = (selectedClass ?? 'All') == c;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: FilterChip(
-                      label: Text(c),
-                      selected: isSelected,
-                      onSelected: (val) {
-                        setState(() => selectedClass = c == 'All' ? null : c);
-                        ref.read(studentControllerProvider.notifier).filterByClassroom(selectedClass);
-                      },
-                      backgroundColor: colors.white,
-                      selectedColor: colors.primary.withValues(alpha: 0.1),
-                      checkmarkColor: colors.primary,
-                      labelStyle: TextStyle(
-                        color: isSelected ? const Color(0xFF163D32) : const Color(0xFF3B4C45),
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: isSelected ? colors.primary : colors.border),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: filterOptions.map((c) {
+                      final isSelected = (selectedClass ?? 'All') == c;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: FilterChip(
+                          label: Text(c),
+                          selected: isSelected,
+                          onSelected: (val) {
+                            setState(() => selectedClass = c == 'All' ? null : c);
+                            ref.read(studentControllerProvider.notifier).filter(selectedClass, selectedShift);
+                          },
+                          backgroundColor: colors.white,
+                          selectedColor: colors.primary.withValues(alpha: 0.1),
+                          checkmarkColor: colors.primary,
+                          labelStyle: TextStyle(
+                            color: isSelected ? const Color(0xFF163D32) : const Color(0xFF3B4C45),
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: isSelected ? colors.primary : colors.border),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const Gap(12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: shiftOptions.map((s) {
+                      final isSelected = (selectedShift ?? 'All') == s;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: FilterChip(
+                          label: Text(s),
+                          selected: isSelected,
+                          onSelected: (val) {
+                            setState(() => selectedShift = s == 'All' ? null : s);
+                            ref.read(studentControllerProvider.notifier).filter(selectedClass, selectedShift);
+                          },
+                          backgroundColor: colors.white,
+                          selectedColor: colors.primary.withValues(alpha: 0.1),
+                          checkmarkColor: colors.primary,
+                          labelStyle: TextStyle(
+                            color: isSelected ? const Color(0xFF163D32) : const Color(0xFF3B4C45),
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: isSelected ? colors.primary : colors.border),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
             ),
           );
         },

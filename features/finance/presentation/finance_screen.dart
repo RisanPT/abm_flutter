@@ -1,6 +1,7 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/finance/data/finance_repository.dart';
 import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
 import 'package:flutter/material.dart';
@@ -80,7 +81,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final colors = context.colors;
     final typography = context.typography;
     final user = ref.watch(authControllerProvider).asData?.value;
-    final canEdit = user?.role.canEditFinance ?? false;
+    final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
+    final canEdit = user?.role.canEditFinance(allowedModules) ?? false;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -113,7 +115,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   Widget _buildExpensesBody(BuildContext context) {
     final typography = context.typography;
     final user = ref.watch(authControllerProvider).asData?.value;
-    final canEdit = user?.role.canEditFinance ?? false;
+    final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
+    final canEdit = user?.role.canEditFinance(allowedModules) ?? false;
     final Future<List<MadrassaExpense>> expensesFuture =
         ref.read(madrassaFinanceRepositoryProvider).getExpenses(
               category: _selectedCategory,

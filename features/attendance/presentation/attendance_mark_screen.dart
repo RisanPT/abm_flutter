@@ -5,6 +5,7 @@ import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:abm_madrasa/features/attendance/presentation/attendance_controller.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
 import 'package:flutter/material.dart';
@@ -27,11 +28,14 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
   String? _selectedClassroom;
   String _searchQuery = '';
   String _selectedType = 'Student';
+  String _selectedShift = 'Shift-1';
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final user = ref.watch(authControllerProvider).value;
+    final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
+    final canManageTeachers = user?.role.canAccess(AppModule.teachers, allowedModules) ?? false;
     final classroomsAsync = ref.watch(attendanceClassroomsProvider);
 
     return Scaffold(
@@ -50,9 +54,12 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                   selectedClassroom: null,
                   classrooms: const [],
                   user: user,
+                  allowedModules: allowedModules,
                   searchQuery: _searchQuery,
                   selectedType: _selectedType,
+                  selectedShift: _selectedShift,
                   onTypeChanged: (val) => setState(() => _selectedType = val),
+                  onShiftChanged: (val) => setState(() => _selectedShift = val),
                   onSelectClassroom: (value) {},
                   onSearchChanged: (value) => setState(() => _searchQuery = value),
                   onMarkAllPresent: () {},
@@ -76,7 +83,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                           textAlign: TextAlign.center,
                         ),
                         const Gap(24),
-                        if (user?.role.canEditAdministration == true)
+                        if (canManageTeachers)
                           ABMButton(
                             text: 'Manage Classrooms',
                             icon: LucideIcons.layers,
@@ -90,11 +97,14 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
             );
           }
 
+          final effectiveClassroom = _selectedClassroom ?? (classrooms.isNotEmpty ? classrooms.first : null);
+
           final attendanceAsync = ref.watch(
             attendanceControllerProvider(
               date: _selectedDate,
-              classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
+              classroom: _selectedType == 'Teacher' ? null : effectiveClassroom,
               type: _selectedType,
+              shift: _selectedShift,
             ),
           );
 
@@ -102,12 +112,18 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
             children: [
               _AttendanceHeader(
                 selectedDate: _selectedDate,
-                selectedClassroom: _selectedClassroom ?? (classrooms.isNotEmpty ? classrooms.first : ''),
+                selectedClassroom: effectiveClassroom ?? '',
                 classrooms: classrooms,
                 user: user,
+                allowedModules: allowedModules,
                 searchQuery: _searchQuery,
                 selectedType: _selectedType,
+                selectedShift: _selectedShift,
                 onTypeChanged: (val) => setState(() => _selectedType = val),
+                onShiftChanged: (val) => setState(() {
+                  _selectedShift = val;
+                  _selectedDate = DateTime.now();
+                }),
                 onSelectClassroom: (value) {
                   setState(() => _selectedClassroom = value);
                 },
@@ -119,18 +135,26 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                       .read(
                         attendanceControllerProvider(
                           date: _selectedDate,
-                          classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
+                          classroom: _selectedType == 'Teacher' ? null : effectiveClassroom,
                           type: _selectedType,
+                          shift: _selectedShift,
                         ).notifier,
                       )
                       .markAll(AttendanceStatus.present);
                 },
                 onSelectDate: () async {
+                  final planAsync = ref.read(attendanceShiftPlanProvider((shift: _selectedShift, year: _selectedDate.year, month: _selectedDate.month)));
+                  final allowedDates = planAsync.value ?? [];
+                  
                   final picked = await showDatePicker(
                     context: context,
-                    initialDate: _selectedDate,
+                    initialDate: allowedDates.contains(DateTime.utc(_selectedDate.year, _selectedDate.month, _selectedDate.day)) ? _selectedDate : (allowedDates.isNotEmpty ? allowedDates.last : _selectedDate),
                     firstDate: DateTime(2020),
                     lastDate: DateTime.now(),
+                    selectableDayPredicate: (day) {
+                      final normalizedDay = DateTime.utc(day.year, day.month, day.day);
+                      return allowedDates.contains(normalizedDay);
+                    },
                   );
                   if (picked != null) {
                     setState(() => _selectedDate = picked);
@@ -199,6 +223,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                       record: record,
                                       classroom: _selectedClassroom,
                                       date: _selectedDate,
+                                      shift: _selectedShift,
                                     );
                                   },
                                 ),
@@ -251,14 +276,21 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                             .read(
                                               attendanceControllerProvider(
                                                 date: _selectedDate,
-                                                classroom: _selectedClassroom,
+                                                classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
+                                                type: _selectedType,
+                                                shift: _selectedShift,
                                               ).notifier,
                                             )
                                             .saveAttendance(user?.username ?? 'Admin');
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Attendance saved successfully'),
+                                            SnackBar(
+                                              content: Text(
+                                                _selectedType == 'Teacher'
+                                                    ? 'Teacher attendance saved successfully'
+                                                    : 'Student attendance saved successfully',
+                                              ),
+                                              backgroundColor: Colors.green.shade700,
                                             ),
                                           );
                                         }
@@ -299,14 +331,21 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                               .read(
                                                 attendanceControllerProvider(
                                                   date: _selectedDate,
-                                                  classroom: _selectedClassroom,
+                                                  classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
+                                                  type: _selectedType,
+                                                  shift: _selectedShift,
                                                 ).notifier,
                                               )
                                               .saveAttendance(user?.username ?? 'Admin');
                                           if (context.mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                content: Text('Attendance saved successfully'),
+                                              SnackBar(
+                                                content: Text(
+                                                  _selectedType == 'Teacher'
+                                                      ? 'Teacher attendance saved successfully'
+                                                      : 'Student attendance saved successfully',
+                                                ),
+                                                backgroundColor: Colors.green.shade700,
                                               ),
                                             );
                                           }
@@ -339,9 +378,12 @@ class _AttendanceHeader extends StatelessWidget {
     required this.selectedClassroom,
     required this.classrooms,
     required this.user,
+    required this.allowedModules,
     required this.searchQuery,
     required this.selectedType,
+    required this.selectedShift,
     required this.onTypeChanged,
+    required this.onShiftChanged,
     required this.onSelectClassroom,
     required this.onSearchChanged,
     required this.onMarkAllPresent,
@@ -352,9 +394,12 @@ class _AttendanceHeader extends StatelessWidget {
   final String? selectedClassroom;
   final List<String> classrooms;
   final UserModel? user;
+  final Set<String> allowedModules;
   final String searchQuery;
   final String selectedType;
+  final String selectedShift;
   final ValueChanged<String> onTypeChanged;
+  final ValueChanged<String> onShiftChanged;
   final ValueChanged<String> onSelectClassroom;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onMarkAllPresent;
@@ -367,6 +412,7 @@ class _AttendanceHeader extends StatelessWidget {
     final isMobile = context.isMobile;
     final filterCardPadding = isMobile ? 10.0 : 16.0;
     final sectionGap = isMobile ? 10.0 : 18.0;
+    final canManageTeachers = user?.role.canAccess(AppModule.teachers, allowedModules) ?? false;
 
     return Container(
       width: double.infinity,
@@ -413,7 +459,7 @@ class _AttendanceHeader extends StatelessWidget {
                     ),
                     const Spacer(),
                     IconButton(
-                      onPressed: () => context.push(RouteNames.attendanceReport),
+                      onPressed: () => context.push(RouteNames.studentAttendanceReport),
                       icon: const Icon(LucideIcons.barChart2, color: Colors.white70),
                       tooltip: 'View Monthly Reports',
                     ),
@@ -470,7 +516,7 @@ class _AttendanceHeader extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      if (user?.role.canEditAdministration == true)
+                      if (canManageTeachers)
                         Row(
                           children: [
                             Expanded(
@@ -490,7 +536,7 @@ class _AttendanceHeader extends StatelessWidget {
                             ),
                           ],
                         ),
-                      if (user?.role.canEditAdministration == true)
+                      if (canManageTeachers)
                         Gap(isMobile ? 12 : 18),
                       if (selectedType == 'Student') ...[
                         _HeaderTile(
@@ -528,27 +574,78 @@ class _AttendanceHeader extends StatelessWidget {
                         Gap(isMobile ? 8 : 14),
                       ],
                       _HeaderTile(
-                        title: user?.role == AppRoles.teacher
-                            ? 'DATE'
-                            : 'DATE (HEAD MASTER)',
-                        child: InkWell(
-                          onTap: onSelectDate,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  DateFormat('EEE, dd MMM yyyy').format(selectedDate),
-                                  style: typography.bodyMediumSemiBold.copyWith(
-                                    color: const Color(0xFF163D32),
+                        title: 'SHIFT',
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedShift,
+                            isExpanded: true,
+                            dropdownColor: Colors.white,
+                            iconEnabledColor: const Color(0xFF7A837E),
+                            style: typography.bodyMediumSemiBold.copyWith(
+                              color: const Color(0xFF163D32),
+                            ),
+                            items: ['Shift-1', 'Shift-2']
+                                .map(
+                                  (shift) => DropdownMenuItem(
+                                    value: shift,
+                                    child: Text(
+                                      shift,
+                                      style: typography.bodyMediumSemiBold.copyWith(
+                                        color: const Color(0xFF163D32),
+                                      ),
+                                    ),
                                   ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                onShiftChanged(value);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      Gap(isMobile ? 8 : 14),
+                      _HeaderTile(
+                        title: 'DATE',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: onSelectDate,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD6B64C).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFD6B64C).withValues(alpha: 0.2),
                                 ),
                               ),
-                              const Icon(
-                                Icons.calendar_today_outlined,
-                                size: 18,
-                                color: Color(0xFF7A837E),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    LucideIcons.calendar,
+                                    size: 16,
+                                    color: const Color(0xFF163D32),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      DateFormat('EEE, dd MMM yyyy').format(selectedDate),
+                                      style: typography.bodyMediumSemiBold.copyWith(
+                                        color: const Color(0xFF163D32),
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(
+                                    LucideIcons.chevronDown,
+                                    size: 16,
+                                    color: Color(0xFF163D32),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -559,7 +656,7 @@ class _AttendanceHeader extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      selectedType == 'Teacher' ? 'Teachers List' : 'Students List',
+                      selectedType == 'Teacher' ? 'Teachers Attendance' : 'Students Attendance',
                       style: typography.bodyLargeSemiBold.copyWith(
                         color: Colors.white,
                         fontSize: isMobile ? 18 : 22,
@@ -665,11 +762,13 @@ class _AttendanceRow extends ConsumerWidget {
     required this.record,
     required this.classroom,
     required this.date,
+    required this.shift,
   });
 
   final AttendanceModel record;
   final String? classroom;
   final DateTime date;
+  final String shift;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -691,7 +790,13 @@ class _AttendanceRow extends ConsumerWidget {
             radius: context.isMobile ? 22 : 24,
             backgroundColor: const Color(0xFFE8EFEA),
             child: Text(
-              (record.studentName ?? 'S')[0].toUpperCase(),
+              ((record.teacherId != null && record.teacherId!.isNotEmpty)
+                  ? record.teacherName
+                  : record.studentName)?.isNotEmpty == true
+                  ? ((record.teacherId != null && record.teacherId!.isNotEmpty)
+                      ? record.teacherName!
+                      : record.studentName!)[0].toUpperCase()
+                  : '?',
               style: context.typography.bodyMediumSemiBold.copyWith(
                 color: colors.primary,
               ),
@@ -703,7 +808,9 @@ class _AttendanceRow extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  record.studentName?.isNotEmpty == true ? record.studentName! : (record.teacherName ?? 'Unknown'),
+                  (record.teacherId != null && record.teacherId!.isNotEmpty)
+                      ? (record.teacherName ?? 'Unknown Teacher')
+                      : (record.studentName ?? 'Unknown Student'),
                   style: context.typography.bodyMediumSemiBold.copyWith(
                     color: rowTitleColor,
                     fontSize: context.isMobile ? 14 : null,
@@ -713,7 +820,9 @@ class _AttendanceRow extends ConsumerWidget {
                 ),
                 const Gap(3),
                 Text(
-                  'ID: ${record.studentId?.isNotEmpty == true ? record.studentId : record.teacherId ?? 'N/A'}',
+                  (record.teacherId != null && record.teacherId!.isNotEmpty)
+                      ? 'Teacher ID: ${record.teacherId ?? 'N/A'}'
+                      : 'Adm: ${record.admissionNumber?.isNotEmpty == true ? record.admissionNumber : record.studentId ?? 'N/A'}',
                   style: context.typography.bodySmall.copyWith(
                     color: rowSubtleColor,
                     fontSize: context.isMobile ? 12 : null,
@@ -736,6 +845,7 @@ class _AttendanceRow extends ConsumerWidget {
                       date: date,
                       classroom: isTeacher ? null : classroom,
                       type: isTeacher ? 'Teacher' : 'Student',
+                      shift: shift,
                     ).notifier,
                   )
                   .updateStatus(targetId, status, type: isTeacher ? 'Teacher' : 'Student');

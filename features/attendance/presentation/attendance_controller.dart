@@ -4,6 +4,7 @@ import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/features/students/data/classroom_repository.dart';
 import 'package:abm_madrasa/features/teachers/data/teacher_repository.dart';
+import 'package:abm_madrasa/features/timetable/presentation/shift_planner_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -12,11 +13,12 @@ part 'attendance_controller.g.dart';
 @riverpod
 class AttendanceController extends _$AttendanceController {
   @override
-  FutureOr<List<AttendanceModel>> build({required DateTime date, String? classroom, String type = 'Student'}) async {
+  FutureOr<List<AttendanceModel>> build({required DateTime date, String? classroom, String type = 'Student', required String shift}) async {
     final instituteId = ref.watch(selectedInstituteProvider).id;
     
     if (type == 'Teacher') {
-      final teachers = await ref.read(teacherRepositoryProvider).getTeachers();
+      final allTeachers = await ref.read(teacherRepositoryProvider).getTeachers();
+      final teachers = allTeachers.where((t) => t.shift.contains(shift)).toList();
       final existingAttendance = await ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId, type: 'Teacher');
       
       return teachers.map((teacher) {
@@ -30,7 +32,8 @@ class AttendanceController extends _$AttendanceController {
       }).toList();
     } else {
       // 1. Fetch all students for the classroom
-      final students = await ref.read(studentRepositoryProvider).getStudents(classroom: classroom);
+      final allStudents = await ref.read(studentRepositoryProvider).getStudents(classroom: classroom);
+      final students = allStudents.where((s) => s.shift == shift).toList();
       
       // 2. Fetch existing attendance for the date
       final existingAttendance = await ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId, type: 'Student');
@@ -41,6 +44,7 @@ class AttendanceController extends _$AttendanceController {
         return existing ?? AttendanceModel(
           studentId: student.id,
           studentName: student.fullName,
+          admissionNumber: student.admissionNumber,
           date: date,
           status: AttendanceStatus.present,
         );
@@ -102,6 +106,11 @@ final attendanceClassroomsProvider = FutureProvider<List<String>>((ref) async {
   final classroomsModels = await ref.read(classroomRepositoryProvider).getClassrooms(instituteId: instituteId);
   final classrooms = classroomsModels.map((c) => c.name).toSet().toList()..sort();
   return classrooms;
+});
+
+final attendanceShiftPlanProvider = FutureProvider.family<List<DateTime>, ({String shift, int year, int month})>((ref, args) async {
+  if (args.shift.isEmpty) return [];
+  return ref.read(shiftPlannerControllerProvider(args.shift, args.year, args.month).future);
 });
 
 @riverpod
