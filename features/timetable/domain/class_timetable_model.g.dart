@@ -8,7 +8,7 @@ part of 'class_timetable_model.dart';
 
 _ClassTimetableEntry _$ClassTimetableEntryFromJson(Map<String, dynamic> json) =>
     _ClassTimetableEntry(
-      day: json['day'] as String,
+      date: DateTime.parse(json['date'] as String),
       period: (json['period'] as num).toInt(),
       subjectName: json['subjectName'] as String,
       teacherId: json['teacherId'] as String,
@@ -19,7 +19,7 @@ _ClassTimetableEntry _$ClassTimetableEntryFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$ClassTimetableEntryToJson(
   _ClassTimetableEntry instance,
 ) => <String, dynamic>{
-  'day': instance.day,
+  'date': instance.date.toIso8601String(),
   'period': instance.period,
   'subjectName': instance.subjectName,
   'teacherId': instance.teacherId,

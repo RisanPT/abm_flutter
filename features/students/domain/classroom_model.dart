@@ -10,6 +10,7 @@ abstract class ClassroomModel with _$ClassroomModel {
     required String name,
     String? description,
     @Default([]) List<String> subjects,
+    @Default('Shift-1') String shift,
   }) = _ClassroomModel;
 
   factory ClassroomModel.fromJson(Map<String, dynamic> json) => _$ClassroomModelFromJson(json);

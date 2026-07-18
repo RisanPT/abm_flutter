@@ -8,18 +8,45 @@ part 'class_timetable_controller.g.dart';
 @riverpod
 class ClassTimetableController extends _$ClassTimetableController {
   @override
-  FutureOr<ClassTimetable> build(String className) async {
+  FutureOr<ClassTimetable> build(
+    String className,
+    String shift,
+    String academicYear,
+    int year,
+    int month,
+  ) async {
     final instituteId = ref.watch(selectedInstituteProvider).id;
-    return ref.read(timetableRepositoryProvider).getClassroomTimetable(className, instituteId);
+    return ref.read(timetableRepositoryProvider).getClassroomTimetable(
+          className,
+          instituteId,
+          shift,
+          year: year,
+          month: month,
+          academicYear: academicYear,
+        );
   }
 
   Future<void> updateTimetable(List<ClassTimetableEntry> schedule) async {
-    final className = this.className;
-    final instituteId = ref.watch(selectedInstituteProvider).id;
+    final instituteId = ref.read(selectedInstituteProvider).id;
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
-      await ref.read(timetableRepositoryProvider).updateClassroomTimetable(className, instituteId, schedule);
-      return ref.read(timetableRepositoryProvider).getClassroomTimetable(className, instituteId);
+      await ref.read(timetableRepositoryProvider).updateClassroomTimetable(
+            className,
+            instituteId,
+            shift,
+            academicYear,
+            year,
+            month,
+            schedule,
+          );
+      return ref.read(timetableRepositoryProvider).getClassroomTimetable(
+            className,
+            instituteId,
+            shift,
+            year: year,
+            month: month,
+            academicYear: academicYear,
+          );
     });
   }
 }

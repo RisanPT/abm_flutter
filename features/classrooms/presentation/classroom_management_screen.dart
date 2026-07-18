@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/widgets/classroom_subjects_dialog.dart';
-import 'package:abm_madrasa/features/timetable/presentation/timetable_grid_screen.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -87,10 +86,10 @@ class ClassroomManagementScreen extends ConsumerWidget {
               data: (classrooms) => studentsAsync.when(
                 data: (students) => _buildGrid(context, classrooms, students),
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('Error loading students: $e')),
+                error: (e, _) => _errorView(context, ref, e, 'students'),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error loading classrooms: $e')),
+              error: (e, _) => _errorView(context, ref, e, 'classrooms'),
             ),
           ),
       ]),
@@ -104,6 +103,77 @@ class ClassroomManagementScreen extends ConsumerWidget {
             )
           : null,
     );
+  }
+
+  /// A calm, actionable error state with a Retry — never a raw exception dump.
+  Widget _errorView(BuildContext context, WidgetRef ref, Object error, String what) {
+    final colors = context.colors;
+    final typography = context.typography;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(color: colors.red.withValues(alpha: 0.08), shape: BoxShape.circle),
+              child: Icon(LucideIcons.alertTriangle, size: 38, color: colors.red),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Couldn't load $what",
+              style: typography.h3.copyWith(color: const Color(0xFF163D32)),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _friendlyError(error),
+              style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: () {
+                ref.invalidate(classroomControllerProvider);
+                ref.invalidate(studentControllerProvider);
+              },
+              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              label: const Text('Retry'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colors.primary,
+                side: BorderSide(color: colors.primary),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Turns a raw error (usually a Dio 4xx/5xx) into a short, human sentence.
+  static String _friendlyError(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map && data['message'] != null) {
+        final m = data['message'].toString();
+        if (m.contains('E11000') || m.toLowerCase().contains('duplicate')) {
+          return 'A classroom with that name already exists — try a different name.';
+        }
+        return m;
+      }
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.receiveTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.connectionError:
+          return 'Cannot reach the server. Check that the backend is running, then retry.';
+        default:
+          break;
+      }
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   Widget _buildGrid(BuildContext context, List classrooms, List students) {
@@ -124,17 +194,13 @@ class ClassroomManagementScreen extends ConsumerWidget {
         return ClassroomCard(
           title: classroom.name,
           studentCount: count,
+          shift: classroom.shift,
           onViewStudents: () => context.push(RouteNames.students, extra: classroom.name),
           onManageSubjects: () => showDialog(
             context: context,
             builder: (context) => ClassroomSubjectsDialog(classroom: classroom),
           ),
-          onManageTimetable: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TimetableGridScreen(classroom: classroom),
-            ),
-          ),
+          onManageTimetable: () => context.push(RouteNames.timetable),
         );
       },
     );
@@ -142,25 +208,54 @@ class ClassroomManagementScreen extends ConsumerWidget {
 
   Future<void> _showAddClassDialog(BuildContext context, WidgetRef ref) async {
     final nameController = TextEditingController();
+    var selectedShift = 'Shift-1';
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Classroom Section'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(hintText: 'e.g. Grade 1A', labelText: 'Class Name'),
-          autofocus: true,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setLocalState) => AlertDialog(
+          title: const Text('New Classroom Section'),
+          content: SizedBox(
+            width: dialogCtx.isMobile ? double.maxFinite : 440,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // First column — the section name.
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(hintText: 'e.g. Grade 1A', labelText: 'Class Name'),
+                    autofocus: true,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Second column — the shift this section belongs to.
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: selectedShift,
+                    decoration: const InputDecoration(labelText: 'Shift'),
+                    items: const [
+                      DropdownMenuItem(value: 'Shift-1', child: Text('Shift-1')),
+                      DropdownMenuItem(value: 'Shift-2', child: Text('Shift-2')),
+                    ],
+                    onChanged: (value) => setLocalState(() => selectedShift = value ?? 'Shift-1'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(dialogCtx, true), child: const Text('Create')),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Create')),
-        ],
       ),
     );
 
     if (result == true && nameController.text.trim().isNotEmpty) {
       try {
-        await ref.read(classroomControllerProvider.notifier).addClassroom(nameController.text.trim());
+        await ref.read(classroomControllerProvider.notifier).addClassroom(nameController.text.trim(), shift: selectedShift);
       } catch (e) {
         if (context.mounted) {
           String errMsg = e.toString();

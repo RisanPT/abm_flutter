@@ -6,7 +6,7 @@ part 'class_timetable_model.g.dart';
 @freezed
 abstract class ClassTimetableEntry with _$ClassTimetableEntry {
   const factory ClassTimetableEntry({
-    required String day,
+    required DateTime date,
     required int period,
     required String subjectName,
     required String teacherId,

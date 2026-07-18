@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 class ClassroomCard extends StatelessWidget {
   final String title;
   final int studentCount;
+  final String? shift;
   final VoidCallback onViewStudents;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
@@ -16,6 +17,7 @@ class ClassroomCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.studentCount,
+    this.shift,
     required this.onViewStudents,
     this.onEdit,
     this.onDelete,
@@ -101,6 +103,31 @@ class ClassroomCard extends StatelessWidget {
                         color: const Color(0xFF6F7A75),
                       ),
                     ),
+                    if (shift != null && shift!.isNotEmpty) ...[
+                      const Gap(10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: colors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.clock, size: 12, color: colors.primary),
+                            const Gap(4),
+                            Text(
+                              shift!,
+                              style: typography.caption.copyWith(
+                                color: colors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const Gap(20),

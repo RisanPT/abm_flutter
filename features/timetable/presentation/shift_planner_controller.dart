@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/features/timetable/domain/shift_plan_model.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -7,16 +8,19 @@ part 'shift_planner_controller.g.dart';
 @riverpod
 class ShiftPlannerController extends _$ShiftPlannerController {
   @override
-  Future<List<DateTime>> build(String shift, int year, int month) async {
-    return _fetchShiftPlan(shift, year, month);
+  Future<List<DateTime>> build(String academicYear, String shift, int year, int month) async {
+    return _fetchShiftPlan(academicYear, shift, year, month);
   }
 
-  Future<List<DateTime>> _fetchShiftPlan(String shift, int year, int month) async {
+  Future<List<DateTime>> _fetchShiftPlan(String academicYear, String shift, int year, int month) async {
     try {
       final dio = ref.read(dioProvider);
+      final instituteId = ref.read(selectedInstituteProvider).id;
       final response = await dio.get(
         '/shift-plans',
         queryParameters: {
+          'instituteId': instituteId,
+          'academicYear': academicYear,
           'shift': shift,
           'year': year,
           'month': month,
@@ -42,10 +46,13 @@ class ShiftPlannerController extends _$ShiftPlannerController {
     try {
       state = const AsyncLoading();
       final dio = ref.read(dioProvider);
+      final instituteId = ref.read(selectedInstituteProvider).id;
       
       final response = await dio.post(
         '/shift-plans',
         data: {
+          'instituteId': instituteId,
+          'academicYear': academicYear,
           'shift': shift,
           'year': year,
           'month': month,

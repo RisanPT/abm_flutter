@@ -12,6 +12,9 @@ class RouteNames {
 
   static const String timetable = '/timetable';
   static const String shiftPlanner = '/shift-planner';
+  static const String classTimetableView = '/class-timetable';
+  static const String teacherDashboard = '/teacher-dashboard';
+  static const String studentDashboard = '/student-dashboard';
   static const String accounts = '/accounts';
   static const String outstandingDues = '/outstanding-dues';
   static const String incomeEntry = '/income-entry';

@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:dio/dio.dart';
@@ -41,14 +38,20 @@ class AttendanceRepository {
     required List<AttendanceModel> records,
     required String markedBy,
     required String instituteId,
+    required String academicYear,
+    required String shift,
     String type = 'Student',
+    String? classroomName,
   }) async {
     try {
       final data = {
         'date': _dateFormatter.format(date),
         'markedBy': markedBy,
         'instituteId': instituteId,
+        'academicYear': academicYear,
+        'shift': shift,
         'type': type,
+        if (classroomName != null && classroomName.isNotEmpty) 'classroomName': classroomName,
         'records': records.map((r) => {
           if (r.studentId != null && r.studentId!.isNotEmpty) 'studentId': r.studentId,
           if (r.teacherId != null && r.teacherId!.isNotEmpty) 'teacherId': r.teacherId,

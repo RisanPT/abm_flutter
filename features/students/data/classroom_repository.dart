@@ -25,13 +25,14 @@ class ClassroomRepository {
     }
   }
 
-  Future<ClassroomModel> addClassroom(String name, {String? description, required String instituteId}) async {
+  Future<ClassroomModel> addClassroom(String name, {String? description, required String instituteId, String shift = 'Shift-1'}) async {
     try {
       final response = await _dio.post(
         '/classrooms',
         data: {
           'name': name,
           'description': description,
+          'shift': shift,
           'instituteId': instituteId,
         },
       );

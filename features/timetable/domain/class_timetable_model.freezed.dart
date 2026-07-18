@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ClassTimetableEntry {
 
- String get day; int get period; String get subjectName; String get teacherId; String get startTime; String get endTime;
+ DateTime get date; int get period; String get subjectName; String get teacherId; String get startTime; String get endTime;
 /// Create a copy of ClassTimetableEntry
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $ClassTimetableEntryCopyWith<ClassTimetableEntry> get copyWith => _$ClassTimetab
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClassTimetableEntry&&(identical(other.day, day) || other.day == day)&&(identical(other.period, period) || other.period == period)&&(identical(other.subjectName, subjectName) || other.subjectName == subjectName)&&(identical(other.teacherId, teacherId) || other.teacherId == teacherId)&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.endTime, endTime) || other.endTime == endTime));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClassTimetableEntry&&(identical(other.date, date) || other.date == date)&&(identical(other.period, period) || other.period == period)&&(identical(other.subjectName, subjectName) || other.subjectName == subjectName)&&(identical(other.teacherId, teacherId) || other.teacherId == teacherId)&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.endTime, endTime) || other.endTime == endTime));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,day,period,subjectName,teacherId,startTime,endTime);
+int get hashCode => Object.hash(runtimeType,date,period,subjectName,teacherId,startTime,endTime);
 
 @override
 String toString() {
-  return 'ClassTimetableEntry(day: $day, period: $period, subjectName: $subjectName, teacherId: $teacherId, startTime: $startTime, endTime: $endTime)';
+  return 'ClassTimetableEntry(date: $date, period: $period, subjectName: $subjectName, teacherId: $teacherId, startTime: $startTime, endTime: $endTime)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $ClassTimetableEntryCopyWith<$Res>  {
   factory $ClassTimetableEntryCopyWith(ClassTimetableEntry value, $Res Function(ClassTimetableEntry) _then) = _$ClassTimetableEntryCopyWithImpl;
 @useResult
 $Res call({
- String day, int period, String subjectName, String teacherId, String startTime, String endTime
+ DateTime date, int period, String subjectName, String teacherId, String startTime, String endTime
 });
 
 
@@ -65,10 +65,10 @@ class _$ClassTimetableEntryCopyWithImpl<$Res>
 
 /// Create a copy of ClassTimetableEntry
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? day = null,Object? period = null,Object? subjectName = null,Object? teacherId = null,Object? startTime = null,Object? endTime = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? date = null,Object? period = null,Object? subjectName = null,Object? teacherId = null,Object? startTime = null,Object? endTime = null,}) {
   return _then(_self.copyWith(
-day: null == day ? _self.day : day // ignore: cast_nullable_to_non_nullable
-as String,period: null == period ? _self.period : period // ignore: cast_nullable_to_non_nullable
+date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
+as DateTime,period: null == period ? _self.period : period // ignore: cast_nullable_to_non_nullable
 as int,subjectName: null == subjectName ? _self.subjectName : subjectName // ignore: cast_nullable_to_non_nullable
 as String,teacherId: null == teacherId ? _self.teacherId : teacherId // ignore: cast_nullable_to_non_nullable
 as String,startTime: null == startTime ? _self.startTime : startTime // ignore: cast_nullable_to_non_nullable
@@ -158,10 +158,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String day,  int period,  String subjectName,  String teacherId,  String startTime,  String endTime)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( DateTime date,  int period,  String subjectName,  String teacherId,  String startTime,  String endTime)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ClassTimetableEntry() when $default != null:
-return $default(_that.day,_that.period,_that.subjectName,_that.teacherId,_that.startTime,_that.endTime);case _:
+return $default(_that.date,_that.period,_that.subjectName,_that.teacherId,_that.startTime,_that.endTime);case _:
   return orElse();
 
 }
@@ -179,10 +179,10 @@ return $default(_that.day,_that.period,_that.subjectName,_that.teacherId,_that.s
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String day,  int period,  String subjectName,  String teacherId,  String startTime,  String endTime)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( DateTime date,  int period,  String subjectName,  String teacherId,  String startTime,  String endTime)  $default,) {final _that = this;
 switch (_that) {
 case _ClassTimetableEntry():
-return $default(_that.day,_that.period,_that.subjectName,_that.teacherId,_that.startTime,_that.endTime);case _:
+return $default(_that.date,_that.period,_that.subjectName,_that.teacherId,_that.startTime,_that.endTime);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -199,10 +199,10 @@ return $default(_that.day,_that.period,_that.subjectName,_that.teacherId,_that.s
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String day,  int period,  String subjectName,  String teacherId,  String startTime,  String endTime)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( DateTime date,  int period,  String subjectName,  String teacherId,  String startTime,  String endTime)?  $default,) {final _that = this;
 switch (_that) {
 case _ClassTimetableEntry() when $default != null:
-return $default(_that.day,_that.period,_that.subjectName,_that.teacherId,_that.startTime,_that.endTime);case _:
+return $default(_that.date,_that.period,_that.subjectName,_that.teacherId,_that.startTime,_that.endTime);case _:
   return null;
 
 }
@@ -214,10 +214,10 @@ return $default(_that.day,_that.period,_that.subjectName,_that.teacherId,_that.s
 @JsonSerializable()
 
 class _ClassTimetableEntry implements ClassTimetableEntry {
-  const _ClassTimetableEntry({required this.day, required this.period, required this.subjectName, required this.teacherId, this.startTime = '', this.endTime = ''});
+  const _ClassTimetableEntry({required this.date, required this.period, required this.subjectName, required this.teacherId, this.startTime = '', this.endTime = ''});
   factory _ClassTimetableEntry.fromJson(Map<String, dynamic> json) => _$ClassTimetableEntryFromJson(json);
 
-@override final  String day;
+@override final  DateTime date;
 @override final  int period;
 @override final  String subjectName;
 @override final  String teacherId;
@@ -237,16 +237,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClassTimetableEntry&&(identical(other.day, day) || other.day == day)&&(identical(other.period, period) || other.period == period)&&(identical(other.subjectName, subjectName) || other.subjectName == subjectName)&&(identical(other.teacherId, teacherId) || other.teacherId == teacherId)&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.endTime, endTime) || other.endTime == endTime));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClassTimetableEntry&&(identical(other.date, date) || other.date == date)&&(identical(other.period, period) || other.period == period)&&(identical(other.subjectName, subjectName) || other.subjectName == subjectName)&&(identical(other.teacherId, teacherId) || other.teacherId == teacherId)&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.endTime, endTime) || other.endTime == endTime));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,day,period,subjectName,teacherId,startTime,endTime);
+int get hashCode => Object.hash(runtimeType,date,period,subjectName,teacherId,startTime,endTime);
 
 @override
 String toString() {
-  return 'ClassTimetableEntry(day: $day, period: $period, subjectName: $subjectName, teacherId: $teacherId, startTime: $startTime, endTime: $endTime)';
+  return 'ClassTimetableEntry(date: $date, period: $period, subjectName: $subjectName, teacherId: $teacherId, startTime: $startTime, endTime: $endTime)';
 }
 
 
@@ -257,7 +257,7 @@ abstract mixin class _$ClassTimetableEntryCopyWith<$Res> implements $ClassTimeta
   factory _$ClassTimetableEntryCopyWith(_ClassTimetableEntry value, $Res Function(_ClassTimetableEntry) _then) = __$ClassTimetableEntryCopyWithImpl;
 @override @useResult
 $Res call({
- String day, int period, String subjectName, String teacherId, String startTime, String endTime
+ DateTime date, int period, String subjectName, String teacherId, String startTime, String endTime
 });
 
 
@@ -274,10 +274,10 @@ class __$ClassTimetableEntryCopyWithImpl<$Res>
 
 /// Create a copy of ClassTimetableEntry
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? day = null,Object? period = null,Object? subjectName = null,Object? teacherId = null,Object? startTime = null,Object? endTime = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? date = null,Object? period = null,Object? subjectName = null,Object? teacherId = null,Object? startTime = null,Object? endTime = null,}) {
   return _then(_ClassTimetableEntry(
-day: null == day ? _self.day : day // ignore: cast_nullable_to_non_nullable
-as String,period: null == period ? _self.period : period // ignore: cast_nullable_to_non_nullable
+date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
+as DateTime,period: null == period ? _self.period : period // ignore: cast_nullable_to_non_nullable
 as int,subjectName: null == subjectName ? _self.subjectName : subjectName // ignore: cast_nullable_to_non_nullable
 as String,teacherId: null == teacherId ? _self.teacherId : teacherId // ignore: cast_nullable_to_non_nullable
 as String,startTime: null == startTime ? _self.startTime : startTime // ignore: cast_nullable_to_non_nullable

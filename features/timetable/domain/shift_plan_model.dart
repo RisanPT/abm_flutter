@@ -8,6 +8,7 @@ abstract class ShiftPlanModel with _$ShiftPlanModel {
   const factory ShiftPlanModel({
     @JsonKey(name: '_id') String? id,
     required String instituteId,
+    required String academicYear,
     required String shift,
     required int year,
     required int month,

@@ -1,6 +1,7 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
+import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/auth/presentation/login_screen.dart';
 import 'package:abm_madrasa/features/dashboard/presentation/dashboard_screen.dart';
@@ -18,6 +19,9 @@ import 'package:abm_madrasa/features/attendance/presentation/attendance_report_s
 
 import 'package:abm_madrasa/features/timetable/presentation/timetable_screen.dart';
 import 'package:abm_madrasa/features/timetable/presentation/shift_planner_screen.dart';
+import 'package:abm_madrasa/features/timetable/presentation/class_timetable_view_screen.dart';
+import 'package:abm_madrasa/features/teachers/presentation/teacher_dashboard_screen.dart';
+import 'package:abm_madrasa/features/students/presentation/student_dashboard_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/outstanding_dues_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/income_entry_screen.dart';
@@ -69,7 +73,9 @@ GoRouter router(Ref ref) {
         return user.role.defaultRoute(allowedModules);
       }
 
-      if (module != null && !user.role.canAccess(module, allowedModules)) {
+      // Only enforce module access once permissions have loaded — otherwise a
+      // cold restart bounces the user off their current route to the dashboard.
+      if (permState.hasValue && module != null && !user.role.canAccess(module, allowedModules)) {
         return user.role.defaultRoute(allowedModules);
       }
 
@@ -137,7 +143,14 @@ GoRouter router(Ref ref) {
           ),
           GoRoute(
             path: RouteNames.attendance,
-            builder: (context, state) => const AttendanceMarkScreen(),
+            builder: (context, state) {
+              // A teacher marks attendance from their own "My Classes" view
+              // (their scheduled classes), not the institute-wide class picker.
+              final role = ref.read(authControllerProvider).value?.role;
+              return role == AppRoles.teacher
+                  ? TeacherDashboardScreen(teacherId: state.uri.queryParameters['teacherId'])
+                  : const AttendanceMarkScreen();
+            },
           ),
           GoRoute(
             path: '/attendance-report',
@@ -174,6 +187,21 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.shiftPlanner,
             builder: (context, state) => const ShiftPlannerScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.classTimetableView,
+            builder: (context, state) => const ClassTimetableViewScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.teacherDashboard,
+            builder: (context, state) => TeacherDashboardScreen(teacherId: state.uri.queryParameters['teacherId']),
+          ),
+          GoRoute(
+            path: RouteNames.studentDashboard,
+            builder: (context, state) => StudentDashboardScreen(
+              studentId: state.uri.queryParameters['studentId'],
+              classroom: state.uri.queryParameters['classroom'],
+            ),
           ),
           GoRoute(
             path: RouteNames.accounts,

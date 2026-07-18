@@ -16,7 +16,7 @@ final class ShiftPlannerControllerProvider
     extends $AsyncNotifierProvider<ShiftPlannerController, List<DateTime>> {
   ShiftPlannerControllerProvider._({
     required ShiftPlannerControllerFamily super.from,
-    required (String, int, int) super.argument,
+    required (String, String, int, int) super.argument,
   }) : super(
          retry: null,
          name: r'shiftPlannerControllerProvider',
@@ -52,7 +52,7 @@ final class ShiftPlannerControllerProvider
 }
 
 String _$shiftPlannerControllerHash() =>
-    r'29db3612459e7a4265690ef70afcd7ad6135b35b';
+    r'53ae2e585bc101afc641aaa5bd504254334700a6';
 
 final class ShiftPlannerControllerFamily extends $Family
     with
@@ -61,7 +61,7 @@ final class ShiftPlannerControllerFamily extends $Family
           AsyncValue<List<DateTime>>,
           List<DateTime>,
           FutureOr<List<DateTime>>,
-          (String, int, int)
+          (String, String, int, int)
         > {
   ShiftPlannerControllerFamily._()
     : super(
@@ -72,23 +72,33 @@ final class ShiftPlannerControllerFamily extends $Family
         isAutoDispose: true,
       );
 
-  ShiftPlannerControllerProvider call(String shift, int year, int month) =>
-      ShiftPlannerControllerProvider._(
-        argument: (shift, year, month),
-        from: this,
-      );
+  ShiftPlannerControllerProvider call(
+    String academicYear,
+    String shift,
+    int year,
+    int month,
+  ) => ShiftPlannerControllerProvider._(
+    argument: (academicYear, shift, year, month),
+    from: this,
+  );
 
   @override
   String toString() => r'shiftPlannerControllerProvider';
 }
 
 abstract class _$ShiftPlannerController extends $AsyncNotifier<List<DateTime>> {
-  late final _$args = ref.$arg as (String, int, int);
-  String get shift => _$args.$1;
-  int get year => _$args.$2;
-  int get month => _$args.$3;
+  late final _$args = ref.$arg as (String, String, int, int);
+  String get academicYear => _$args.$1;
+  String get shift => _$args.$2;
+  int get year => _$args.$3;
+  int get month => _$args.$4;
 
-  FutureOr<List<DateTime>> build(String shift, int year, int month);
+  FutureOr<List<DateTime>> build(
+    String academicYear,
+    String shift,
+    int year,
+    int month,
+  );
   @$mustCallSuper
   @override
   void runBuild() {
@@ -101,6 +111,9 @@ abstract class _$ShiftPlannerController extends $AsyncNotifier<List<DateTime>> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, () => build(_$args.$1, _$args.$2, _$args.$3));
+    element.handleCreate(
+      ref,
+      () => build(_$args.$1, _$args.$2, _$args.$3, _$args.$4),
+    );
   }
 }

@@ -10,6 +10,7 @@ _ShiftPlanModel _$ShiftPlanModelFromJson(Map<String, dynamic> json) =>
     _ShiftPlanModel(
       id: json['_id'] as String?,
       instituteId: json['instituteId'] as String,
+      academicYear: json['academicYear'] as String,
       shift: json['shift'] as String,
       year: (json['year'] as num).toInt(),
       month: (json['month'] as num).toInt(),
@@ -25,6 +26,7 @@ Map<String, dynamic> _$ShiftPlanModelToJson(
 ) => <String, dynamic>{
   '_id': instance.id,
   'instituteId': instance.instituteId,
+  'academicYear': instance.academicYear,
   'shift': instance.shift,
   'year': instance.year,
   'month': instance.month,

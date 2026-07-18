@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ClassroomModel {
 
-@JsonKey(name: '_id') String get id; String get name; String? get description; List<String> get subjects;
+@JsonKey(name: '_id') String get id; String get name; String? get description; List<String> get subjects; String get shift;
 /// Create a copy of ClassroomModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $ClassroomModelCopyWith<ClassroomModel> get copyWith => _$ClassroomModelCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClassroomModel&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&const DeepCollectionEquality().equals(other.subjects, subjects));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClassroomModel&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&const DeepCollectionEquality().equals(other.subjects, subjects)&&(identical(other.shift, shift) || other.shift == shift));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,const DeepCollectionEquality().hash(subjects));
+int get hashCode => Object.hash(runtimeType,id,name,description,const DeepCollectionEquality().hash(subjects),shift);
 
 @override
 String toString() {
-  return 'ClassroomModel(id: $id, name: $name, description: $description, subjects: $subjects)';
+  return 'ClassroomModel(id: $id, name: $name, description: $description, subjects: $subjects, shift: $shift)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $ClassroomModelCopyWith<$Res>  {
   factory $ClassroomModelCopyWith(ClassroomModel value, $Res Function(ClassroomModel) _then) = _$ClassroomModelCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: '_id') String id, String name, String? description, List<String> subjects
+@JsonKey(name: '_id') String id, String name, String? description, List<String> subjects, String shift
 });
 
 
@@ -65,13 +65,14 @@ class _$ClassroomModelCopyWithImpl<$Res>
 
 /// Create a copy of ClassroomModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? subjects = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? subjects = null,Object? shift = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,subjects: null == subjects ? _self.subjects : subjects // ignore: cast_nullable_to_non_nullable
-as List<String>,
+as List<String>,shift: null == shift ? _self.shift : shift // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 
@@ -156,10 +157,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String name,  String? description,  List<String> subjects)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String name,  String? description,  List<String> subjects,  String shift)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ClassroomModel() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.subjects);case _:
+return $default(_that.id,_that.name,_that.description,_that.subjects,_that.shift);case _:
   return orElse();
 
 }
@@ -177,10 +178,10 @@ return $default(_that.id,_that.name,_that.description,_that.subjects);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String name,  String? description,  List<String> subjects)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String id,  String name,  String? description,  List<String> subjects,  String shift)  $default,) {final _that = this;
 switch (_that) {
 case _ClassroomModel():
-return $default(_that.id,_that.name,_that.description,_that.subjects);case _:
+return $default(_that.id,_that.name,_that.description,_that.subjects,_that.shift);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +198,10 @@ return $default(_that.id,_that.name,_that.description,_that.subjects);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String id,  String name,  String? description,  List<String> subjects)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String id,  String name,  String? description,  List<String> subjects,  String shift)?  $default,) {final _that = this;
 switch (_that) {
 case _ClassroomModel() when $default != null:
-return $default(_that.id,_that.name,_that.description,_that.subjects);case _:
+return $default(_that.id,_that.name,_that.description,_that.subjects,_that.shift);case _:
   return null;
 
 }
@@ -212,7 +213,7 @@ return $default(_that.id,_that.name,_that.description,_that.subjects);case _:
 @JsonSerializable()
 
 class _ClassroomModel implements ClassroomModel {
-  const _ClassroomModel({@JsonKey(name: '_id') required this.id, required this.name, this.description, final  List<String> subjects = const []}): _subjects = subjects;
+  const _ClassroomModel({@JsonKey(name: '_id') required this.id, required this.name, this.description, final  List<String> subjects = const [], this.shift = 'Shift-1'}): _subjects = subjects;
   factory _ClassroomModel.fromJson(Map<String, dynamic> json) => _$ClassroomModelFromJson(json);
 
 @override@JsonKey(name: '_id') final  String id;
@@ -225,6 +226,7 @@ class _ClassroomModel implements ClassroomModel {
   return EqualUnmodifiableListView(_subjects);
 }
 
+@override@JsonKey() final  String shift;
 
 /// Create a copy of ClassroomModel
 /// with the given fields replaced by the non-null parameter values.
@@ -239,16 +241,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClassroomModel&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&const DeepCollectionEquality().equals(other._subjects, _subjects));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClassroomModel&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.description, description) || other.description == description)&&const DeepCollectionEquality().equals(other._subjects, _subjects)&&(identical(other.shift, shift) || other.shift == shift));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,name,description,const DeepCollectionEquality().hash(_subjects));
+int get hashCode => Object.hash(runtimeType,id,name,description,const DeepCollectionEquality().hash(_subjects),shift);
 
 @override
 String toString() {
-  return 'ClassroomModel(id: $id, name: $name, description: $description, subjects: $subjects)';
+  return 'ClassroomModel(id: $id, name: $name, description: $description, subjects: $subjects, shift: $shift)';
 }
 
 
@@ -259,7 +261,7 @@ abstract mixin class _$ClassroomModelCopyWith<$Res> implements $ClassroomModelCo
   factory _$ClassroomModelCopyWith(_ClassroomModel value, $Res Function(_ClassroomModel) _then) = __$ClassroomModelCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: '_id') String id, String name, String? description, List<String> subjects
+@JsonKey(name: '_id') String id, String name, String? description, List<String> subjects, String shift
 });
 
 
@@ -276,13 +278,14 @@ class __$ClassroomModelCopyWithImpl<$Res>
 
 /// Create a copy of ClassroomModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? subjects = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? description = freezed,Object? subjects = null,Object? shift = null,}) {
   return _then(_ClassroomModel(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,subjects: null == subjects ? _self._subjects : subjects // ignore: cast_nullable_to_non_nullable
-as List<String>,
+as List<String>,shift: null == shift ? _self.shift : shift // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 

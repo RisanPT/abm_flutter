@@ -30,12 +30,13 @@ class TimetableEntry {
     required this.teacherName,
     required this.className,
     required this.subject,
-    required this.day,
+    required this.date,
     required this.startTime,
     required this.endTime,
     required this.room,
     this.teacherPhotoUrl,
     this.period,
+    this.shift = 'Shift-1',
   });
 
   final String id;
@@ -43,26 +44,30 @@ class TimetableEntry {
   final String teacherName;
   final String className;
   final String subject;
-  final String day;
+  final DateTime date;
   final String startTime;
   final String endTime;
   final String room;
   final String? teacherPhotoUrl;
   final int? period;
+  final String shift;
 
   factory TimetableEntry.fromJson(Map<String, dynamic> json) {
     return TimetableEntry(
       id: json['id'] as String? ?? '',
       teacherId: json['teacherId'] as String? ?? '',
       teacherName: json['teacherName'] as String? ?? '',
-      className: json['className'] as String? ?? '',
-      subject: json['subject'] as String? ?? '',
-      day: json['day'] as String? ?? '',
+      // The API serialises these as `classroomName` / `subjectName`; keep the
+      // legacy keys as a fallback so older payloads still parse.
+      className: (json['classroomName'] ?? json['className']) as String? ?? '',
+      subject: (json['subjectName'] ?? json['subject']) as String? ?? '',
+      date: json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
       startTime: json['startTime'] as String? ?? '',
       endTime: json['endTime'] as String? ?? '',
       room: json['room'] as String? ?? '',
       teacherPhotoUrl: json['teacherPhotoUrl'] as String?,
       period: json['period'] as int?,
+      shift: json['shift'] as String? ?? 'Shift-1',
     );
   }
 }

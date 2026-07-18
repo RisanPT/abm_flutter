@@ -26,6 +26,9 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final user = ref.watch(authControllerProvider).value;
+    // Watch (not read) so the shell rebuilds when permissions finish loading on a
+    // cold restart — otherwise the nav comes up empty and never refreshes.
+    ref.watch(permissionControllerProvider);
     final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
     
     final navItems = user?.role.navigationItems(allowedModules) ??
@@ -567,9 +570,9 @@ class _SidebarInstituteSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef _) {
     final institute = ref.watch(selectedInstituteProvider);
     final user = ref.watch(authControllerProvider).value;
-    final canChangeInstitute = user?.role == AppRoles.superAdmin || 
-                               user?.role == AppRoles.itAdmin || 
-                               user?.role == AppRoles.headMaster;
+    // Only multi-institute admins may switch institutes. A Head Master belongs
+    // to a single institution and sees its name without a switcher.
+    final canChangeInstitute = user?.role == AppRoles.superAdmin || user?.role == AppRoles.itAdmin;
     final colors = context.colors;
 
     Widget content = Container(
@@ -834,9 +837,9 @@ class _DrawerInstituteHeader extends ConsumerWidget {
     final colors = context.colors;
     final institute = ref.watch(selectedInstituteProvider);
     final user = ref.watch(authControllerProvider).value;
-    final canChangeInstitute = user?.role == AppRoles.superAdmin || 
-                               user?.role == AppRoles.itAdmin || 
-                               user?.role == AppRoles.headMaster;
+    // Only multi-institute admins may switch institutes. A Head Master belongs
+    // to a single institution and sees its name without a switcher.
+    final canChangeInstitute = user?.role == AppRoles.superAdmin || user?.role == AppRoles.itAdmin;
 
     final content = Container(
       width: double.infinity,

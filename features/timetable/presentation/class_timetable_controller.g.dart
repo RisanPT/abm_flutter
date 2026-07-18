@@ -16,7 +16,7 @@ final class ClassTimetableControllerProvider
     extends $AsyncNotifierProvider<ClassTimetableController, ClassTimetable> {
   ClassTimetableControllerProvider._({
     required ClassTimetableControllerFamily super.from,
-    required String super.argument,
+    required (String, String, String, int, int) super.argument,
   }) : super(
          retry: null,
          name: r'classTimetableControllerProvider',
@@ -32,7 +32,7 @@ final class ClassTimetableControllerProvider
   String toString() {
     return r'classTimetableControllerProvider'
         ''
-        '($argument)';
+        '$argument';
   }
 
   @$internal
@@ -52,7 +52,7 @@ final class ClassTimetableControllerProvider
 }
 
 String _$classTimetableControllerHash() =>
-    r'70b43cc59f34fb93bc281ffd1726c720f274b7fb';
+    r'76c187c11d5bf68bcbe990a10d4b9baff092b069';
 
 final class ClassTimetableControllerFamily extends $Family
     with
@@ -61,7 +61,7 @@ final class ClassTimetableControllerFamily extends $Family
           AsyncValue<ClassTimetable>,
           ClassTimetable,
           FutureOr<ClassTimetable>,
-          String
+          (String, String, String, int, int)
         > {
   ClassTimetableControllerFamily._()
     : super(
@@ -72,8 +72,16 @@ final class ClassTimetableControllerFamily extends $Family
         isAutoDispose: true,
       );
 
-  ClassTimetableControllerProvider call(String className) =>
-      ClassTimetableControllerProvider._(argument: className, from: this);
+  ClassTimetableControllerProvider call(
+    String className,
+    String shift,
+    String academicYear,
+    int year,
+    int month,
+  ) => ClassTimetableControllerProvider._(
+    argument: (className, shift, academicYear, year, month),
+    from: this,
+  );
 
   @override
   String toString() => r'classTimetableControllerProvider';
@@ -81,10 +89,20 @@ final class ClassTimetableControllerFamily extends $Family
 
 abstract class _$ClassTimetableController
     extends $AsyncNotifier<ClassTimetable> {
-  late final _$args = ref.$arg as String;
-  String get className => _$args;
+  late final _$args = ref.$arg as (String, String, String, int, int);
+  String get className => _$args.$1;
+  String get shift => _$args.$2;
+  String get academicYear => _$args.$3;
+  int get year => _$args.$4;
+  int get month => _$args.$5;
 
-  FutureOr<ClassTimetable> build(String className);
+  FutureOr<ClassTimetable> build(
+    String className,
+    String shift,
+    String academicYear,
+    int year,
+    int month,
+  );
   @$mustCallSuper
   @override
   void runBuild() {
@@ -97,6 +115,9 @@ abstract class _$ClassTimetableController
               Object?,
               Object?
             >;
-    element.handleCreate(ref, () => build(_$args));
+    element.handleCreate(
+      ref,
+      () => build(_$args.$1, _$args.$2, _$args.$3, _$args.$4, _$args.$5),
+    );
   }
 }

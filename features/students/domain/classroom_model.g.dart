@@ -16,6 +16,7 @@ _ClassroomModel _$ClassroomModelFromJson(Map<String, dynamic> json) =>
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      shift: json['shift'] as String? ?? 'Shift-1',
     );
 
 Map<String, dynamic> _$ClassroomModelToJson(_ClassroomModel instance) =>
@@ -24,4 +25,5 @@ Map<String, dynamic> _$ClassroomModelToJson(_ClassroomModel instance) =>
       'name': instance.name,
       'description': instance.description,
       'subjects': instance.subjects,
+      'shift': instance.shift,
     };

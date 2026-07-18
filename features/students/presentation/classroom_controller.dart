@@ -13,17 +13,20 @@ class ClassroomController extends _$ClassroomController {
     return ref.read(classroomRepositoryProvider).getClassrooms(instituteId: institute.id);
   }
 
-  Future<void> addClassroom(String name, {String? description}) async {
-    state = const AsyncValue.loading();
-    try {
-      final institute = ref.read(selectedInstituteProvider);
-      await ref.read(classroomRepositoryProvider).addClassroom(name, description: description, instituteId: institute.id);
-      final classrooms = await ref.read(classroomRepositoryProvider).getClassrooms(instituteId: institute.id);
-      state = AsyncValue.data(classrooms);
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
-      rethrow;
-    }
+  Future<void> addClassroom(String name, {String? description, String shift = 'Shift-1'}) async {
+    final institute = ref.read(selectedInstituteProvider);
+    // Don't touch the list state before the add succeeds — a failed add (e.g.
+    // a duplicate name) must surface to the caller for a snackbar, while the
+    // existing classroom list stays visible instead of being wiped to an error.
+    await ref.read(classroomRepositoryProvider).addClassroom(
+          name,
+          description: description,
+          instituteId: institute.id,
+          shift: shift,
+        );
+    state = await AsyncValue.guard(
+      () => ref.read(classroomRepositoryProvider).getClassrooms(instituteId: institute.id),
+    );
   }
 
   Future<void> refresh() async {

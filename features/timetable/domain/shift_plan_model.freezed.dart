@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ShiftPlanModel {
 
-@JsonKey(name: '_id') String? get id; String get instituteId; String get shift; int get year; int get month; List<DateTime> get classDates;
+@JsonKey(name: '_id') String? get id; String get instituteId; String get academicYear; String get shift; int get year; int get month; List<DateTime> get classDates;
 /// Create a copy of ShiftPlanModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $ShiftPlanModelCopyWith<ShiftPlanModel> get copyWith => _$ShiftPlanModelCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ShiftPlanModel&&(identical(other.id, id) || other.id == id)&&(identical(other.instituteId, instituteId) || other.instituteId == instituteId)&&(identical(other.shift, shift) || other.shift == shift)&&(identical(other.year, year) || other.year == year)&&(identical(other.month, month) || other.month == month)&&const DeepCollectionEquality().equals(other.classDates, classDates));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ShiftPlanModel&&(identical(other.id, id) || other.id == id)&&(identical(other.instituteId, instituteId) || other.instituteId == instituteId)&&(identical(other.academicYear, academicYear) || other.academicYear == academicYear)&&(identical(other.shift, shift) || other.shift == shift)&&(identical(other.year, year) || other.year == year)&&(identical(other.month, month) || other.month == month)&&const DeepCollectionEquality().equals(other.classDates, classDates));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,instituteId,shift,year,month,const DeepCollectionEquality().hash(classDates));
+int get hashCode => Object.hash(runtimeType,id,instituteId,academicYear,shift,year,month,const DeepCollectionEquality().hash(classDates));
 
 @override
 String toString() {
-  return 'ShiftPlanModel(id: $id, instituteId: $instituteId, shift: $shift, year: $year, month: $month, classDates: $classDates)';
+  return 'ShiftPlanModel(id: $id, instituteId: $instituteId, academicYear: $academicYear, shift: $shift, year: $year, month: $month, classDates: $classDates)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $ShiftPlanModelCopyWith<$Res>  {
   factory $ShiftPlanModelCopyWith(ShiftPlanModel value, $Res Function(ShiftPlanModel) _then) = _$ShiftPlanModelCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: '_id') String? id, String instituteId, String shift, int year, int month, List<DateTime> classDates
+@JsonKey(name: '_id') String? id, String instituteId, String academicYear, String shift, int year, int month, List<DateTime> classDates
 });
 
 
@@ -65,10 +65,11 @@ class _$ShiftPlanModelCopyWithImpl<$Res>
 
 /// Create a copy of ShiftPlanModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = freezed,Object? instituteId = null,Object? shift = null,Object? year = null,Object? month = null,Object? classDates = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = freezed,Object? instituteId = null,Object? academicYear = null,Object? shift = null,Object? year = null,Object? month = null,Object? classDates = null,}) {
   return _then(_self.copyWith(
 id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String?,instituteId: null == instituteId ? _self.instituteId : instituteId // ignore: cast_nullable_to_non_nullable
+as String,academicYear: null == academicYear ? _self.academicYear : academicYear // ignore: cast_nullable_to_non_nullable
 as String,shift: null == shift ? _self.shift : shift // ignore: cast_nullable_to_non_nullable
 as String,year: null == year ? _self.year : year // ignore: cast_nullable_to_non_nullable
 as int,month: null == month ? _self.month : month // ignore: cast_nullable_to_non_nullable
@@ -158,10 +159,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String? id,  String instituteId,  String shift,  int year,  int month,  List<DateTime> classDates)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String? id,  String instituteId,  String academicYear,  String shift,  int year,  int month,  List<DateTime> classDates)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ShiftPlanModel() when $default != null:
-return $default(_that.id,_that.instituteId,_that.shift,_that.year,_that.month,_that.classDates);case _:
+return $default(_that.id,_that.instituteId,_that.academicYear,_that.shift,_that.year,_that.month,_that.classDates);case _:
   return orElse();
 
 }
@@ -179,10 +180,10 @@ return $default(_that.id,_that.instituteId,_that.shift,_that.year,_that.month,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String? id,  String instituteId,  String shift,  int year,  int month,  List<DateTime> classDates)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String? id,  String instituteId,  String academicYear,  String shift,  int year,  int month,  List<DateTime> classDates)  $default,) {final _that = this;
 switch (_that) {
 case _ShiftPlanModel():
-return $default(_that.id,_that.instituteId,_that.shift,_that.year,_that.month,_that.classDates);case _:
+return $default(_that.id,_that.instituteId,_that.academicYear,_that.shift,_that.year,_that.month,_that.classDates);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -199,10 +200,10 @@ return $default(_that.id,_that.instituteId,_that.shift,_that.year,_that.month,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String? id,  String instituteId,  String shift,  int year,  int month,  List<DateTime> classDates)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String? id,  String instituteId,  String academicYear,  String shift,  int year,  int month,  List<DateTime> classDates)?  $default,) {final _that = this;
 switch (_that) {
 case _ShiftPlanModel() when $default != null:
-return $default(_that.id,_that.instituteId,_that.shift,_that.year,_that.month,_that.classDates);case _:
+return $default(_that.id,_that.instituteId,_that.academicYear,_that.shift,_that.year,_that.month,_that.classDates);case _:
   return null;
 
 }
@@ -214,11 +215,12 @@ return $default(_that.id,_that.instituteId,_that.shift,_that.year,_that.month,_t
 @JsonSerializable()
 
 class _ShiftPlanModel implements ShiftPlanModel {
-  const _ShiftPlanModel({@JsonKey(name: '_id') this.id, required this.instituteId, required this.shift, required this.year, required this.month, final  List<DateTime> classDates = const []}): _classDates = classDates;
+  const _ShiftPlanModel({@JsonKey(name: '_id') this.id, required this.instituteId, required this.academicYear, required this.shift, required this.year, required this.month, final  List<DateTime> classDates = const []}): _classDates = classDates;
   factory _ShiftPlanModel.fromJson(Map<String, dynamic> json) => _$ShiftPlanModelFromJson(json);
 
 @override@JsonKey(name: '_id') final  String? id;
 @override final  String instituteId;
+@override final  String academicYear;
 @override final  String shift;
 @override final  int year;
 @override final  int month;
@@ -243,16 +245,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ShiftPlanModel&&(identical(other.id, id) || other.id == id)&&(identical(other.instituteId, instituteId) || other.instituteId == instituteId)&&(identical(other.shift, shift) || other.shift == shift)&&(identical(other.year, year) || other.year == year)&&(identical(other.month, month) || other.month == month)&&const DeepCollectionEquality().equals(other._classDates, _classDates));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ShiftPlanModel&&(identical(other.id, id) || other.id == id)&&(identical(other.instituteId, instituteId) || other.instituteId == instituteId)&&(identical(other.academicYear, academicYear) || other.academicYear == academicYear)&&(identical(other.shift, shift) || other.shift == shift)&&(identical(other.year, year) || other.year == year)&&(identical(other.month, month) || other.month == month)&&const DeepCollectionEquality().equals(other._classDates, _classDates));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,instituteId,shift,year,month,const DeepCollectionEquality().hash(_classDates));
+int get hashCode => Object.hash(runtimeType,id,instituteId,academicYear,shift,year,month,const DeepCollectionEquality().hash(_classDates));
 
 @override
 String toString() {
-  return 'ShiftPlanModel(id: $id, instituteId: $instituteId, shift: $shift, year: $year, month: $month, classDates: $classDates)';
+  return 'ShiftPlanModel(id: $id, instituteId: $instituteId, academicYear: $academicYear, shift: $shift, year: $year, month: $month, classDates: $classDates)';
 }
 
 
@@ -263,7 +265,7 @@ abstract mixin class _$ShiftPlanModelCopyWith<$Res> implements $ShiftPlanModelCo
   factory _$ShiftPlanModelCopyWith(_ShiftPlanModel value, $Res Function(_ShiftPlanModel) _then) = __$ShiftPlanModelCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: '_id') String? id, String instituteId, String shift, int year, int month, List<DateTime> classDates
+@JsonKey(name: '_id') String? id, String instituteId, String academicYear, String shift, int year, int month, List<DateTime> classDates
 });
 
 
@@ -280,10 +282,11 @@ class __$ShiftPlanModelCopyWithImpl<$Res>
 
 /// Create a copy of ShiftPlanModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = freezed,Object? instituteId = null,Object? shift = null,Object? year = null,Object? month = null,Object? classDates = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = freezed,Object? instituteId = null,Object? academicYear = null,Object? shift = null,Object? year = null,Object? month = null,Object? classDates = null,}) {
   return _then(_ShiftPlanModel(
 id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String?,instituteId: null == instituteId ? _self.instituteId : instituteId // ignore: cast_nullable_to_non_nullable
+as String,academicYear: null == academicYear ? _self.academicYear : academicYear // ignore: cast_nullable_to_non_nullable
 as String,shift: null == shift ? _self.shift : shift // ignore: cast_nullable_to_non_nullable
 as String,year: null == year ? _self.year : year // ignore: cast_nullable_to_non_nullable
 as int,month: null == month ? _self.month : month // ignore: cast_nullable_to_non_nullable

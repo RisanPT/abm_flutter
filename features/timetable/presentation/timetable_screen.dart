@@ -14,15 +14,7 @@ import 'package:go_router/go_router.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/widgets/classroom_subjects_dialog.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-
-const _days = <String>[
-  'Saturday',
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-];
+import 'package:intl/intl.dart';
 
 class TimetableScreen extends ConsumerStatefulWidget {
   const TimetableScreen({super.key});
@@ -34,26 +26,48 @@ class TimetableScreen extends ConsumerStatefulWidget {
 class _TimetableScreenState extends ConsumerState<TimetableScreen> {
   String _selectedClass = 'All Classes';
   String _selectedTeacherId = 'all';
+  String _selectedShift = 'Shift-1';
+  DateTime _focusedMonth = DateTime.now();
+
+  String get _academicYear =>
+      deriveAcademicYear(_focusedMonth.year, _focusedMonth.month);
+  int get _year => _focusedMonth.year;
+  int get _month => _focusedMonth.month;
+
+  ({String shift, int year, int month, String academicYear}) get _args => (
+    shift: _selectedShift,
+    year: _year,
+    month: _month,
+    academicYear: _academicYear,
+  );
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
-    final timetableAsync = ref.watch(timetableDataProvider);
+    final timetableAsync = ref.watch(timetableDataProvider(_args));
+    final scheduledDatesAsync = ref.watch(scheduledDatesProvider(_args));
     final userRole = ref.watch(authControllerProvider).asData?.value?.role;
-    final allowedModules = userRole != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(userRole) : <String>{};
+    final allowedModules = userRole != null
+        ? ref
+              .read(permissionControllerProvider.notifier)
+              .getPermissionsForRole(userRole)
+        : <String>{};
     final canEdit = userRole?.canEditTimetable(allowedModules) ?? false;
 
     return Scaffold(
       backgroundColor: colors.background,
       body: timetableAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Failed to load timetable: $error')),
+        error: (error, _) =>
+            Center(child: Text('Failed to load timetable: $error')),
         data: (data) {
           final filteredEntries = data.schedule.where((entry) {
             final classMatches =
-                _selectedClass == 'All Classes' || entry.className == _selectedClass;
-            final teacherMatches = _selectedTeacherId == 'all' ||
+                _selectedClass == 'All Classes' ||
+                entry.className == _selectedClass;
+            final teacherMatches =
+                _selectedTeacherId == 'all' ||
                 entry.teacherId == _selectedTeacherId;
             return classMatches && teacherMatches;
           }).toList();
@@ -87,115 +101,198 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // ── Shift Tabs ────────────────────────────────────
+                          Container(
+                            decoration: BoxDecoration(
+                              color: colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _buildShiftTab('Shift-1', colors),
+                                ),
+                                Expanded(
+                                  child: _buildShiftTab('Shift-2', colors),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Gap(16),
+                          // ── Title + Actions ───────────────────────────────
                           Row(
                             children: [
-                              (() {
-                                String title = 'Global Timetable';
-                                if (_selectedClass != 'All Classes') {
-                                  title = '$_selectedClass Timetable';
-                                } else if (_selectedTeacherId != 'all') {
-                                  final teacherName = data.teachers
-                                      .firstWhere((t) => t.id == _selectedTeacherId, orElse: () => data.teachers.first)
-                                      .fullName;
-                                  title = '$teacherName Timetable';
-                                }
-                                return Expanded(
-                                  child: Text(
-                                    title,
-                                    style: typography.h2.copyWith(color: colors.white),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                );
-                              })(),
-                              if (canEdit)
-                                Row(
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    ElevatedButton.icon(
-                                      onPressed: () => context.push(RouteNames.classrooms),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: colors.white.withValues(alpha: 0.15),
-                                        foregroundColor: colors.white,
+                                    Text(
+                                      'Timetable — ${DateFormat('MMMM yyyy').format(_focusedMonth)}',
+                                      style: typography.h2.copyWith(
+                                        color: colors.white,
                                       ),
-                                      icon: const Icon(LucideIcons.home, size: 18),
-                                      label: const Text('Manage Classes'),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const Gap(12),
-                                    ElevatedButton.icon(
-                                      onPressed: _selectedClass == 'All Classes'
-                                          ? null
-                                          : () {
-                                              final classroom = data.allClassrooms.firstWhere(
-                                                (c) => c.name == _selectedClass,
-                                              );
-                                              showDialog(
-                                                context: context,
-                                                builder: (context) =>
-                                                    ClassroomSubjectsDialog(classroom: classroom),
-                                              ).then((_) {
-                                                ref.invalidate(classroomControllerProvider);
-                                                ref.invalidate(timetableDataProvider);
-                                              });
-                                            },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: colors.white.withValues(alpha: 0.2),
-                                        foregroundColor: colors.white,
-                                      ),
-                                      icon: const Icon(LucideIcons.plusCircle, size: 18),
-                                      label: const Text('Add Subject'),
-                                    ),
-                                    const Gap(12),
-                                    if (_selectedClass != 'All Classes') ...[
-                                      ElevatedButton.icon(
-                                        onPressed: () {
-                                          final classroom = data.allClassrooms.firstWhere(
-                                            (c) => c.name == _selectedClass,
-                                          );
-                                          showDialog(
-                                            context: context,
-                                            builder: (context) => ClassroomSubjectsDialog(classroom: classroom),
-                                          ).then((_) => ref.invalidate(classroomControllerProvider));
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: colors.white.withValues(alpha: 0.2),
-                                          foregroundColor: colors.white,
+                                    const Gap(4),
+                                    Text(
+                                      'Academic Year: $_academicYear  •  $_selectedShift',
+                                      style: typography.bodyMedium.copyWith(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.78,
                                         ),
-                                        icon: const Icon(LucideIcons.listTodo, size: 18),
-                                        label: const Text('Define Subjects'),
                                       ),
-                                      const Gap(12),
-                                    ],
-                                    ElevatedButton.icon(
-                                      onPressed: () => _showAssignmentDialog(context, data),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: colors.white,
-                                        foregroundColor: colors.primary,
-                                      ),
-                                      icon: const Icon(LucideIcons.userPlus, size: 18),
-                                      label: const Text('Manage Assignments'),
-                                    ),
-                                    const Gap(12),
-                                    ElevatedButton.icon(
-                                      onPressed: () => context.push(RouteNames.shiftPlanner),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: colors.white,
-                                        foregroundColor: colors.primary,
-                                      ),
-                                      icon: const Icon(LucideIcons.calendarCheck, size: 18),
-                                      label: const Text('Shift Planner'),
                                     ),
                                   ],
                                 ),
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: () =>
+                                    context.push(RouteNames.classTimetableView),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: colors.white.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  foregroundColor: colors.white,
+                                ),
+                                icon: const Icon(LucideIcons.search, size: 18),
+                                label: const Text('View by Date'),
+                              ),
+                              const Gap(10),
+                              if (canEdit) ...[
+                                ElevatedButton.icon(
+                                  onPressed: () =>
+                                      context.push(RouteNames.shiftPlanner),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: colors.white.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                    foregroundColor: colors.white,
+                                  ),
+                                  icon: const Icon(
+                                    LucideIcons.calendarCheck,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Shift Planner'),
+                                ),
+                                const Gap(10),
+                                ElevatedButton.icon(
+                                  onPressed: _selectedClass == 'All Classes'
+                                      ? null
+                                      : () => _showSubjectDialog(context, data),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: colors.white.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                    foregroundColor: colors.white,
+                                    disabledBackgroundColor: colors.white
+                                        .withValues(alpha: 0.08),
+                                    disabledForegroundColor: colors.white
+                                        .withValues(alpha: 0.4),
+                                  ),
+                                  icon: const Icon(
+                                    LucideIcons.listTodo,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Define Subjects'),
+                                ),
+                                // const Gap(10),
+                                // ElevatedButton.icon(
+                                //   onPressed: () => _showAssignmentDialog(context, data),
+                                //   style: ElevatedButton.styleFrom(
+                                //     backgroundColor: colors.white,
+                                //     foregroundColor: colors.primary,
+                                //   ),
+                                //   icon: const Icon(LucideIcons.userPlus, size: 18),
+                                //   label: const Text('Plan Timetable'),
+                                // ),
+                              ],
                             ],
                           ),
-                          const Gap(8),
-                          Text(
-                            'Class schedules are driven by teacher assignments and teaching periods.',
-                            style: typography.bodyMedium.copyWith(
-                              color: Colors.white.withValues(alpha: 0.78),
-                            ),
+                          const Gap(16),
+                          // ── Month Navigation ──────────────────────────────
+                          Row(
+                            children: [
+                              _buildMonthNavButton(
+                                icon: LucideIcons.chevronLeft,
+                                onPressed: () {
+                                  setState(() {
+                                    _focusedMonth = DateTime(
+                                      _focusedMonth.year,
+                                      _focusedMonth.month - 1,
+                                    );
+                                  });
+                                },
+                              ),
+                              const Gap(8),
+                              _buildMonthNavButton(
+                                icon: LucideIcons.chevronRight,
+                                onPressed: () {
+                                  setState(() {
+                                    _focusedMonth = DateTime(
+                                      _focusedMonth.year,
+                                      _focusedMonth.month + 1,
+                                    );
+                                  });
+                                },
+                              ),
+                              const Gap(16),
+                              OutlinedButton(
+                                onPressed: () {
+                                  setState(
+                                    () => _focusedMonth = DateTime.now(),
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: colors.white,
+                                  side: BorderSide(
+                                    color: colors.white.withValues(alpha: 0.4),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                ),
+                                child: const Text('This Month'),
+                              ),
+                              const Spacer(),
+                              // Scheduled dates count badge
+                              scheduledDatesAsync.when(
+                                data: (dates) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colors.white.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        LucideIcons.calendarDays,
+                                        size: 14,
+                                        color: colors.white,
+                                      ),
+                                      const Gap(6),
+                                      Text(
+                                        '${dates.length} date${dates.length == 1 ? '' : 's'} scheduled',
+                                        style: typography.bodySmall.copyWith(
+                                          color: colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                loading: () => const SizedBox.shrink(),
+                                error: (_, __) => const SizedBox.shrink(),
+                              ),
+                            ],
                           ),
-                          const Gap(20),
+                          const Gap(16),
+                          // ── Class / Teacher Filters ───────────────────────
                           if (context.isMobile)
                             Column(
                               children: [
@@ -207,9 +304,13 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                           else
                             Row(
                               children: [
-                                Expanded(child: _buildClassSelector(context, data)),
+                                Expanded(
+                                  child: _buildClassSelector(context, data),
+                                ),
                                 const Gap(16),
-                                Expanded(child: _buildTeacherSelector(context, data)),
+                                Expanded(
+                                  child: _buildTeacherSelector(context, data),
+                                ),
                               ],
                             ),
                         ],
@@ -227,13 +328,17 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                           children: [
                             Expanded(
                               flex: 3,
-                              child: _ScheduleBoard(entries: filteredEntries),
+                              child: _ScheduleBoard(
+                                entries: filteredEntries,
+                                scheduledDatesAsync: scheduledDatesAsync,
+                              ),
                             ),
                             const Gap(20),
                             Expanded(
                               child: _TimetableSummary(
                                 data: data,
                                 visibleEntries: filteredEntries,
+                                scheduledDatesAsync: scheduledDatesAsync,
                               ),
                             ),
                           ],
@@ -243,9 +348,13 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                             _TimetableSummary(
                               data: data,
                               visibleEntries: filteredEntries,
+                              scheduledDatesAsync: scheduledDatesAsync,
                             ),
                             const Gap(16),
-                            _ScheduleBoard(entries: filteredEntries),
+                            _ScheduleBoard(
+                              entries: filteredEntries,
+                              scheduledDatesAsync: scheduledDatesAsync,
+                            ),
                           ],
                         ),
                 ),
@@ -257,15 +366,84 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
     );
   }
 
+  Widget _buildShiftTab(String shift, ColorExtension colors) {
+    final isSelected = _selectedShift == shift;
+    return InkWell(
+      onTap: () {
+        if (_selectedShift != shift) {
+          setState(() => _selectedShift = shift);
+        }
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          shift,
+          style: context.typography.bodySmallSemiBold.copyWith(
+            color: isSelected
+                ? colors.primary
+                : colors.white.withValues(alpha: 0.7),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMonthNavButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: context.colors.white.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, color: context.colors.white, size: 18),
+        ),
+      ),
+    );
+  }
+
   void _showAssignmentDialog(BuildContext context, TimetableData data) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => TimetableAssignmentDialog(
         data: data,
-        initialClassName: _selectedClass == 'All Classes' ? null : _selectedClass,
+        shift: _selectedShift,
+        year: _year,
+        month: _month,
+        academicYear: _academicYear,
+        initialClassName: _selectedClass == 'All Classes'
+            ? null
+            : _selectedClass,
       ),
+    ).then((_) {
+      // Refresh timetable and scheduled dates after dialog closes
+      ref.invalidate(timetableDataProvider(_args));
+      ref.invalidate(scheduledDatesProvider(_args));
+    });
+  }
+
+  void _showSubjectDialog(BuildContext context, TimetableData data) {
+    final classroom = data.allClassrooms.firstWhere(
+      (c) => c.name == _selectedClass,
     );
+    showDialog(
+      context: context,
+      builder: (context) => ClassroomSubjectsDialog(classroom: classroom),
+    ).then((_) {
+      ref.invalidate(classroomControllerProvider);
+      ref.invalidate(timetableDataProvider(_args));
+    });
   }
 
   Widget _buildClassSelector(BuildContext context, TimetableData data) {
@@ -370,18 +548,153 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
   }
 }
 
-class _TimetableSummary extends StatelessWidget {
-  const _TimetableSummary({
-    required this.data,
-    required this.visibleEntries,
+// ─── Schedule Board ──────────────────────────────────────────────────────────
+
+class _ScheduleBoard extends StatelessWidget {
+  const _ScheduleBoard({
+    required this.entries,
+    required this.scheduledDatesAsync,
   });
 
-  final TimetableData data;
-  final List<TimetableEntry> visibleEntries;
+  final List<TimetableEntry> entries;
+  final AsyncValue<List<DateTime>> scheduledDatesAsync;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+
+    // Extract unique dates from entries and sort
+    final uniqueDates = entries
+        .map((e) => DateTime(e.date.year, e.date.month, e.date.day))
+        .toSet()
+        .toList();
+    uniqueDates.sort();
+
+    final grouped = <DateTime, List<TimetableEntry>>{
+      for (final date in uniqueDates)
+        date: entries
+            .where(
+              (entry) =>
+                  entry.date.year == date.year &&
+                  entry.date.month == date.month &&
+                  entry.date.day == date.day,
+            )
+            .toList(),
+    };
+
+    // Show shift-plan dates that have no timetable yet
+    final shiftPlanDates = scheduledDatesAsync.asData?.value ?? [];
+
+    if (uniqueDates.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
+        decoration: BoxDecoration(
+          color: colors.cardBackground,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: colors.border),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              LucideIcons.calendarX,
+              size: 48,
+              color: colors.textSecondary.withValues(alpha: 0.5),
+            ),
+            const Gap(16),
+            Text(
+              'No Timetable Entries',
+              style: context.typography.h4.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
+            const Gap(8),
+            Text(
+              shiftPlanDates.isEmpty
+                  ? 'No Shift Plan dates found for this month. Create a Shift Plan first.'
+                  : 'Shift Plan has ${shiftPlanDates.length} dates. Use "Plan Timetable" to assign subjects and teachers.',
+              style: context.typography.bodyMedium.copyWith(
+                color: colors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: uniqueDates.map((date) {
+        final dayEntries = grouped[date] ?? const [];
+        final dateString = DateFormat('EEEE, MMM d, yyyy').format(date);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: colors.cardBackground,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: colors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    LucideIcons.calendarDays,
+                    size: 16,
+                    color: colors.primary,
+                  ),
+                  const Gap(8),
+                  Text(dateString, style: context.typography.h4),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${dayEntries.length} period${dayEntries.length == 1 ? '' : 's'}',
+                      style: context.typography.bodySmall.copyWith(
+                        color: colors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Gap(14),
+              ...dayEntries.map((entry) => _ScheduleCard(entry: entry)),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─── Timetable Summary ───────────────────────────────────────────────────────
+
+class _TimetableSummary extends StatelessWidget {
+  const _TimetableSummary({
+    required this.data,
+    required this.visibleEntries,
+    required this.scheduledDatesAsync,
+  });
+
+  final TimetableData data;
+  final List<TimetableEntry> visibleEntries;
+  final AsyncValue<List<DateTime>> scheduledDatesAsync;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final scheduledDateCount = scheduledDatesAsync.asData?.value.length ?? 0;
 
     return Container(
       width: double.infinity,
@@ -397,18 +710,27 @@ class _TimetableSummary extends StatelessWidget {
           Text('Schedule Summary', style: context.typography.h4),
           const Gap(16),
           _MetricTile(
+            label: 'Planned Dates',
+            value: scheduledDateCount.toString(),
+            icon: LucideIcons.calendarCheck,
+          ),
+          const Gap(12),
+          _MetricTile(
             label: 'Teachers',
             value: data.teachers.length.toString(),
+            icon: LucideIcons.userCheck,
           ),
           const Gap(12),
           _MetricTile(
             label: 'Classes',
             value: data.classes.length.toString(),
+            icon: LucideIcons.school,
           ),
           const Gap(12),
           _MetricTile(
-            label: 'Visible periods',
+            label: 'Visible Periods',
             value: visibleEntries.length.toString(),
+            icon: LucideIcons.clock,
           ),
         ],
       ),
@@ -417,10 +739,15 @@ class _TimetableSummary extends StatelessWidget {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.label, required this.value});
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
   final String label;
   final String value;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -434,6 +761,8 @@ class _MetricTile extends StatelessWidget {
       ),
       child: Row(
         children: [
+          Icon(icon, size: 16, color: colors.primary.withValues(alpha: 0.7)),
+          const Gap(10),
           Expanded(
             child: Text(
               label,
@@ -454,73 +783,7 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
-class _ScheduleBoard extends StatelessWidget {
-  const _ScheduleBoard({required this.entries});
-
-  final List<TimetableEntry> entries;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final grouped = <String, List<TimetableEntry>>{
-      for (final day in _days) day: entries.where((entry) => entry.day == day).toList()
-    };
-
-    return Column(
-      children: _days.map((day) {
-        final dayEntries = grouped[day] ?? const [];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: colors.cardBackground,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: colors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(day, style: context.typography.h4),
-              const Gap(14),
-              if (dayEntries.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: colors.background.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: colors.border, style: BorderStyle.solid),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(LucideIcons.calendarX, size: 32, color: colors.textSecondary.withValues(alpha: 0.5)),
-                      const Gap(12),
-                      Text(
-                        'Free Day',
-                        style: context.typography.bodyLargeSemiBold.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                      const Gap(4),
-                      Text(
-                        'No periods assigned.',
-                        style: context.typography.bodyMedium.copyWith(
-                          color: colors.textSecondary.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                ...dayEntries.map((entry) => _ScheduleCard(entry: entry)),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
+// ─── Schedule Card ───────────────────────────────────────────────────────────
 
 class _ScheduleCard extends StatelessWidget {
   const _ScheduleCard({required this.entry});
@@ -587,11 +850,18 @@ class _ScheduleCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(entry.subject, style: context.typography.bodyLargeSemiBold),
+                Text(
+                  entry.subject,
+                  style: context.typography.bodyLargeSemiBold,
+                ),
                 const Gap(6),
                 Row(
                   children: [
-                    Icon(LucideIcons.users, size: 14, color: colors.textSecondary),
+                    Icon(
+                      LucideIcons.users,
+                      size: 14,
+                      color: colors.textSecondary,
+                    ),
                     const Gap(6),
                     Text(
                       entry.className,
@@ -600,31 +870,23 @@ class _ScheduleCard extends StatelessWidget {
                       ),
                     ),
                     const Gap(12),
-                    Icon(LucideIcons.userCheck, size: 14, color: colors.textSecondary),
+                    Icon(
+                      LucideIcons.userCheck,
+                      size: 14,
+                      color: colors.textSecondary,
+                    ),
                     const Gap(6),
-                    Text(
-                      entry.teacherName,
-                      style: context.typography.bodyMedium.copyWith(
-                        color: colors.textSecondary,
+                    Expanded(
+                      child: Text(
+                        entry.teacherName,
+                        style: context.typography.bodyMedium.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-                if (entry.room.isNotEmpty) ...[
-                  const Gap(6),
-                  Row(
-                    children: [
-                      Icon(LucideIcons.mapPin, size: 14, color: colors.textSecondary),
-                      const Gap(6),
-                      Text(
-                        'Room: ${entry.room}',
-                        style: context.typography.bodySmall.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),

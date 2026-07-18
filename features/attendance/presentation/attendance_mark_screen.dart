@@ -1,6 +1,8 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/utils/institute_time.dart';
 import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:abm_madrasa/features/attendance/presentation/attendance_controller.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
@@ -24,11 +26,34 @@ class AttendanceMarkScreen extends ConsumerStatefulWidget {
 }
 
 class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = instituteToday();
   String? _selectedClassroom;
+  final String _academicYear = '2026-2027';
   String _searchQuery = '';
   String _selectedType = 'Student';
   String _selectedShift = 'Shift-1';
+
+  /// Chooses an accurate empty-state icon + message: distinguishes "no class
+  /// scheduled on this date" from "class is scheduled but nobody is enrolled".
+  ({IconData icon, String message}) _emptyState(List<String> scheduled, String? classroom) {
+    if (_searchQuery.trim().isNotEmpty) {
+      return (icon: LucideIcons.search, message: 'No results match your search.');
+    }
+    if (_selectedType == 'Teacher') {
+      return (icon: LucideIcons.calendarOff, message: 'No classes scheduled for this date.');
+    }
+    final cls = classroom ?? '';
+    if (cls.isNotEmpty && scheduled.contains(cls)) {
+      return (
+        icon: LucideIcons.userX,
+        message: 'No $_selectedShift students enrolled in $cls.\nAdd students to this class to mark attendance.',
+      );
+    }
+    return (
+      icon: LucideIcons.calendarOff,
+      message: 'No class scheduled${cls.isEmpty ? '' : ' for $cls'} on this date.',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,14 +122,37 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
             );
           }
 
-          final effectiveClassroom = _selectedClassroom ?? (classrooms.isNotEmpty ? classrooms.first : null);
+          final year = _selectedDate.year;
+          final month = _selectedDate.month;
+          final academicYear = _academicYear;
+          final instituteId = ref.watch(selectedInstituteProvider).id;
+
+          // Classrooms that have a timetable entry on the selected date
+          final scheduledClassroomsAsync = ref.watch(
+            scheduledClassroomsForDateProvider((
+              date: _selectedDate,
+              shift: _selectedShift,
+              academicYear: academicYear,
+              year: year,
+              month: month,
+              instituteId: instituteId,
+            )),
+          );
+          final scheduledClassrooms = scheduledClassroomsAsync.asData?.value ?? classrooms;
+
+          if (scheduledClassrooms.isNotEmpty && (_selectedClassroom == null || !scheduledClassrooms.contains(_selectedClassroom))) {
+            _selectedClassroom = scheduledClassrooms.first;
+          }
+
+          final effectiveClassroom = _selectedType == 'Teacher' ? null : (_selectedClassroom ?? (scheduledClassrooms.isNotEmpty ? scheduledClassrooms.first : null));
 
           final attendanceAsync = ref.watch(
             attendanceControllerProvider(
               date: _selectedDate,
-              classroom: _selectedType == 'Teacher' ? null : effectiveClassroom,
+              classroom: effectiveClassroom,
               type: _selectedType,
               shift: _selectedShift,
+              academicYear: _academicYear,
             ),
           );
 
@@ -113,7 +161,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
               _AttendanceHeader(
                 selectedDate: _selectedDate,
                 selectedClassroom: effectiveClassroom ?? '',
-                classrooms: classrooms,
+                classrooms: scheduledClassrooms,
                 user: user,
                 allowedModules: allowedModules,
                 searchQuery: _searchQuery,
@@ -122,7 +170,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                 onTypeChanged: (val) => setState(() => _selectedType = val),
                 onShiftChanged: (val) => setState(() {
                   _selectedShift = val;
-                  _selectedDate = DateTime.now();
+                  _selectedDate = instituteToday();
                 }),
                 onSelectClassroom: (value) {
                   setState(() => _selectedClassroom = value);
@@ -138,26 +186,26 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                           classroom: _selectedType == 'Teacher' ? null : effectiveClassroom,
                           type: _selectedType,
                           shift: _selectedShift,
+                          academicYear: _academicYear,
                         ).notifier,
                       )
                       .markAll(AttendanceStatus.present);
                 },
                 onSelectDate: () async {
-                  final planAsync = ref.read(attendanceShiftPlanProvider((shift: _selectedShift, year: _selectedDate.year, month: _selectedDate.month)));
-                  final allowedDates = planAsync.value ?? [];
-                  
+                  final today = instituteToday();
+                  // Free calendar: pick any day up to today. Days without a
+                  // scheduled class just show the "No class scheduled" state,
+                  // so the admin can navigate freely instead of being locked
+                  // to a handful of class dates.
+                  final initial = _selectedDate.isAfter(today) ? today : _selectedDate;
                   final picked = await showDatePicker(
                     context: context,
-                    initialDate: allowedDates.contains(DateTime.utc(_selectedDate.year, _selectedDate.month, _selectedDate.day)) ? _selectedDate : (allowedDates.isNotEmpty ? allowedDates.last : _selectedDate),
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
-                    selectableDayPredicate: (day) {
-                      final normalizedDay = DateTime.utc(day.year, day.month, day.day);
-                      return allowedDates.contains(normalizedDay);
-                    },
+                    initialDate: initial,
+                    firstDate: DateTime.utc(2020, 1, 1),
+                    lastDate: today,
                   );
                   if (picked != null) {
-                    setState(() => _selectedDate = picked);
+                    setState(() => _selectedDate = DateTime.utc(picked.year, picked.month, picked.day));
                   }
                 },
               ),
@@ -184,6 +232,8 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                         .where((record) => record.status == AttendanceStatus.absent)
                         .length;
 
+                    final empty = _emptyState(scheduledClassrooms, effectiveClassroom);
+
                     return Column(
                       children: [
                         Expanded(
@@ -193,18 +243,17 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(
-                                        Icons.search_off_rounded,
-                                        size: 36,
-                                        color: colors.textSecondary,
+                                        empty.icon,
+                                        size: 48,
+                                        color: colors.textSecondary.withValues(alpha: 0.5),
                                       ),
-                                      const Gap(10),
+                                      const Gap(16),
                                       Text(
-                                        _searchQuery.trim().isEmpty
-                                            ? 'No students found for this class'
-                                            : 'No students match your search',
+                                        empty.message,
                                         style: context.typography.bodyMedium.copyWith(
                                           color: colors.textSecondary,
                                         ),
+                                        textAlign: TextAlign.center,
                                       ),
                                     ],
                                   ),
@@ -224,6 +273,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                       classroom: _selectedClassroom,
                                       date: _selectedDate,
                                       shift: _selectedShift,
+                                      academicYear: _academicYear,
                                     );
                                   },
                                 ),
@@ -279,9 +329,10 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                                 classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
                                                 type: _selectedType,
                                                 shift: _selectedShift,
+                                                academicYear: _academicYear,
                                               ).notifier,
                                             )
-                                            .saveAttendance(user?.username ?? 'Admin');
+                                            .saveAttendance(user?.username ?? 'Admin', classroomName: _selectedType == 'Student' ? effectiveClassroom : null);
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
@@ -334,9 +385,10 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                                   classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
                                                   type: _selectedType,
                                                   shift: _selectedShift,
+                                                  academicYear: _academicYear,
                                                 ).notifier,
                                               )
-                                              .saveAttendance(user?.username ?? 'Admin');
+                                              .saveAttendance(user?.username ?? 'Admin', classroomName: _selectedType == 'Student' ? effectiveClassroom : null);
                                           if (context.mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               SnackBar(
@@ -763,12 +815,14 @@ class _AttendanceRow extends ConsumerWidget {
     required this.classroom,
     required this.date,
     required this.shift,
+    required this.academicYear,
   });
 
   final AttendanceModel record;
   final String? classroom;
   final DateTime date;
   final String shift;
+  final String academicYear;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -846,6 +900,7 @@ class _AttendanceRow extends ConsumerWidget {
                       classroom: isTeacher ? null : classroom,
                       type: isTeacher ? 'Teacher' : 'Student',
                       shift: shift,
+                      academicYear: academicYear,
                     ).notifier,
                   )
                   .updateStatus(targetId, status, type: isTeacher ? 'Teacher' : 'Student');

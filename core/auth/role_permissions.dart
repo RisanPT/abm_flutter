@@ -98,6 +98,20 @@ const List<AppNavItem> kAppNavItems = [
     route: RouteNames.timetable,
     icon: LucideIcons.calendarDays,
     module: AppModule.timetable,
+    children: [
+      AppNavItem(
+        label: 'Timetable',
+        route: RouteNames.timetable,
+        icon: LucideIcons.calendarDays,
+        module: AppModule.timetable,
+      ),
+      AppNavItem(
+        label: 'Shift Planner',
+        route: RouteNames.shiftPlanner,
+        icon: LucideIcons.calendarCheck,
+        module: AppModule.timetable,
+      ),
+    ],
   ),
   AppNavItem(
     label: 'Accounts',
@@ -200,6 +214,10 @@ extension RoleStringExtension on String {
   }
 
   String defaultRoute(Set<String> allowedModules) {
+    // Teachers land straight on their own "My Classes" attendance view.
+    if (this == AppRoles.teacher && canAccess(AppModule.attendance, allowedModules)) {
+      return RouteNames.attendance;
+    }
     if (canAccess(AppModule.dashboard, allowedModules)) {
       return RouteNames.dashboard;
     }
