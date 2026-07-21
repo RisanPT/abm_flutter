@@ -19,6 +19,7 @@ class RouteNames {
   static const String outstandingDues = '/outstanding-dues';
   static const String incomeEntry = '/income-entry';
   static const String finance = '/finance';
+  static const String payroll = '/payroll';
   static const String feeSetup = '/fee-setup';
   static const String teachers = '/teachers';
   static const String progressReports = '/progress-reports';

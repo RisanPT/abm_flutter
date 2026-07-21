@@ -27,6 +27,7 @@ import 'package:abm_madrasa/features/accounts/presentation/outstanding_dues_scre
 import 'package:abm_madrasa/features/accounts/presentation/income_entry_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/fee_structure_setup_screen.dart';
 import 'package:abm_madrasa/features/finance/presentation/finance_screen.dart' as expenditure;
+import 'package:abm_madrasa/features/finance/presentation/payroll_screen.dart';
 import 'package:abm_madrasa/features/events/presentation/event_list_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/settings_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/role_permissions_screen.dart';
@@ -218,6 +219,10 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.finance,
             builder: (context, state) => const expenditure.FinanceScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.payroll,
+            builder: (context, state) => const PayrollScreen(),
           ),
           GoRoute(
             path: RouteNames.feeSetup,

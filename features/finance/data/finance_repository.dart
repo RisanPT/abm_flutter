@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/features/finance/domain/payroll_models.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -113,14 +114,34 @@ class MadrassaFinanceRepository {
   Future<void> processSalary({
     required String teacherId,
     required String month,
+    num deductionPerClass = 0,
   }) async {
     try {
       await _dio.post('/finance/process-salary', data: {
         'teacherId': teacherId,
         'month': month,
+        'deductionPerClass': deductionPerClass,
       });
     } catch (e) {
       throw Exception('Failed to process salary: $e');
+    }
+  }
+
+  /// Attendance-driven salary breakdown for a month (read-only preview).
+  Future<PayrollPreview> getSalaryPreview({
+    required String month,
+    required String instituteId,
+    num deductionPerClass = 0,
+  }) async {
+    try {
+      final response = await _dio.get('/finance/salary-preview', queryParameters: {
+        'month': month,
+        'instituteId': instituteId,
+        'deductionPerClass': deductionPerClass,
+      });
+      return PayrollPreview.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception('Failed to load payroll: $e');
     }
   }
 

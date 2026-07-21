@@ -116,7 +116,7 @@ const List<AppNavItem> kAppNavItems = [
   AppNavItem(
     label: 'Accounts',
     route: RouteNames.accounts,
-    icon: LucideIcons.indianRupee,
+    icon: LucideIcons.banknote,
     module: AppModule.accounts,
   ),
   AppNavItem(
@@ -135,6 +135,12 @@ const List<AppNavItem> kAppNavItems = [
     label: 'Finance',
     route: RouteNames.finance,
     icon: LucideIcons.wallet,
+    module: AppModule.finance,
+  ),
+  AppNavItem(
+    label: 'Payroll',
+    route: RouteNames.payroll,
+    icon: LucideIcons.banknote,
     module: AppModule.finance,
   ),
   AppNavItem(

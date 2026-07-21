@@ -52,7 +52,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             pw.SizedBox(height: 8),
             pw.Text('Month: ${DateFormat('MMMM yyyy').format(_selectedMonth)}'),
             pw.SizedBox(height: 8),
-            pw.Text('Total Expenditure: INR ₹${total.toStringAsFixed(2)}'),
+            pw.Text('Total Expenditure: SAR ${total.toStringAsFixed(2)}'),
             pw.SizedBox(height: 16),
             pw.TableHelper.fromTextArray(
               headers: ['Date', 'Category', 'Description', 'Amount'],
@@ -60,7 +60,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                 DateFormat('dd MMM yyyy').format(e.date),
                 e.category,
                 e.description.isEmpty ? 'Madrassa expense entry' : e.description,
-                '₹${e.amount.toStringAsFixed(2)}',
+                'SAR ${e.amount.toStringAsFixed(2)}',
               ]).toList(),
             ),
           ],
@@ -197,7 +197,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                 ),
                 const Gap(8),
                 Text(
-                  '₹${total.toStringAsFixed(2)}',
+                  'SAR ${total.toStringAsFixed(2)}',
                   style: typography.h2.copyWith(color: Colors.white),
                 ),
                 const Gap(4),
@@ -342,7 +342,7 @@ class _ExpenseCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '₹${expense.amount.toStringAsFixed(0)}',
+                'SAR ${expense.amount.toStringAsFixed(0)}',
                 style: typography.bodyLargeSemiBold.copyWith(color: Colors.red.shade700),
               ),
               Text(
@@ -402,7 +402,7 @@ class _AddExpenseDialogState extends ConsumerState<_AddExpenseDialog> {
           ),
           const Gap(16),
           ABMTextField(
-            label: 'Amount (₹)',
+            label: 'Amount (SAR)',
             controller: _amountController,
             keyboardType: TextInputType.number,
             hint: 'Enter amount',
@@ -557,7 +557,7 @@ class _CategoryManagerDialogState extends ConsumerState<_CategoryManagerDialog> 
                       if (cat.description.isNotEmpty)
                         Text(cat.description, style: typography.bodySmall.copyWith(color: colors.textSecondary)),
                       if (cat.type == 'Income')
-                        Text('Default Amount: ₹${cat.amount.toStringAsFixed(0)}', 
+                        Text('Default Amount: SAR ${cat.amount.toStringAsFixed(0)}', 
                              style: typography.bodySmall.copyWith(color: colors.primary, fontWeight: FontWeight.bold)),
                     ],
                   ),
@@ -749,7 +749,7 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
             if (_type == 'Income') ...[
               const Gap(16),
               ABMTextField(
-                label: 'Default Amount (₹)',
+                label: 'Default Amount (SAR)',
                 controller: _amountController,
                 keyboardType: TextInputType.number,
                 hint: 'e.g. 1000',

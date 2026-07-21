@@ -382,7 +382,7 @@ class DashboardScreen extends ConsumerWidget {
             allowedModules.contains(AppModule.accounts.name))
           StatCard(
             title: 'Fee Collected',
-            value: NumberFormat.compactCurrency(symbol: '₹').format(stats.feeCollectedThisMonth),
+            value: NumberFormat.compactCurrency(symbol: 'SAR ').format(stats.feeCollectedThisMonth),
             subtitle: 'This month',
             icon: LucideIcons.wallet,
             color: Colors.blue.shade700,
@@ -432,7 +432,7 @@ class DashboardScreen extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Income:', style: context.typography.bodySmall),
-                            Text('₹${data.income.toStringAsFixed(0)}',
+                            Text('SAR ${data.income.toStringAsFixed(0)}',
                                 style: context.typography.bodySmall.copyWith(
                                     color: Colors.green, fontWeight: FontWeight.bold)),
                           ],
@@ -442,7 +442,7 @@ class DashboardScreen extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Expense:', style: context.typography.bodySmall),
-                            Text('₹${data.expense.toStringAsFixed(0)}',
+                            Text('SAR ${data.expense.toStringAsFixed(0)}',
                                 style: context.typography.bodySmall.copyWith(
                                     color: Colors.red, fontWeight: FontWeight.bold)),
                           ],
@@ -454,7 +454,7 @@ class DashboardScreen extends ConsumerWidget {
                             Text('Net:',
                                 style: context.typography.bodySmall
                                     .copyWith(fontWeight: FontWeight.bold)),
-                            Text('₹${net.toStringAsFixed(0)}',
+                            Text('SAR ${net.toStringAsFixed(0)}',
                                 style: context.typography.bodySmall.copyWith(
                                     color: net >= 0 ? Colors.green : Colors.red,
                                     fontWeight: FontWeight.bold)),
@@ -601,7 +601,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               if (routes.contains(RouteNames.finance))
                 _QuickActionItem(
-                  icon: LucideIcons.indianRupee,
+                  icon: LucideIcons.banknote,
                   label: 'Collect Fee',
                   color: const Color(0xFFC0A040),
                   onTap: () => context.push(RouteNames.finance),
