@@ -16,6 +16,7 @@ import 'package:abm_madrasa/features/students/presentation/parent_portal_screen.
 import 'package:abm_madrasa/features/students/presentation/online_admission_screen.dart';
 import 'package:abm_madrasa/features/attendance/presentation/attendance_mark_screen.dart';
 import 'package:abm_madrasa/features/attendance/presentation/attendance_report_screen.dart';
+import 'package:abm_madrasa/features/attendance/presentation/staff_checkin_screen.dart';
 
 import 'package:abm_madrasa/features/timetable/presentation/timetable_screen.dart';
 import 'package:abm_madrasa/features/timetable/presentation/shift_planner_screen.dart';
@@ -223,6 +224,10 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.payroll,
             builder: (context, state) => const PayrollScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.staffCheckin,
+            builder: (context, state) => const StaffCheckinScreen(),
           ),
           GoRoute(
             path: RouteNames.feeSetup,

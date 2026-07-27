@@ -16,6 +16,7 @@ enum AppModule {
   feeSetup,
   expenditure,
   teachers,
+  teacherCheckIn,
   progressReports,
   transport,
   administration,
@@ -85,6 +86,12 @@ const List<AppNavItem> kAppNavItems = [
         module: AppModule.attendance,
       ),
     ],
+  ),
+  AppNavItem(
+    label: 'My Attendance',
+    route: RouteNames.staffCheckin,
+    icon: LucideIcons.userCheck,
+    module: AppModule.teacherCheckIn,
   ),
   AppNavItem(
     label: 'Progress Reports',
