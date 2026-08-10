@@ -91,6 +91,15 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 Container(
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
                   child: IconButton(
+                    icon: const Icon(LucideIcons.table, color: Colors.white, size: 20),
+                    tooltip: 'Bulk Add / Import CSV',
+                    onPressed: () => context.push(RouteNames.bulkAddStudents),
+                  ),
+                ),
+                const Gap(8),
+                Container(
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: IconButton(
                     icon: const Icon(LucideIcons.arrowUpCircle, color: Colors.white, size: 20),
                     tooltip: 'Promote Eligible Students',
                     onPressed: () => _handlePromoteStudents(context),

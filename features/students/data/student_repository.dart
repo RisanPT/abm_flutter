@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
+import 'package:abm_madrasa/features/students/domain/bulk_import_result.dart';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -46,6 +47,25 @@ class StudentRepository {
       return StudentModel.fromJson(response.data);
     } catch (e) {
       throw Exception('Failed to add student: $e');
+    }
+  }
+
+  /// Bulk-create students from the grid / CSV import. Each row is validated and
+  /// saved independently on the server, so the result reports partial success:
+  /// how many were created and which rows failed (with reasons).
+  Future<BulkImportResult> bulkAddStudents(List<Map<String, dynamic>> students) async {
+    try {
+      final response = await _dio.post('/students/bulk', data: {'students': students});
+      return BulkImportResult.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      // A batch where every row failed comes back as 400 but still carries the
+      // per-row breakdown — surface it instead of a generic error.
+      final data = e.response?.data;
+      if (data is Map<String, dynamic> && data.containsKey('errorCount')) {
+        return BulkImportResult.fromJson(data);
+      }
+      final msg = (data is Map && data['message'] != null) ? data['message'] : e.message;
+      throw Exception('Bulk import failed: $msg');
     }
   }
 

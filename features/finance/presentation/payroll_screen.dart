@@ -247,11 +247,13 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
                 Text(r.teacherName, style: typography.bodyMediumSemiBold, maxLines: 1, overflow: TextOverflow.ellipsis),
                 const Gap(3),
                 Text(
-                  r.expected == 0
-                      ? 'No classes this month'
-                      : 'Attended ${r.attended}/${r.expected}'
-                          '${r.missed > 0 ? ' · ${r.missed} missed' : ''}'
-                          '${r.onLeave > 0 ? ' · ${r.onLeave} leave' : ''}',
+                  r.basis == 'checkin'
+                      ? '${r.presentDays ?? 0} days present · self check-in'
+                      : r.expected == 0
+                          ? 'No classes this month'
+                          : 'Attended ${r.attended}/${r.expected}'
+                              '${r.missed > 0 ? ' · ${r.missed} missed' : ''}'
+                              '${r.onLeave > 0 ? ' · ${r.onLeave} leave' : ''}',
                   style: typography.bodySmall.copyWith(color: colors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

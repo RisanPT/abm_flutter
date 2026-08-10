@@ -41,14 +41,35 @@ class AccountSummary {
 }
 
 class AccountLineItem {
-  const AccountLineItem({required this.title, required this.amount});
+  const AccountLineItem({
+    required this.title,
+    required this.amount,
+    this.months = const [],
+  });
 
   final String title;
   final double amount;
 
+  /// Month-based billing (1 = Jan … 12 = Dec). Empty = a recurring item billed
+  /// every month (waived during vacation months). When set, the item is billed
+  /// only in these months (and still charged even during vacation).
+  final List<int> months;
+
+  bool get isRecurring => months.isEmpty;
+
+  AccountLineItem copyWith({String? title, double? amount, List<int>? months}) =>
+      AccountLineItem(
+        title: title ?? this.title,
+        amount: amount ?? this.amount,
+        months: months ?? this.months,
+      );
+
   factory AccountLineItem.fromJson(Map<String, dynamic> json) => AccountLineItem(
         title: json['title'] as String,
         amount: (json['amount'] as num).toDouble(),
+        months: ((json['months'] as List?) ?? [])
+            .map((m) => (m as num).toInt())
+            .toList(),
       );
 }
 
@@ -181,6 +202,8 @@ class FeeStructureModel {
         'instituteId': instituteId,
         'grade': grade,
         'totalAmount': totalAmount,
-        'lineItems': lineItems.map((e) => {'title': e.title, 'amount': e.amount}).toList(),
+        'lineItems': lineItems
+            .map((e) => {'title': e.title, 'amount': e.amount, 'months': e.months})
+            .toList(),
       };
 }

@@ -193,6 +193,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
+  late TextEditingController _salaryController;
   String _selectedRole = AppRoles.staff;
   String? _selectedInstituteId;
   bool _isLoading = false;
@@ -202,6 +203,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
     super.initState();
     _usernameController = TextEditingController(text: widget.existingUser?.username ?? '');
     _passwordController = TextEditingController();
+    _salaryController = TextEditingController();
     if (widget.existingUser != null) {
       _selectedRole = widget.existingUser!.role;
       _selectedInstituteId = widget.existingUser!.instituteId;
@@ -212,6 +214,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _salaryController.dispose();
     super.dispose();
   }
 
@@ -225,6 +228,9 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
       final currentUser = authState.value;
       final isITAdmin = currentUser?.role == AppRoles.itAdmin || currentUser?.role == AppRoles.superAdmin;
       final isGlobalRole = roleStr == AppRoles.itAdmin || roleStr == AppRoles.superAdmin;
+      // Salary only applies to non-teaching payable staff (teachers use the
+      // Teachers screen). Null when blank → leaves any existing salary unchanged.
+      final salary = roleStr == AppRoles.teacher ? null : num.tryParse(_salaryController.text.trim());
 
       if (widget.existingUser == null) {
         await ref.read(adminControllerProvider.notifier).createUser(
@@ -232,6 +238,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
           password: _passwordController.text,
           role: roleStr,
           instituteId: (isITAdmin && !isGlobalRole) ? _selectedInstituteId : null,
+          monthlySalary: salary,
         );
       } else {
         await ref.read(adminControllerProvider.notifier).updateUser(
@@ -240,6 +247,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
           password: _passwordController.text.isNotEmpty ? _passwordController.text : null,
           role: roleStr,
           instituteId: (isITAdmin && !isGlobalRole) ? _selectedInstituteId : null,
+          monthlySalary: salary,
         );
       }
       if (mounted) Navigator.pop(context);
@@ -437,6 +445,23 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
                   return null;
                 },
               ),
+              // Monthly salary — for non-teaching payable staff (Head Master,
+              // Principal, Treasurer, Staff…). Teachers set salary on the
+              // Teachers screen. Adding a salary here makes the user appear in
+              // Payroll with their self check-in attendance.
+              if (_selectedRole != AppRoles.teacher && _selectedRole != '+ Add New Role...') ...[
+                const Gap(16),
+                TextFormField(
+                  controller: _salaryController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Monthly Salary (SAR) — optional',
+                    hintText: isEdit ? 'Leave blank to keep unchanged' : 'e.g. 6000',
+                    prefixText: 'SAR ',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
               if (rolesAsync.isLoading) const Padding(
                 padding: EdgeInsets.only(top: 8.0),
                 child: LinearProgressIndicator(),

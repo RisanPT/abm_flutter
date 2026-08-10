@@ -29,6 +29,7 @@ class AdminController extends AsyncNotifier<List<AdminUser>> {
     required String password,
     required String role,
     String? instituteId,
+    num? monthlySalary,
   }) async {
     state = const AsyncValue.loading();
     try {
@@ -37,6 +38,7 @@ class AdminController extends AsyncNotifier<List<AdminUser>> {
         password: password,
         role: role,
         instituteId: instituteId,
+        monthlySalary: monthlySalary,
       );
       final users = await _fetchUsers();
       state = AsyncValue.data(users);
@@ -52,6 +54,7 @@ class AdminController extends AsyncNotifier<List<AdminUser>> {
     String? password,
     String? role,
     String? instituteId,
+    num? monthlySalary,
   }) async {
     state = const AsyncValue.loading();
     try {
@@ -61,6 +64,7 @@ class AdminController extends AsyncNotifier<List<AdminUser>> {
         password: password,
         role: role,
         instituteId: instituteId,
+        monthlySalary: monthlySalary,
       );
       final users = await _fetchUsers();
       state = AsyncValue.data(users);

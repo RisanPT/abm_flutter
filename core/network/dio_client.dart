@@ -16,7 +16,8 @@ Dio dio(Ref ref) {
   final dio = Dio(
     BaseOptions(
       // baseUrl: 'https://13.60.186.111.nip.io/api',
-      baseUrl: 'http://localhost:5001/api',
+      // baseUrl: 'http://localhost:5001/api',
+      baseUrl: 'https://api.anasbinmalik.org/api',
 
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),

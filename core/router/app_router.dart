@@ -11,6 +11,7 @@ import 'package:abm_madrasa/features/teachers/presentation/progress_report_list_
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/presentation/student_list_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/add_student_screen.dart';
+import 'package:abm_madrasa/features/students/presentation/bulk_add_students_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/student_profile_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/parent_portal_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/online_admission_screen.dart';
@@ -119,6 +120,10 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.addStudent,
             builder: (context, state) => const AddStudentScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.bulkAddStudents,
+            builder: (context, state) => const BulkAddStudentsScreen(),
           ),
           GoRoute(
             path: '${RouteNames.editStudent}/:id',

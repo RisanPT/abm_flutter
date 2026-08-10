@@ -13,6 +13,8 @@ class PayrollRow {
     required this.net,
     required this.alreadyPaid,
     required this.fullyAttended,
+    this.basis = 'classes',
+    this.presentDays,
   });
 
   final String teacherId;
@@ -27,6 +29,8 @@ class PayrollRow {
   final num net;
   final bool alreadyPaid;
   final bool fullyAttended;
+  final String basis; // 'classes' | 'checkin'
+  final int? presentDays; // self check-in present days (non-teaching staff)
 
   static int _int(dynamic v) => (v as num?)?.toInt() ?? 0;
   static num _num(dynamic v) => (v as num?) ?? 0;
@@ -44,6 +48,8 @@ class PayrollRow {
         net: _num(j['net']),
         alreadyPaid: j['alreadyPaid'] == true,
         fullyAttended: j['fullyAttended'] == true,
+        basis: j['basis']?.toString() ?? 'classes',
+        presentDays: (j['presentDays'] as num?)?.toInt(),
       );
 }
 

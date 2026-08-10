@@ -4,6 +4,7 @@ class RouteNames {
   static const String dashboard = '/dashboard';
   static const String students = '/students';
   static const String addStudent = '/add-student';
+  static const String bulkAddStudents = '/bulk-add-students';
   static const String editStudent = '/edit-student';
   static const String studentProfile = '/student-profile';
   static const String attendance = '/attendance';

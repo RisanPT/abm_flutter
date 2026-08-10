@@ -145,6 +145,18 @@ class _FeeStructureSetupScreenState extends ConsumerState<FeeStructureSetupScree
 
 // ─── Fee Structure Card ────────────────────────────────────────────────────────
 
+const _kMonthAbbr = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// Empty months → recurring ('Every month'); otherwise the list, e.g. 'Apr, Oct'.
+String _monthsLabelFor(List<int> months) {
+  if (months.isEmpty) return 'Every month';
+  final sorted = [...months]..sort();
+  return sorted.map((m) => _kMonthAbbr[m - 1]).join(', ');
+}
+
 class _FeeStructureCard extends StatelessWidget {
   const _FeeStructureCard({
     required this.structure,
@@ -215,7 +227,23 @@ class _FeeStructureCard extends StatelessWidget {
                                 ),
                               ),
                               const Gap(10),
-                              Expanded(child: Text(item.title, style: typography.bodyMedium)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.title, style: typography.bodyMedium),
+                                    if (!item.title.toLowerCase().contains('admission'))
+                                      Text(
+                                        _monthsLabelFor(item.months),
+                                        style: typography.bodySmall.copyWith(
+                                          color: item.isRecurring
+                                              ? colors.textSecondary
+                                              : colors.primary,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                               Text(
                                 'SAR ${item.amount.toStringAsFixed(0)}',
                                 style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
@@ -286,6 +314,23 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
   late final TextEditingController _tourFeeCtrl;
   bool _isSubmitting = false;
 
+  // Month-based billing per fee (1 = Jan … 12 = Dec). Empty = recurring/every
+  // month (and waived in vacation months). Admission is one-time, so it has no
+  // month picker. Keyed by a stable slug matching each fee field below.
+  final Map<String, List<int>> _months = {
+    'monthly': [],
+    'sports': [],
+    'arts': [],
+    'exam1': [],
+    'exam2': [],
+    'tour': [],
+  };
+
+  static const List<String> _monthAbbr = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
   bool get _isEdit => widget.existing != null;
 
   /// The resolved grade string to save
@@ -311,16 +356,22 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
           admission = item.amount;
         } else if (name.contains('monthly') || name.contains('tuition')) {
           monthly = item.amount;
+          _months['monthly'] = List.of(item.months);
         } else if (name.contains('sports')) {
           sports = item.amount;
+          _months['sports'] = List.of(item.months);
         } else if (name.contains('arts')) {
           arts = item.amount;
+          _months['arts'] = List.of(item.months);
         } else if (name.contains('exam-1') || name == 'exam-1 fee' || name == 'exam 1 fee') {
           exam1 = item.amount;
+          _months['exam1'] = List.of(item.months);
         } else if (name.contains('exam-2') || name == 'exam-2 fee' || name == 'exam 2 fee') {
           exam2 = item.amount;
+          _months['exam2'] = List.of(item.months);
         } else if (name.contains('tour')) {
           tour = item.amount;
+          _months['tour'] = List.of(item.months);
         }
       }
     }
@@ -433,48 +484,26 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
               ),
             const Gap(16),
             const Text('Fee Breakdown (SAR)', style: TextStyle(fontWeight: FontWeight.bold)),
-            const Gap(8),
-            TextField(
-              controller: _admissionFeeCtrl,
-              decoration: const InputDecoration(labelText: 'Admission Fee (SAR)', hintText: '0'),
-              keyboardType: TextInputType.number,
+            const Gap(4),
+            Text(
+              'Set “Billed in” months for term/one-off fees. Leave it on Every month for recurring fees — those are automatically skipped during vacation months.',
+              style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary),
             ),
             const Gap(12),
-            TextField(
-              controller: _monthlyFeeCtrl,
-              decoration: const InputDecoration(labelText: 'Monthly Tuition Fee (SAR)', hintText: '0'),
-              keyboardType: TextInputType.number,
-            ),
+            // Admission is one-time (charged once per student, ever) — no month picker.
+            _feeField(controller: _admissionFeeCtrl, label: 'Admission Fee (SAR)'),
             const Gap(12),
-            TextField(
-              controller: _sportsFeeCtrl,
-              decoration: const InputDecoration(labelText: 'Sports Fee (SAR)', hintText: '0'),
-              keyboardType: TextInputType.number,
-            ),
+            _feeField(controller: _monthlyFeeCtrl, label: 'Monthly Tuition Fee (SAR)', monthKey: 'monthly'),
             const Gap(12),
-            TextField(
-              controller: _artsFeeCtrl,
-              decoration: const InputDecoration(labelText: 'Arts Fee (SAR)', hintText: '0'),
-              keyboardType: TextInputType.number,
-            ),
+            _feeField(controller: _sportsFeeCtrl, label: 'Sports Fee (SAR)', monthKey: 'sports'),
             const Gap(12),
-            TextField(
-              controller: _exam1FeeCtrl,
-              decoration: const InputDecoration(labelText: 'Exam-1 Fee (SAR)', hintText: '0'),
-              keyboardType: TextInputType.number,
-            ),
+            _feeField(controller: _artsFeeCtrl, label: 'Arts Fee (SAR)', monthKey: 'arts'),
             const Gap(12),
-            TextField(
-              controller: _exam2FeeCtrl,
-              decoration: const InputDecoration(labelText: 'Exam-2 Fee (SAR)', hintText: '0'),
-              keyboardType: TextInputType.number,
-            ),
+            _feeField(controller: _exam1FeeCtrl, label: 'Exam-1 Fee (SAR)', monthKey: 'exam1'),
             const Gap(12),
-            TextField(
-              controller: _tourFeeCtrl,
-              decoration: const InputDecoration(labelText: 'Tour Fee (SAR)', hintText: '0'),
-              keyboardType: TextInputType.number,
-            ),
+            _feeField(controller: _exam2FeeCtrl, label: 'Exam-2 Fee (SAR)', monthKey: 'exam2'),
+            const Gap(12),
+            _feeField(controller: _tourFeeCtrl, label: 'Tour Fee (SAR)', monthKey: 'tour'),
           ],
         ),
       ),
@@ -491,6 +520,117 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
         ),
       ],
     );
+  }
+
+  // A fee amount field with an optional "Billed in <months>" selector beneath it.
+  Widget _feeField({
+    required TextEditingController controller,
+    required String label,
+    String? monthKey,
+  }) {
+    final colors = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: controller,
+          decoration: InputDecoration(labelText: label, hintText: '0'),
+          keyboardType: TextInputType.number,
+        ),
+        if (monthKey != null)
+          InkWell(
+            onTap: () => _openMonthPicker(monthKey, label),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.calendarDays, size: 14, color: colors.textSecondary),
+                  const Gap(6),
+                  Text('Billed in: ',
+                      style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+                  Expanded(
+                    child: Text(
+                      _monthsSummary(_months[monthKey]!),
+                      style: context.typography.bodySmall
+                          .copyWith(color: colors.primary, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(LucideIcons.chevronRight, size: 14, color: colors.textSecondary),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _monthsSummary(List<int> months) {
+    if (months.isEmpty) return 'Every month';
+    final sorted = [...months]..sort();
+    return sorted.map((m) => _monthAbbr[m - 1]).join(', ');
+  }
+
+  Future<void> _openMonthPicker(String key, String label) async {
+    final temp = List<int>.of(_months[key]!);
+    final result = await showDialog<List<int>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text('Billed months — $label'),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  temp.isEmpty
+                      ? 'Currently billed every month (skipped during vacation).'
+                      : 'Billed only in the selected months.',
+                  style: context.typography.bodySmall
+                      .copyWith(color: context.colors.textSecondary),
+                ),
+                const Gap(12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: List.generate(12, (i) {
+                    final m = i + 1;
+                    return FilterChip(
+                      label: Text(_monthAbbr[i]),
+                      selected: temp.contains(m),
+                      onSelected: (on) => setLocal(() {
+                        if (on) {
+                          temp.add(m);
+                        } else {
+                          temp.remove(m);
+                        }
+                      }),
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => setLocal(temp.clear),
+              child: const Text('Every month'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, temp),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() => _months[key] = result..sort());
+    }
   }
 
   Future<void> _submit() async {
@@ -516,13 +656,14 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
     setState(() => _isSubmitting = true);
 
     final lineItems = <AccountLineItem>[];
+    // Admission is one-time (charged once per student, ever) — no month billing.
     if (admissionFee > 0) lineItems.add(AccountLineItem(title: 'Admission Fee', amount: admissionFee));
-    if (monthlyFee > 0) lineItems.add(AccountLineItem(title: 'Monthly Tuition Fee', amount: monthlyFee));
-    if (sportsFee > 0) lineItems.add(AccountLineItem(title: 'Sports Fee', amount: sportsFee));
-    if (artsFee > 0) lineItems.add(AccountLineItem(title: 'Arts Fee', amount: artsFee));
-    if (exam1Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-1 Fee', amount: exam1Fee));
-    if (exam2Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-2 Fee', amount: exam2Fee));
-    if (tourFee > 0) lineItems.add(AccountLineItem(title: 'Tour Fee', amount: tourFee));
+    if (monthlyFee > 0) lineItems.add(AccountLineItem(title: 'Monthly Tuition Fee', amount: monthlyFee, months: _months['monthly']!));
+    if (sportsFee > 0) lineItems.add(AccountLineItem(title: 'Sports Fee', amount: sportsFee, months: _months['sports']!));
+    if (artsFee > 0) lineItems.add(AccountLineItem(title: 'Arts Fee', amount: artsFee, months: _months['arts']!));
+    if (exam1Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-1 Fee', amount: exam1Fee, months: _months['exam1']!));
+    if (exam2Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-2 Fee', amount: exam2Fee, months: _months['exam2']!));
+    if (tourFee > 0) lineItems.add(AccountLineItem(title: 'Tour Fee', amount: tourFee, months: _months['tour']!));
 
     final totalAmount = lineItems.fold(0.0, (sum, item) => sum + item.amount);
 
