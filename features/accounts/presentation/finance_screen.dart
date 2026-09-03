@@ -15,6 +15,11 @@ import 'package:printing/printing.dart';
 
 String _sar(double v) => 'SAR ${v.toStringAsFixed(0)}';
 
+// Full month-by-month ledger (arrears + current) for the selected student.
+final feeLedgerProvider = FutureProvider.family.autoDispose<FeeLedger, String>(
+  (ref, studentId) => ref.watch(accountRepositoryProvider).getLedger(studentId),
+);
+
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 
 class AccountsScreen extends ConsumerStatefulWidget {
@@ -119,12 +124,13 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     );
   }
 
-  Future<void> _handlePayment(String studentId, double amount) async {
+  Future<void> _handlePayment(String studentId, double amount, List<String> items) async {
     setState(() => _processingPayment = true);
     try {
       final receipt = await ref.read(accountRepositoryProvider).processPayment(
             studentId: studentId,
             amount: amount,
+            items: items,
           );
       ref.invalidate(accountSummariesProvider);
       ref.invalidate(studentAccountDetailsProvider(studentId));
@@ -197,7 +203,7 @@ class _MobileLayout extends StatelessWidget {
   final String? selectedStudentId;
   final bool processingPayment;
   final void Function(String id) onSelectStudent;
-  final Future<void> Function(String studentId, double amount) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items) onProcessPayment;
   final TextEditingController searchController;
   final String query;
   final void Function(String) onQueryChanged;
@@ -539,7 +545,7 @@ class _AccountDetailsPanel extends ConsumerStatefulWidget {
 
   final String studentId;
   final bool processingPayment;
-  final Future<void> Function(String studentId, double amount) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items) onProcessPayment;
   final VoidCallback onBack;
 
   @override
@@ -639,6 +645,8 @@ class _AccountDetailsPanelState extends ConsumerState<_AccountDetailsPanel> {
                 ),
               ],
             ),
+          const Gap(20),
+          _LedgerCard(studentId: widget.studentId),
         ],
       ),
     );
@@ -734,7 +742,7 @@ class _StudentHeaderCard extends StatelessWidget {
 
 // ─── Fee Breakdown Card ────────────────────────────────────────────────────────
 
-class _FeeBreakdownCard extends ConsumerWidget {
+class _FeeBreakdownCard extends ConsumerStatefulWidget {
   const _FeeBreakdownCard({
     required this.details,
     required this.amountController,
@@ -745,10 +753,37 @@ class _FeeBreakdownCard extends ConsumerWidget {
   final StudentAccountDetails details;
   final TextEditingController amountController;
   final bool processingPayment;
-  final Future<void> Function(String studentId, double amount) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items) onProcessPayment;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FeeBreakdownCard> createState() => _FeeBreakdownCardState();
+}
+
+class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
+  // Which fee items the office admin is collecting in this payment.
+  late final Set<String> _selected = widget.details.lineItems.map((e) => e.title).toSet();
+
+  double _selectedTotal() => widget.details.lineItems
+      .where((i) => _selected.contains(i.title))
+      .fold(0.0, (s, i) => s + i.amount);
+
+  void _toggleItem(String title) {
+    setState(() {
+      if (_selected.contains(title)) {
+        _selected.remove(title);
+      } else {
+        _selected.add(title);
+      }
+      widget.amountController.text = _selectedTotal().toStringAsFixed(0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final details = widget.details;
+    final amountController = widget.amountController;
+    final processingPayment = widget.processingPayment;
+    final onProcessPayment = widget.onProcessPayment;
     final colors = context.colors;
     final typography = context.typography;
     final isPaid = details.status == 'Paid';
@@ -873,17 +908,46 @@ class _FeeBreakdownCard extends ConsumerWidget {
                       ),
                     ],
                   )
-                else
+                else ...[
+                  if (!isPaid)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text('Tick the fee items to collect',
+                          style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                    ),
                   ...details.lineItems.asMap().entries.map((entry) {
                     final item = entry.value;
                     final isLast = entry.key == details.lineItems.length - 1;
+                    final selected = _selected.contains(item.title);
                     return Column(
                       children: [
-                        _FeeLineItem(item: item),
+                        if (isPaid)
+                          _FeeLineItem(item: item)
+                        else
+                          InkWell(
+                            onTap: () => _toggleItem(item.title),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 34,
+                                  child: Checkbox(
+                                    value: selected,
+                                    onChanged: (_) => _toggleItem(item.title),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    activeColor: colors.primary,
+                                  ),
+                                ),
+                                Expanded(child: _FeeLineItem(item: item)),
+                              ],
+                            ),
+                          ),
                         if (!isLast) Divider(height: 1, color: colors.border),
                       ],
                     );
                   }),
+                ],
 
                 const Gap(12),
                 // Total row
@@ -991,7 +1055,14 @@ class _FeeBreakdownCard extends ConsumerWidget {
                                   );
                                   return;
                                 }
-                                await onProcessPayment(details.summary.studentId, amount);
+                                if (_selected.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Select at least one fee item to collect')),
+                                  );
+                                  return;
+                                }
+                                await onProcessPayment(
+                                    details.summary.studentId, amount, _selected.toList());
                               },
                         borderRadius: BorderRadius.circular(16),
                         child: Row(
@@ -1708,6 +1779,231 @@ class _StatusBadge extends StatelessWidget {
           fontWeight: FontWeight.w700,
           fontSize: 10,
         ),
+      ),
+    );
+  }
+}
+
+// ─── Fee Ledger Card (arrears + month-by-month + waive) ──────────────────────
+
+class _LedgerCard extends ConsumerWidget {
+  const _LedgerCard({required this.studentId});
+  final String studentId;
+
+  void _refresh(WidgetRef ref) {
+    ref.invalidate(feeLedgerProvider(studentId));
+    ref.invalidate(accountSummariesProvider);
+    ref.invalidate(studentAccountDetailsProvider(studentId));
+  }
+
+  Future<void> _snack(BuildContext context, String msg, {bool ok = true}) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: ok ? const Color(0xFF16A34A) : null),
+    );
+  }
+
+  Future<void> _payMonth(BuildContext context, WidgetRef ref, LedgerMonth m) async {
+    final ctrl = TextEditingController(text: m.balance.toStringAsFixed(0));
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Collect — ${m.monthLabel}'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Amount (SAR)', prefixText: 'SAR '),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, double.tryParse(ctrl.text.trim())),
+            child: const Text('Collect'),
+          ),
+        ],
+      ),
+    );
+    if (amount == null || amount <= 0) return;
+    try {
+      await ref.read(accountRepositoryProvider).processPayment(
+          studentId: studentId, amount: amount, monthLabel: m.monthLabel);
+      _refresh(ref);
+      if (context.mounted) _snack(context, 'Collected ${_sar(amount)} for ${m.monthLabel}');
+    } catch (e) {
+      if (context.mounted) _snack(context, e.toString().replaceFirst('Exception: ', ''), ok: false);
+    }
+  }
+
+  Future<void> _settleArrears(BuildContext context, WidgetRef ref, num arrears) async {
+    final ctrl = TextEditingController(text: arrears.toStringAsFixed(0));
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Settle Arrears (oldest first)'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Total arrears: ${_sar(arrears.toDouble())}'),
+          const Gap(10),
+          TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Amount to collect (SAR)', prefixText: 'SAR '),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, double.tryParse(ctrl.text.trim())),
+            child: const Text('Collect'),
+          ),
+        ],
+      ),
+    );
+    if (amount == null || amount <= 0) return;
+    try {
+      await ref.read(accountRepositoryProvider)
+          .processPayment(studentId: studentId, amount: amount, allocate: 'oldest');
+      _refresh(ref);
+      if (context.mounted) _snack(context, 'Applied ${_sar(amount)} oldest-first');
+    } catch (e) {
+      if (context.mounted) _snack(context, e.toString().replaceFirst('Exception: ', ''), ok: false);
+    }
+  }
+
+  Future<void> _toggleWaive(BuildContext context, WidgetRef ref, LedgerMonth m) async {
+    try {
+      await ref.read(accountRepositoryProvider).waiveMonth(studentId, m.monthLabel, !m.waived);
+      _refresh(ref);
+      if (context.mounted) _snack(context, m.waived ? '${m.monthLabel} restored' : '${m.monthLabel} waived');
+    } catch (e) {
+      if (context.mounted) _snack(context, e.toString().replaceFirst('Exception: ', ''), ok: false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final typography = context.typography;
+    final async = ref.watch(feeLedgerProvider(studentId));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colors.border),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: async.when(
+        loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
+        error: (e, _) => Text('Ledger error: $e', style: typography.bodySmall),
+        data: (ledger) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(LucideIcons.history, color: colors.primary, size: 20),
+                const Gap(10),
+                Text('Fee Ledger', style: typography.h4),
+                const Spacer(),
+                if (ledger.arrears > 0)
+                  ElevatedButton.icon(
+                    onPressed: () => _settleArrears(context, ref, ledger.arrears),
+                    icon: const Icon(LucideIcons.wallet, size: 15),
+                    label: const Text('Settle Arrears'),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+                  ),
+              ]),
+              const Gap(14),
+              // Arrears vs current summary
+              Row(children: [
+                _sumTile(context, 'Arrears', ledger.arrears.toDouble(),
+                    ledger.arrears > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A)),
+                const Gap(10),
+                _sumTile(context, 'This Month', ledger.currentDue.toDouble(), colors.primary),
+                const Gap(10),
+                _sumTile(context, 'Advance', ledger.advanceBalance.toDouble(), const Color(0xFF2563EB)),
+              ]),
+              const Gap(16),
+              ...ledger.months.reversed.map((m) => _monthRow(context, ref, m)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _sumTile(BuildContext context, String label, double value, Color tint) {
+    final typography = context.typography;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: tint.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: typography.bodySmall.copyWith(color: context.colors.textSecondary),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          const Gap(2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(_sar(value), style: typography.bodyLargeSemiBold.copyWith(color: tint)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _monthRow(BuildContext context, WidgetRef ref, LedgerMonth m) {
+    final colors = context.colors;
+    final typography = context.typography;
+    final color = m.waived
+        ? const Color(0xFF6B7280)
+        : (m.status == 'Paid'
+            ? const Color(0xFF16A34A)
+            : (m.balance > 0 ? const Color(0xFFD97706) : colors.textSecondary));
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Text(m.monthLabel, style: typography.bodyMediumSemiBold),
+                if (m.isCurrent) ...[
+                  const Gap(6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                    decoration: BoxDecoration(color: colors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                    child: Text('Current', style: typography.bodySmall.copyWith(color: colors.primary, fontSize: 10)),
+                  ),
+                ],
+              ]),
+              Text(m.waived ? 'Waived — no fee due' : 'SAR ${m.totalPaid.toStringAsFixed(0)} / ${m.totalDue.toStringAsFixed(0)}',
+                  style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+            ]),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+            child: Text(m.waived ? 'Waived' : m.status,
+                style: typography.bodySmall.copyWith(color: color, fontWeight: FontWeight.w600)),
+          ),
+          if (!m.waived && m.balance > 0) ...[
+            const Gap(6),
+            IconButton(
+              tooltip: 'Collect this month',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _payMonth(context, ref, m),
+              icon: Icon(LucideIcons.creditCard, size: 18, color: colors.primary),
+            ),
+          ],
+          if (m.totalPaid == 0)
+            IconButton(
+              tooltip: m.waived ? 'Restore fee' : 'Waive this month',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _toggleWaive(context, ref, m),
+              icon: Icon(m.waived ? LucideIcons.rotateCcw : LucideIcons.ban,
+                  size: 17, color: colors.textSecondary),
+            ),
+        ],
       ),
     );
   }

@@ -18,6 +18,7 @@ class InstituteBannerChip extends ConsumerWidget {
     final institute = ref.watch(selectedInstituteProvider);
     final user = ref.watch(authControllerProvider).asData?.value;
     final canSwitch = user?.role == AppRoles.superAdmin || user?.role == AppRoles.itAdmin;
+    final colors = context.colors;
 
     return GestureDetector(
       onTap: canSwitch ? () => _showPremiumPicker(context, ref) : null,
@@ -25,10 +26,10 @@ class InstituteBannerChip extends ConsumerWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
+          color: colors.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.3),
+            color: colors.primary.withValues(alpha: 0.2),
             width: 1,
           ),
         ),
@@ -39,12 +40,12 @@ class InstituteBannerChip extends ConsumerWidget {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
+                color: colors.primary.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 institute.icon,
-                color: Colors.white,
+                color: colors.primary,
                 size: 12,
               ),
             ),
@@ -53,8 +54,8 @@ class InstituteBannerChip extends ConsumerWidget {
               constraints: const BoxConstraints(maxWidth: 160),
               child: Text(
                 institute.name,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: colors.primary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.1,
@@ -65,9 +66,9 @@ class InstituteBannerChip extends ConsumerWidget {
             ),
             if (canSwitch) ...[
               const SizedBox(width: 6),
-              const Icon(
+              Icon(
                 LucideIcons.chevronsUpDown,
-                color: Colors.white,
+                color: colors.primary,
                 size: 13,
               ),
             ],

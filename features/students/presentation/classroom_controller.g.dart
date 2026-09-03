@@ -34,7 +34,7 @@ final class ClassroomControllerProvider
 }
 
 String _$classroomControllerHash() =>
-    r'530b938545c561d9aee403493449d81dbe781b25';
+    r'8c5da76a4f352551b20b9befdda41402c3666396';
 
 abstract class _$ClassroomController
     extends $AsyncNotifier<List<ClassroomModel>> {

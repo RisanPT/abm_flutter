@@ -101,7 +101,9 @@ class _UserTile extends ConsumerWidget {
               children: [
                 Text(user.username, style: typography.bodySemiBold.copyWith(color: colors.textPrimary)),
                 const Gap(4),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -115,7 +117,6 @@ class _UserTile extends ConsumerWidget {
                       ),
                     ),
                     if (instituteName.isNotEmpty) ...[
-                      const Gap(8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(

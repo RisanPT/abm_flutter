@@ -364,6 +364,141 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
     }
   }
 
+  // ── Default shift schedule (recurring weekdays per shift) ───────────────────
+  static const _weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  Future<void> _showShiftDefaultsDialog() async {
+    Map<String, List<int>> defaults;
+    try {
+      defaults = await ref.read(plannerRepositoryProvider).getShiftDefaults(_instituteId);
+    } catch (_) {
+      defaults = {};
+    }
+    final s1 = <int>{...(defaults['Shift-1'] ?? const [])};
+    final s2 = <int>{...(defaults['Shift-2'] ?? const [])};
+    if (!mounted) return;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Widget shiftRow(String title, Set<int> sel) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: context.typography.bodyMediumSemiBold),
+                  const Gap(6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (int i = 0; i < 7; i++)
+                        FilterChip(
+                          label: Text(_weekdayLabels[i]),
+                          selected: sel.contains(i),
+                          onSelected: (v) => setLocal(() => v ? sel.add(i) : sel.remove(i)),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+          return AlertDialog(
+            icon: const Icon(LucideIcons.calendarClock, color: _maroon, size: 28),
+            title: const Text('Default Shift Schedule'),
+            content: SizedBox(
+              width: MediaQuery.sizeOf(context).width * 0.9 < 380 ? MediaQuery.sizeOf(context).width * 0.9 : 380,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Set the recurring class weekdays for each shift. You can then auto-fill the whole term for a shift with one tap.',
+                      style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary),
+                    ),
+                    const Gap(16),
+                    shiftRow('Shift-1', s1),
+                    const Gap(16),
+                    shiftRow('Shift-2', s2),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: _maroon, foregroundColor: Colors.white),
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (saved != true) return;
+    try {
+      await ref.read(plannerRepositoryProvider).setShiftDefaults(_instituteId, {
+        'Shift-1': s1.toList()..sort(),
+        'Shift-2': s2.toList()..sort(),
+      });
+      if (mounted) _toast('Default schedule saved');
+    } catch (e) {
+      _toast(_err(e), error: true);
+    }
+  }
+
+  Future<void> _applyDefaultSchedule() async {
+    Map<String, List<int>> defaults;
+    try {
+      defaults = await ref.read(plannerRepositoryProvider).getShiftDefaults(_instituteId);
+    } catch (e) {
+      _toast(_err(e), error: true);
+      return;
+    }
+    final weekdays = defaults[_shift] ?? const [];
+    if (weekdays.isEmpty) {
+      if (mounted) _toast('Set a default schedule for $_shift first (Defaults)', error: true);
+      return;
+    }
+    final names = weekdays.map((w) => _weekdayLabels[w]).join(', ');
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(LucideIcons.zap, color: _maroon, size: 28),
+        title: Text('Auto-fill $_shift'),
+        content: Text('Plan class days on $names for every week of $_academicYear? Existing days are kept.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _maroon, foregroundColor: Colors.white),
+            child: const Text('Auto-fill Year'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final res = await ref.read(plannerRepositoryProvider).bulkPlan(
+            weekdays: weekdays,
+            scope: 'year',
+            year: _focusedDay.year,
+            month: _focusedDay.month,
+            academicYear: _academicYear,
+            shift: _shift,
+            instituteId: _instituteId,
+          );
+      _refresh();
+      if (mounted) {
+        _toast('Auto-filled ${res.planned} class day(s) on $names'
+            '${res.skippedExisting > 0 ? ' • ${res.skippedExisting} already planned' : ''}');
+      }
+    } catch (e) {
+      _toast(_err(e), error: true);
+    }
+  }
+
   // ── Teacher leave (reassign to a substitute) ────────────────────────────────
   Future<void> _showTeacherLeaveDialog() async {
     List<TeacherOption> teachers;
@@ -554,51 +689,61 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _goBack,
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Shift Planner', style: typography.h3.copyWith(color: _maroon)),
-                    const Gap(2),
-                    Text('Master academic calendar — plan class days, build timetables, publish.',
-                        style: typography.bodyMedium.copyWith(color: colors.textSecondary)),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => showAddClassSheet(
-                  context,
-                  instituteId: _instituteId,
-                  initialDate: _focusedDay,
-                  initialShift: _shift,
-                  onSaved: _refresh,
-                ),
-                icon: const Icon(LucideIcons.plus, size: 18),
-                label: const Text('Add Class'),
-                style: ElevatedButton.styleFrom(backgroundColor: _maroon, foregroundColor: Colors.white),
-              ),
-              const Gap(10),
-              OutlinedButton.icon(
-                onPressed: _showBulkPlanDialog,
-                icon: const Icon(LucideIcons.calendarRange, size: 18),
-                label: const Text('Bulk Plan'),
-                style: OutlinedButton.styleFrom(foregroundColor: _maroon),
-              ),
-              const Gap(10),
-              OutlinedButton.icon(
-                onPressed: _showTeacherLeaveDialog,
-                icon: const Icon(LucideIcons.userMinus, size: 18),
-                label: const Text('Teacher Leave'),
-                style: OutlinedButton.styleFrom(foregroundColor: _maroon),
-              ),
-            ],
-          ),
+          Builder(builder: (context) {
+            final back = IconButton(icon: const Icon(Icons.arrow_back), onPressed: _goBack);
+            final titleCol = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Shift Planner', style: typography.h3.copyWith(color: _maroon)),
+                const Gap(2),
+                Text('Master academic calendar — plan class days, build timetables, publish.',
+                    style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            );
+            final addBtn = ElevatedButton.icon(
+              onPressed: () => showAddClassSheet(context,
+                  instituteId: _instituteId, initialDate: _focusedDay, initialShift: _shift, onSaved: _refresh),
+              icon: const Icon(LucideIcons.plus, size: 18),
+              label: const Text('Add Class'),
+              style: ElevatedButton.styleFrom(backgroundColor: _maroon, foregroundColor: Colors.white),
+            );
+            final bulkBtn = OutlinedButton.icon(
+              onPressed: _showBulkPlanDialog,
+              icon: const Icon(LucideIcons.calendarRange, size: 18),
+              label: const Text('Bulk Plan'),
+              style: OutlinedButton.styleFrom(foregroundColor: _maroon),
+            );
+            final leaveBtn = OutlinedButton.icon(
+              onPressed: _showTeacherLeaveDialog,
+              icon: const Icon(LucideIcons.userMinus, size: 18),
+              label: const Text('Teacher Leave'),
+              style: OutlinedButton.styleFrom(foregroundColor: _maroon),
+            );
+            final defaultsBtn = OutlinedButton.icon(
+              onPressed: _showShiftDefaultsDialog,
+              icon: const Icon(LucideIcons.calendarClock, size: 18),
+              label: const Text('Defaults'),
+              style: OutlinedButton.styleFrom(foregroundColor: _maroon),
+            );
+            final autofillBtn = ElevatedButton.icon(
+              onPressed: _applyDefaultSchedule,
+              icon: const Icon(LucideIcons.zap, size: 18),
+              label: Text('Auto-fill $_shift'),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: _maroon.withValues(alpha: 0.9), foregroundColor: Colors.white),
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [back, Expanded(child: titleCol)]),
+                const Gap(12),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  addBtn, defaultsBtn, autofillBtn, bulkBtn, leaveBtn,
+                ]),
+              ],
+            );
+          }),
           const Gap(20),
           Wrap(
             spacing: 16,

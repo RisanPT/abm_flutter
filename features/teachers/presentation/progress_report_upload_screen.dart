@@ -356,10 +356,14 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text(
-                                  'Evaluation Result Status:',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                const Flexible(
+                                  child: Text(
+                                    'Evaluation Result Status:',
+                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
+                                const Gap(8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(

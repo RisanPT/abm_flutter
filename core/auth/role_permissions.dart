@@ -22,6 +22,7 @@ enum AppModule {
   administration,
   settings,
   institutes,
+  websiteManagement,
 }
 
 class AppNavItem {
@@ -187,6 +188,12 @@ const List<AppNavItem> kAppNavItems = [
     icon: LucideIcons.building,
     module: AppModule.institutes,
   ),
+  AppNavItem(
+    label: 'Website Content',
+    route: RouteNames.websiteContent,
+    icon: LucideIcons.layout,
+    module: AppModule.websiteManagement,
+  ),
 ];
 
 extension RoleStringExtension on String {
@@ -218,7 +225,12 @@ extension RoleStringExtension on String {
   bool canEditStudentData(Set<String> allowedModules) => canAccess(AppModule.students, allowedModules);
   bool canEditAdministration(Set<String> allowedModules) => canAccess(AppModule.administration, allowedModules);
   bool canEditAttendance(Set<String> allowedModules) => canAccess(AppModule.attendance, allowedModules);
-  bool canEditTimetable(Set<String> allowedModules) => canAccess(AppModule.timetable, allowedModules);
+  // Timetable VIEW follows the module (teachers can see their schedule), but
+  // CREATE / EDIT / DELETE is admin-only — mirrors the server write roles and
+  // keeps schedule changes out of teacher interfaces.
+  bool get canManageTimetable =>
+      this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster;
+  bool canEditTimetable(Set<String> allowedModules) => canManageTimetable;
   bool canEditAccounts(Set<String> allowedModules) => canAccess(AppModule.accounts, allowedModules);
   bool canEditFinance(Set<String> allowedModules) => canAccess(AppModule.finance, allowedModules);
 
@@ -227,6 +239,10 @@ extension RoleStringExtension on String {
   }
 
   String defaultRoute(Set<String> allowedModules) {
+    // Students land on their own portal (no admin modules).
+    if (this == AppRoles.student) {
+      return RouteNames.studentPortal;
+    }
     // Teachers land straight on their own "My Classes" attendance view.
     if (this == AppRoles.teacher && canAccess(AppModule.attendance, allowedModules)) {
       return RouteNames.attendance;

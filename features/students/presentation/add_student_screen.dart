@@ -5,6 +5,7 @@ import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
+import 'package:abm_madrasa/features/students/data/student_login_repository.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
@@ -341,11 +342,11 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
               subtitle: _isEdit ? 'Updating records for ${_nameController.text}' : 'Complete the form to register a new student',
             ),
             Padding(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(context.isMobile ? 12 : 24),
               child: Center(
                 child: Container(
                   constraints: const BoxConstraints(maxWidth: 960),
-                  padding: EdgeInsets.all(context.isMobile ? 20 : 32),
+                  padding: EdgeInsets.all(context.isMobile ? 16 : 32),
                   decoration: BoxDecoration(
                     color: colors.cardBackground,
                     borderRadius: BorderRadius.circular(24),
@@ -576,6 +577,14 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                             prefixIcon:  LucideIcons.banknote,
                           ),
                         ],
+                        if (_isEdit &&
+                            const [AppRoles.itAdmin, AppRoles.superAdmin, AppRoles.headMaster]
+                                .contains(ref.watch(authControllerProvider).value?.role)) ...[
+                          const Gap(28),
+                          const SectionHeader(title: 'Student Login Access'),
+                          const Gap(8),
+                          _StudentLoginSection(studentId: widget.existingStudent!.id),
+                        ],
                         const Gap(40),
                         ABMButton(text: _isEdit ? 'Update Student Record' : 'Enroll Student', onPressed: _isSaving ? null : () => _save(), isLoading: _isSaving),
                       ],
@@ -743,5 +752,170 @@ class _ResponsiveRow extends StatelessWidget {
   Widget build(BuildContext context) {
     if (context.isMobile) return Column(children: [children[0], const Gap(24), children[1]]);
     return Row(children: [Expanded(child: children[0]), const Gap(24), Expanded(child: children[1])]);
+  }
+}
+
+/// Lets a Head Master / IT Admin create, update, disable or remove a student's
+/// login from the edit screen. Login = a Student-role account tied to this record.
+class _StudentLoginSection extends ConsumerStatefulWidget {
+  const _StudentLoginSection({required this.studentId});
+  final String studentId;
+  @override
+  ConsumerState<_StudentLoginSection> createState() => _StudentLoginSectionState();
+}
+
+class _StudentLoginSectionState extends ConsumerState<_StudentLoginSection> {
+  final _username = TextEditingController();
+  final _password = TextEditingController();
+  StudentLoginStatus? _status;
+  bool _loading = true;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _username.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final s = await ref.read(studentLoginRepositoryProvider).getStatus(widget.studentId);
+      _username.text = s.username ?? s.suggestedUsername;
+      if (mounted) setState(() { _status = s; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = 'Could not load login status'; _loading = false; });
+    }
+  }
+
+  Future<void> _run(Future<StudentLoginStatus> Function() action, String okMsg) async {
+    setState(() { _busy = true; _error = null; });
+    try {
+      final s = await action();
+      _password.clear();
+      _username.text = s.username ?? _username.text;
+      if (mounted) {
+        setState(() { _status = s; _busy = false; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(okMsg), backgroundColor: const Color(0xFF16A34A)));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() { _busy = false; _error = e.toString().replaceFirst('Exception: ', ''); });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final repo = ref.read(studentLoginRepositoryProvider);
+    final has = _status?.hasLogin ?? false;
+    final enabled = _status?.loginEnabled ?? false;
+
+    if (_loading) {
+      return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(has && enabled ? LucideIcons.userCheck : LucideIcons.userCog,
+                  size: 18, color: has && enabled ? const Color(0xFF16A34A) : colors.textSecondary),
+              const Gap(9),
+              Expanded(
+                child: Text(
+                  !has ? 'No login yet' : (enabled ? 'Login active' : 'Login disabled'),
+                  style: context.typography.bodyMediumSemiBold,
+                ),
+              ),
+              if (has)
+                Switch(
+                  value: enabled,
+                  onChanged: _busy ? null : (v) => _run(
+                    () => repo.setLogin(widget.studentId, username: _username.text.trim(), enabled: v),
+                    v ? 'Login enabled' : 'Login disabled',
+                  ),
+                ),
+            ],
+          ),
+          const Gap(4),
+          Text(
+            'The student signs in with this username and password to see their dashboard, attendance and fees.',
+            style: context.typography.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+          const Gap(14),
+          ABMTextField(label: 'Username', hint: 'e.g. roll number', controller: _username, prefixIcon: LucideIcons.atSign),
+          const Gap(12),
+          ABMTextField(
+            label: has ? 'New Password (leave blank to keep)' : 'Password',
+            hint: has ? 'Reset password' : 'Set a password',
+            controller: _password,
+            isPassword: true,
+            prefixIcon: LucideIcons.lock,
+          ),
+          if (_error != null) ...[
+            const Gap(10),
+            Text(_error!, style: context.typography.bodySmall.copyWith(color: const Color(0xFFDC2626))),
+          ],
+          const Gap(14),
+          Row(
+            children: [
+              Expanded(
+                child: ABMButton(
+                  text: has ? 'Save Login' : 'Create Login',
+                  isLoading: _busy,
+                  onPressed: _busy
+                      ? null
+                      : () {
+                          final u = _username.text.trim();
+                          if (u.isEmpty) { setState(() => _error = 'Enter a username'); return; }
+                          if (!has && _password.text.isEmpty) { setState(() => _error = 'Set a password to create the login'); return; }
+                          _run(
+                            () => repo.setLogin(widget.studentId, username: u, password: _password.text, enabled: true),
+                            has ? 'Login updated' : 'Login created',
+                          );
+                        },
+                ),
+              ),
+              if (has) ...[
+                const Gap(10),
+                IconButton(
+                  tooltip: 'Remove login',
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          await repo.removeLogin(widget.studentId);
+                          _password.clear();
+                          if (!mounted) return;
+                          setState(() => _status = const StudentLoginStatus(
+                              hasLogin: false, loginEnabled: false, suggestedUsername: ''));
+                          messenger.showSnackBar(const SnackBar(content: Text('Login removed')));
+                        },
+                  icon: const Icon(LucideIcons.trash2, color: Color(0xFFDC2626)),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

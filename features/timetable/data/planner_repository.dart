@@ -250,6 +250,28 @@ class PlannerRepository {
     );
   }
 
+  /// Default recurring class weekdays per shift (0=Sun … 6=Sat).
+  Future<Map<String, List<int>>> getShiftDefaults(String instituteId) async {
+    final res = await _dio.get('/institutes/$instituteId/shift-defaults');
+    final list = (res.data as List?) ?? [];
+    final map = <String, List<int>>{};
+    for (final e in list) {
+      final m = Map<String, dynamic>.from(e);
+      map[m['shift'].toString()] =
+          ((m['weekdays'] as List?) ?? []).map((x) => (x as num).toInt()).toList();
+    }
+    return map;
+  }
+
+  Future<void> setShiftDefaults(String instituteId, Map<String, List<int>> defaults) async {
+    final payload = defaults.entries.map((e) => {'shift': e.key, 'weekdays': e.value}).toList();
+    try {
+      await _dio.put('/institutes/$instituteId/shift-defaults', data: {'defaults': payload});
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map ? (e.response?.data['message'] ?? 'Failed') : 'Failed to save defaults');
+    }
+  }
+
   /// Teacher leave: move one teacher's classes in a date range to a substitute.
   Future<ReassignResult> reassignTeacher({
     required String fromTeacherId,
@@ -333,6 +355,118 @@ class PlannerRepository {
       'shift': shift,
       if (classroomName != null) 'classroomName': classroomName,
     });
+  }
+
+  /// Permanently delete one assigned class. Throws (409) if attendance exists —
+  /// cancel it instead.
+  Future<void> deleteClass({
+    required DateTime date,
+    required String instituteId,
+    required String academicYear,
+    required String shift,
+    required String classroomName,
+    required int period,
+  }) async {
+    try {
+      await _dio.delete('/timetable/day/${_dateKey(date)}/period', data: {
+        'instituteId': instituteId,
+        'academicYear': academicYear,
+        'shift': shift,
+        'classroomName': classroomName,
+        'period': period,
+      });
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map ? (e.response?.data['message'] ?? 'Failed to delete class') : 'Failed to delete class');
+    }
+  }
+
+  /// Replicate a day's timetable forward to future class days (fills the term).
+  /// Returns (daysFilled, classesWritten). By default same-weekday only, published,
+  /// and skips days that already have a timetable.
+  Future<({int daysFilled, int classesWritten})> copyDayForward({
+    required DateTime date,
+    required String instituteId,
+    required String academicYear,
+    required String shift,
+    String? classroomName,
+    bool sameWeekday = true,
+    bool publish = true,
+    bool overwrite = false,
+    DateTime? endDate,
+  }) async {
+    try {
+      final res = await _dio.post('/timetable/day/${_dateKey(date)}/copy-forward', data: {
+        'instituteId': instituteId,
+        'academicYear': academicYear,
+        'shift': shift,
+        if (classroomName != null) 'classroomName': classroomName,
+        'sameWeekday': sameWeekday,
+        'publish': publish,
+        'overwrite': overwrite,
+        if (endDate != null) 'endDate': _dateKey(endDate),
+      });
+      final d = res.data as Map<String, dynamic>;
+      return (
+        daysFilled: (d['daysFilled'] as num?)?.toInt() ?? 0,
+        classesWritten: (d['classesWritten'] as num?)?.toInt() ?? 0,
+      );
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map ? (e.response?.data['message'] ?? 'Failed to copy timetable') : 'Failed to copy timetable');
+    }
+  }
+
+  /// Bulk-cancel a classroom's classes (or the whole day's) across future class
+  /// days — the inverse of copyDayForward. Returns (daysAffected, classesCancelled).
+  Future<({int daysAffected, int classesCancelled})> cancelDayForward({
+    required DateTime date,
+    required String instituteId,
+    required String academicYear,
+    required String shift,
+    String? classroomName,
+    bool sameWeekday = true,
+    bool includeThisDay = true,
+    DateTime? endDate,
+  }) async {
+    try {
+      final res = await _dio.post('/timetable/day/${_dateKey(date)}/cancel-forward', data: {
+        'instituteId': instituteId,
+        'academicYear': academicYear,
+        'shift': shift,
+        if (classroomName != null) 'classroomName': classroomName,
+        'sameWeekday': sameWeekday,
+        'includeThisDay': includeThisDay,
+        if (endDate != null) 'endDate': _dateKey(endDate),
+      });
+      final d = res.data as Map<String, dynamic>;
+      return (
+        daysAffected: (d['daysAffected'] as num?)?.toInt() ?? 0,
+        classesCancelled: (d['classesCancelled'] as num?)?.toInt() ?? 0,
+      );
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map ? (e.response?.data['message'] ?? 'Failed to cancel') : 'Failed to cancel classes');
+    }
+  }
+
+  /// Soft-cancel one assigned class (keeps the record; attendance disabled).
+  Future<void> cancelClass({
+    required DateTime date,
+    required String instituteId,
+    required String academicYear,
+    required String shift,
+    required String classroomName,
+    required int period,
+  }) async {
+    try {
+      await _dio.post('/timetable/day/${_dateKey(date)}/period/cancel', data: {
+        'instituteId': instituteId,
+        'academicYear': academicYear,
+        'shift': shift,
+        'classroomName': classroomName,
+        'period': period,
+      });
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map ? (e.response?.data['message'] ?? 'Failed to cancel class') : 'Failed to cancel class');
+    }
   }
 
   // ── Derived schedules ─────────────────────────────────────────────────────

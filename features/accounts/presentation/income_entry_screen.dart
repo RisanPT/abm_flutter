@@ -463,7 +463,7 @@ class _AddIncomeDialogState extends ConsumerState<_AddIncomeDialog> {
     return AlertDialog(
       title: const Text('Add Income Entry'),
       content: SizedBox(
-        width: 400,
+        width: MediaQuery.sizeOf(context).width * 0.9 < 400 ? MediaQuery.sizeOf(context).width * 0.9 : 400,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

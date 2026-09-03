@@ -45,6 +45,7 @@ class _PeriodRow {
     required this.period,
     this.subjectName,
     this.teacherId,
+    this.existed = false,
     String startTime = '',
     String endTime = '',
     String room = '',
@@ -55,6 +56,7 @@ class _PeriodRow {
   int period;
   String? subjectName;
   String? teacherId;
+  bool existed; // true = already saved on the backend (can be deleted/cancelled)
   final TextEditingController start;
   final TextEditingController end;
   final TextEditingController room;
@@ -148,6 +150,7 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
         period: p.period,
         subjectName: p.subjectName.isEmpty ? null : p.subjectName,
         teacherId: p.teacherId,
+        existed: true,
         startTime: p.startTime,
         endTime: p.endTime,
         room: p.room,
@@ -159,6 +162,235 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
   void _addRow() {
     final nextPeriod = _rows.isEmpty ? 1 : (_rows.map((r) => r.period).reduce((a, b) => a > b ? a : b) + 1);
     _rows.add(_PeriodRow(period: nextPeriod));
+  }
+
+  void _removeRowLocal(int i) {
+    setState(() {
+      _rows[i].dispose();
+      _rows.removeAt(i);
+      if (_rows.isEmpty) _addRow();
+    });
+  }
+
+  // Permanently delete an assigned class (backend hard delete; blocked if
+  // attendance exists, in which case the office is told to cancel instead).
+  Future<void> _deleteRow(int i) async {
+    final row = _rows[i];
+    if (!row.existed) { _removeRowLocal(i); return; } // never saved → just drop it
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this class?'),
+        content: Text('Period ${row.period} will be permanently removed from this day. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: context.colors.red, foregroundColor: Colors.white),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(plannerRepositoryProvider).deleteClass(
+            date: widget.date, instituteId: widget.instituteId, academicYear: widget.academicYear,
+            shift: widget.shift, classroomName: _classroom ?? '', period: row.period,
+          );
+      if (!mounted) return;
+      _removeRowLocal(i);
+      widget.onChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Class deleted'), backgroundColor: Color(0xFF16A34A)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      // Delete is blocked once attendance exists — offer to cancel instead.
+      if (msg.toLowerCase().contains('cancel')) {
+        final doCancel = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Already attended'),
+            content: Text('$msg\n\nCancel this class instead? It stays on record but is marked cancelled.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
+              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cancel class')),
+            ],
+          ),
+        );
+        if (doCancel == true) await _cancelRow(i);
+      } else {
+        setState(() => _error = msg);
+      }
+    }
+  }
+
+  // Soft-cancel an assigned class (keeps the record; attendance disabled).
+  Future<void> _cancelRow(int i) async {
+    final row = _rows[i];
+    if (!row.existed) { _removeRowLocal(i); return; }
+    try {
+      await ref.read(plannerRepositoryProvider).cancelClass(
+            date: widget.date, instituteId: widget.instituteId, academicYear: widget.academicYear,
+            shift: widget.shift, classroomName: _classroom ?? '', period: row.period,
+          );
+      if (!mounted) return;
+      _removeRowLocal(i);
+      widget.onChanged();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Class cancelled')));
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  // Replicate this day's timetable to future class days so it persists across
+  // months without rebuilding (the recurring-schedule fix).
+  Future<void> _copyForward() async {
+    if (_classroom == null) {
+      setState(() => _error = 'Select a classroom first.');
+      return;
+    }
+    final weekday = DateFormat('EEEE').format(widget.date);
+    bool sameWeekday = true;
+    bool publish = true;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Copy timetable forward'),
+          content: SizedBox(
+            width: MediaQuery.sizeOf(ctx).width * 0.9 < 360 ? MediaQuery.sizeOf(ctx).width * 0.9 : 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Copy $_classroom’s timetable from this day to future class days for the rest of the term. Days that already have a timetable are kept.',
+                  style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary),
+                ),
+                const Gap(4),
+                Text('Tip: Save or Publish this day first so your latest changes are copied.',
+                    style: context.typography.bodySmall.copyWith(color: _maroon)),
+                const Gap(6),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text('Only every $weekday'),
+                  subtitle: const Text('Off = every class day'),
+                  value: sameWeekday,
+                  onChanged: (v) => setLocal(() => sameWeekday = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Publish immediately'),
+                  value: publish,
+                  onChanged: (v) => setLocal(() => publish = v),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: _maroon, foregroundColor: Colors.white),
+              child: const Text('Copy'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (go != true) return;
+    try {
+      final r = await ref.read(plannerRepositoryProvider).copyDayForward(
+            date: widget.date, instituteId: widget.instituteId, academicYear: widget.academicYear,
+            shift: widget.shift, classroomName: _classroom, sameWeekday: sameWeekday, publish: publish,
+          );
+      if (!mounted) return;
+      widget.onChanged();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Copied to ${r.daysFilled} day(s) · ${r.classesWritten} classes'),
+        backgroundColor: const Color(0xFF16A34A),
+      ));
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  // Bulk-cancel this classroom's classes across future class days (inverse of copy).
+  Future<void> _cancelForward() async {
+    if (_classroom == null) {
+      setState(() => _error = 'Select a classroom first.');
+      return;
+    }
+    final weekday = DateFormat('EEEE').format(widget.date);
+    bool sameWeekday = true;
+    bool includeThisDay = true;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Cancel classes forward'),
+          content: SizedBox(
+            width: MediaQuery.sizeOf(ctx).width * 0.9 < 360 ? MediaQuery.sizeOf(ctx).width * 0.9 : 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cancel $_classroom’s classes across future class days for the rest of the term. Records are kept and marked cancelled; attendance is disabled. (Holiday & already-cancelled days are untouched.)',
+                  style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary),
+                ),
+                const Gap(6),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text('Only every $weekday'),
+                  subtitle: const Text('Off = every class day'),
+                  value: sameWeekday,
+                  onChanged: (v) => setLocal(() => sameWeekday = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Include this day'),
+                  value: includeThisDay,
+                  onChanged: (v) => setLocal(() => includeThisDay = v),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: context.colors.red, foregroundColor: Colors.white),
+              child: const Text('Cancel classes'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (go != true) return;
+    try {
+      final r = await ref.read(plannerRepositoryProvider).cancelDayForward(
+            date: widget.date, instituteId: widget.instituteId, academicYear: widget.academicYear,
+            shift: widget.shift, classroomName: _classroom, sameWeekday: sameWeekday, includeThisDay: includeThisDay,
+          );
+      if (!mounted) return;
+      widget.onChanged();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Cancelled ${r.classesCancelled} class(es) across ${r.daysAffected} day(s)'),
+      ));
+      // If this day's classes were cancelled, refresh the editor to reflect it.
+      if (includeThisDay) _load();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    }
   }
 
   List<String> get _subjects {
@@ -287,9 +519,15 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
               } else if (v == 'cancel') {
                 Navigator.of(context).pop();
                 await widget.onCancelDay();
+              } else if (v == 'copy') {
+                await _copyForward();
+              } else if (v == 'cancelForward') {
+                await _cancelForward();
               }
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'copy', child: Text('Copy to future weeks…')),
+              PopupMenuItem(value: 'cancelForward', child: Text('Cancel future weeks…')),
               PopupMenuItem(value: 'holiday', child: Text('Mark as Holiday')),
               PopupMenuItem(value: 'cancel', child: Text('Cancel Day')),
             ],
@@ -335,7 +573,26 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
               ),
             ],
           ),
-          const Gap(20),
+          const Gap(16),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: colors.background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: colors.border),
+            ),
+            child: Row(children: [
+              Icon(LucideIcons.info, size: 15, color: colors.textSecondary),
+              const Gap(8),
+              Expanded(
+                child: Text(
+                  'Edit a period’s subject or teacher below, then Save. Use the trash icon to delete a class; a cancel icon appears once a class is saved (use it if the class was already attended).',
+                  style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                ),
+              ),
+            ]),
+          ),
+          const Gap(12),
           for (int i = 0; i < _rows.length; i++) _periodCard(i, colors, typography),
           const Gap(8),
           TextButton.icon(
@@ -371,13 +628,16 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
               const Gap(10),
               Text('Period ${row.period}', style: typography.bodyMediumSemiBold.copyWith(color: _maroon)),
               const Spacer(),
+              if (_rows[i].existed)
+                IconButton(
+                  icon: Icon(LucideIcons.ban, size: 17, color: colors.textSecondary),
+                  tooltip: 'Cancel this class (keep record)',
+                  onPressed: () => _cancelRow(i),
+                ),
               IconButton(
                 icon: Icon(LucideIcons.trash2, size: 18, color: colors.red),
-                onPressed: () => setState(() {
-                  _rows[i].dispose();
-                  _rows.removeAt(i);
-                  if (_rows.isEmpty) _addRow();
-                }),
+                tooltip: 'Delete this class',
+                onPressed: () => _deleteRow(i),
               ),
             ],
           ),

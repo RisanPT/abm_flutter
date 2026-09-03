@@ -24,6 +24,7 @@ import 'package:abm_madrasa/features/timetable/presentation/shift_planner_screen
 import 'package:abm_madrasa/features/timetable/presentation/class_timetable_view_screen.dart';
 import 'package:abm_madrasa/features/teachers/presentation/teacher_dashboard_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/student_dashboard_screen.dart';
+import 'package:abm_madrasa/features/students/presentation/student_portal_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/outstanding_dues_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/income_entry_screen.dart';
@@ -35,6 +36,7 @@ import 'package:abm_madrasa/features/settings/presentation/settings_screen.dart'
 import 'package:abm_madrasa/features/settings/presentation/role_permissions_screen.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/classroom_management_screen.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/institute_management_screen.dart';
+import 'package:abm_madrasa/features/website_management/presentation/website_management_screen.dart';
 import 'package:abm_madrasa/features/transportation/presentation/fleet_management_screen.dart';
 import 'package:abm_madrasa/shared/widgets/main_shell_scaffold.dart';
 import 'package:flutter/material.dart';
@@ -69,6 +71,11 @@ GoRouter router(Ref ref) {
         return isLoggingIn ? null : RouteNames.login;
       }
 
+      // Students only ever see their own portal — never the admin shell.
+      if (user.role == AppRoles.student) {
+        return state.matchedLocation == RouteNames.studentPortal ? null : RouteNames.studentPortal;
+      }
+
       final permState = ref.read(permissionControllerProvider);
       final allowedModules = ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role);
 
@@ -80,6 +87,12 @@ GoRouter router(Ref ref) {
       // cold restart bounces the user off their current route to the dashboard.
       if (permState.hasValue && module != null && !user.role.canAccess(module, allowedModules)) {
         return user.role.defaultRoute(allowedModules);
+      }
+
+      // The Shift Planner (schedule creation/editing) is admin-only. Teachers
+      // can view the timetable but never reach the planner or its delete/edit.
+      if (state.matchedLocation == RouteNames.shiftPlanner && !user.role.canManageTimetable) {
+        return RouteNames.timetable;
       }
 
       return null;
@@ -97,6 +110,11 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: RouteNames.onlineAdmission,
         builder: (context, state) => const OnlineAdmissionScreen(),
+      ),
+      // Student self-service portal (outside the admin shell — no sidebar).
+      GoRoute(
+        path: RouteNames.studentPortal,
+        builder: (context, state) => const StudentPortalScreen(),
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -124,6 +142,10 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.bulkAddStudents,
             builder: (context, state) => const BulkAddStudentsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.websiteContent,
+            builder: (context, state) => const WebsiteManagementScreen(),
           ),
           GoRoute(
             path: '${RouteNames.editStudent}/:id',

@@ -429,7 +429,7 @@ class _BulkAddStudentsScreenState extends ConsumerState<BulkAddStudentsScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(title),
         content: SizedBox(
-          width: 380,
+          width: MediaQuery.sizeOf(context).width * 0.9 < 380 ? MediaQuery.sizeOf(context).width * 0.9 : 380,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,

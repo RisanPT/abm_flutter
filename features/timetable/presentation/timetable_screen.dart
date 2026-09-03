@@ -121,98 +121,84 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                           ),
                           const Gap(16),
                           // ── Title + Actions ───────────────────────────────
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Timetable — ${DateFormat('MMMM yyyy').format(_focusedMonth)}',
-                                      style: typography.h2.copyWith(
-                                        color: colors.white,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const Gap(4),
-                                    Text(
-                                      'Academic Year: $_academicYear  •  $_selectedShift',
-                                      style: typography.bodyMedium.copyWith(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.78,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                          Builder(builder: (context) {
+                            final titleCol = Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Timetable — ${DateFormat('MMMM yyyy').format(_focusedMonth)}',
+                                  style: typography.h2.copyWith(color: colors.white),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () =>
-                                    context.push(RouteNames.classTimetableView),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: colors.white.withValues(
-                                    alpha: 0.15,
-                                  ),
-                                  foregroundColor: colors.white,
+                                const Gap(4),
+                                Text(
+                                  'Academic Year: $_academicYear  •  $_selectedShift',
+                                  style: typography.bodyMedium
+                                      .copyWith(color: Colors.white.withValues(alpha: 0.78)),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                icon: const Icon(LucideIcons.search, size: 18),
-                                label: const Text('View by Date'),
-                              ),
-                              const Gap(10),
-                              if (canEdit) ...[
-                                ElevatedButton.icon(
-                                  onPressed: () =>
-                                      context.push(RouteNames.shiftPlanner),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: colors.white.withValues(
-                                      alpha: 0.15,
-                                    ),
-                                    foregroundColor: colors.white,
-                                  ),
-                                  icon: const Icon(
-                                    LucideIcons.calendarCheck,
-                                    size: 18,
-                                  ),
-                                  label: const Text('Shift Planner'),
-                                ),
-                                const Gap(10),
-                                ElevatedButton.icon(
-                                  onPressed: _selectedClass == 'All Classes'
-                                      ? null
-                                      : () => _showSubjectDialog(context, data),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: colors.white.withValues(
-                                      alpha: 0.2,
-                                    ),
-                                    foregroundColor: colors.white,
-                                    disabledBackgroundColor: colors.white
-                                        .withValues(alpha: 0.08),
-                                    disabledForegroundColor: colors.white
-                                        .withValues(alpha: 0.4),
-                                  ),
-                                  icon: const Icon(
-                                    LucideIcons.listTodo,
-                                    size: 18,
-                                  ),
-                                  label: const Text('Define Subjects'),
-                                ),
-                                // const Gap(10),
-                                // ElevatedButton.icon(
-                                //   onPressed: () => _showAssignmentDialog(context, data),
-                                //   style: ElevatedButton.styleFrom(
-                                //     backgroundColor: colors.white,
-                                //     foregroundColor: colors.primary,
-                                //   ),
-                                //   icon: const Icon(LucideIcons.userPlus, size: 18),
-                                //   label: const Text('Plan Timetable'),
-                                // ),
                               ],
-                            ],
-                          ),
+                            );
+                            final viewBtn = ElevatedButton.icon(
+                              onPressed: () => context.push(RouteNames.classTimetableView),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: colors.white.withValues(alpha: 0.15),
+                                foregroundColor: colors.white,
+                              ),
+                              icon: const Icon(LucideIcons.search, size: 18),
+                              label: const Text('View by Date'),
+                            );
+                            final shiftBtn = ElevatedButton.icon(
+                              onPressed: () => context.push(RouteNames.shiftPlanner),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: colors.white.withValues(alpha: 0.15),
+                                foregroundColor: colors.white,
+                              ),
+                              icon: const Icon(LucideIcons.calendarCheck, size: 18),
+                              label: const Text('Shift Planner'),
+                            );
+                            final subjBtn = ElevatedButton.icon(
+                              onPressed: _selectedClass == 'All Classes'
+                                  ? null
+                                  : () => _showSubjectDialog(context, data),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: colors.white.withValues(alpha: 0.2),
+                                foregroundColor: colors.white,
+                                disabledBackgroundColor: colors.white.withValues(alpha: 0.08),
+                                disabledForegroundColor: colors.white.withValues(alpha: 0.4),
+                              ),
+                              icon: const Icon(LucideIcons.listTodo, size: 18),
+                              label: const Text('Define Subjects'),
+                            );
+                            final actions = [viewBtn, if (canEdit) shiftBtn, if (canEdit) subjBtn];
+                            if (context.isMobile) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  titleCol,
+                                  const Gap(12),
+                                  Wrap(spacing: 8, runSpacing: 8, children: actions),
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                Expanded(child: titleCol),
+                                for (var i = 0; i < actions.length; i++) ...[
+                                  if (i > 0) const Gap(10),
+                                  actions[i],
+                                ],
+                              ],
+                            );
+                          }),
                           const Gap(16),
                           // ── Month Navigation ──────────────────────────────
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               _buildMonthNavButton(
                                 icon: LucideIcons.chevronLeft,
@@ -225,7 +211,6 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                                   });
                                 },
                               ),
-                              const Gap(8),
                               _buildMonthNavButton(
                                 icon: LucideIcons.chevronRight,
                                 onPressed: () {
@@ -237,7 +222,6 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                                   });
                                 },
                               ),
-                              const Gap(16),
                               OutlinedButton(
                                 onPressed: () {
                                   setState(
@@ -256,7 +240,6 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                                 ),
                                 child: const Text('This Month'),
                               ),
-                              const Spacer(),
                               // Scheduled dates count badge
                               scheduledDatesAsync.when(
                                 data: (dates) => Container(

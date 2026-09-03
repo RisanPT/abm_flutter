@@ -1,4 +1,6 @@
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/accounts/data/finance_repository.dart';
 import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
 import 'package:abm_madrasa/features/accounts/presentation/fee_structure_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
@@ -6,6 +8,7 @@ import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class FeeStructureSetupScreen extends ConsumerStatefulWidget {
@@ -30,6 +33,18 @@ class _FeeStructureSetupScreenState extends ConsumerState<FeeStructureSetupScree
               title: 'Fee Structure Setup',
               subtitle: 'Define default fee templates per grade/classroom',
               actions: [
+                Container(
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                  child: IconButton(
+                    icon: const Icon(LucideIcons.calendarClock, color: Colors.white, size: 20),
+                    onPressed: () => showDialog(
+                      context: context,
+                      builder: (_) => _FeeTrackingDialog(instituteId: ref.read(selectedInstituteProvider).id),
+                    ),
+                    tooltip: 'Fee tracking & holiday months',
+                  ),
+                ),
+                const Gap(8),
                 Container(
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
                   child: IconButton(
@@ -687,5 +702,154 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+}
+
+// ─── Fee Tracking + Holiday Months dialog (institute-wide) ───────────────────
+
+class _FeeTrackingDialog extends ConsumerStatefulWidget {
+  const _FeeTrackingDialog({required this.instituteId});
+  final String instituteId;
+  @override
+  ConsumerState<_FeeTrackingDialog> createState() => _FeeTrackingDialogState();
+}
+
+class _FeeTrackingDialogState extends ConsumerState<_FeeTrackingDialog> {
+  DateTime? _startMonth;
+  final List<VacationPeriod> _vacationPeriods = [];
+  bool _loading = true, _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final cfg = await ref.read(accountRepositoryProvider).getInstituteFeeConfig(widget.instituteId);
+      if (mounted) {
+        setState(() {
+          _startMonth = cfg.feesStartMonth;
+          _vacationPeriods
+            ..clear()
+            ..addAll(cfg.vacationPeriods);
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<DateTime?> _pickMonth(DateTime initial) => showDatePicker(
+        context: context,
+        initialDate: initial,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2035),
+        helpText: 'Pick any day in the month',
+      );
+
+  Future<DateTimeRange?> _pickDateRange() => showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2035),
+        helpText: 'Select holiday period',
+      );
+
+  Future<void> _save() async {
+    setState(() { _saving = true; _error = null; });
+    try {
+      await ref.read(accountRepositoryProvider).setInstituteFeeConfig(
+            widget.instituteId,
+            feesStartMonth: _startMonth,
+            waivedMonths: [], // Kept empty as we moved to vacationPeriods
+            vacationPeriods: _vacationPeriods,
+          );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) setState(() { _saving = false; _error = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return AlertDialog(
+      title: const Text('Fee Tracking & Holidays'),
+      content: _loading
+          ? const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()))
+          : SizedBox(
+              width: MediaQuery.sizeOf(context).width * 0.9 < 380 ? MediaQuery.sizeOf(context).width * 0.9 : 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Track fee dues from', style: context.typography.bodyMediumSemiBold),
+                  const Gap(2),
+                  Text('Dues (and arrears) are only tracked from this month onward.',
+                      style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+                  const Gap(8),
+                  OutlinedButton.icon(
+                    icon: const Icon(LucideIcons.calendar, size: 16),
+                    label: Text(_startMonth != null
+                        ? DateFormat('MMMM yyyy').format(_startMonth!)
+                        : 'Current month (default)'),
+                    onPressed: () async {
+                      final d = await _pickMonth(_startMonth ?? DateTime.now());
+                      if (d != null) setState(() => _startMonth = DateTime(d.year, d.month, 1));
+                    },
+                  ),
+                  const Gap(20),
+                  Text('Holiday periods (no recurring fee)', style: context.typography.bodyMediumSemiBold),
+                  const Gap(2),
+                  Text('Madrasa closure periods where recurring fees are waived.',
+                      style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+                  const Gap(8),
+                  if (_vacationPeriods.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _vacationPeriods
+                          .map((vp) => Chip(
+                                label: Text('${DateFormat('MMM d, yyyy').format(vp.from)} - ${DateFormat('MMM d, yyyy').format(vp.to)}'),
+                                onDeleted: () => setState(() => _vacationPeriods.remove(vp)),
+                                deleteIcon: const Icon(Icons.close, size: 16),
+                              ))
+                          .toList(),
+                    ),
+                  const Gap(6),
+                  TextButton.icon(
+                    icon: const Icon(LucideIcons.plus, size: 16),
+                    label: const Text('Add holiday period'),
+                    onPressed: () async {
+                      final range = await _pickDateRange();
+                      if (range != null) {
+                        setState(() => _vacationPeriods.add(VacationPeriod(
+                          name: 'Vacation',
+                          from: range.start,
+                          to: range.end,
+                        )));
+                      }
+                    },
+                  ),
+                  if (_error != null) ...[
+                    const Gap(8),
+                    Text(_error!, style: context.typography.bodySmall.copyWith(color: const Color(0xFFDC2626))),
+                  ],
+                ],
+              ),
+            ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Save'),
+        ),
+      ],
+    );
   }
 }

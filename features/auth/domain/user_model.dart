@@ -10,6 +10,8 @@ class AppRoles {
   static const teacher = 'Teacher';
   static const treasurer = 'Treasurer';
   static const staff = 'Staff';
+  // Student self-service login (portal only — not a staff/management role).
+  static const student = 'Student';
 
   static const coreRoles = [superAdmin, itAdmin, headMaster, teacher, treasurer, staff];
 }
@@ -23,6 +25,7 @@ abstract class UserModel with _$UserModel {
     String? photoUrl,
     String? phoneNumber,
     String? instituteId,
+    String? studentRef,
   }) = _UserModel;
 
   factory UserModel.fromJson(Map<String, dynamic> json) => _$UserModelFromJson(json);

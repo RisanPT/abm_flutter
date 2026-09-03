@@ -146,50 +146,67 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
           Text('Salary is full pay minus a penalty per missed class. Holidays & paid leave are excused.',
               style: typography.bodySmall.copyWith(color: Colors.white.withValues(alpha: 0.8))),
           const Gap(14),
-          Row(
-            children: [
-              // month stepper
-              _pillButton(icon: LucideIcons.chevronLeft, onTap: () => setState(() => _month = DateTime(_month.year, _month.month - 1))),
-              const Gap(8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                child: Text(DateFormat('MMMM yyyy').format(_month),
-                    style: typography.bodyMediumSemiBold.copyWith(color: Colors.white)),
-              ),
-              const Gap(8),
-              _pillButton(icon: LucideIcons.chevronRight, onTap: () => setState(() => _month = DateTime(_month.year, _month.month + 1))),
-              const Spacer(),
-              // deduction per class
-              SizedBox(
-                width: 150,
-                child: TextField(
-                  controller: _deductionCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                  style: const TextStyle(color: Colors.white),
-                  onSubmitted: (_) => _applyDeduction(),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    prefixText: 'SAR ',
-                    prefixStyle: const TextStyle(color: Colors.white70),
-                    labelText: 'Deduct / missed class',
-                    labelStyle: const TextStyle(color: Colors.white70, fontSize: 11),
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    suffixIcon: IconButton(
-                      icon: const Icon(LucideIcons.check, color: _gold, size: 18),
-                      onPressed: _applyDeduction,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _monthDeductionControls(),
         ],
       ),
     );
+  }
+
+  // Month stepper + per-missed-class deduction field. On phones the deduction
+  // field drops to its own full-width row so the header never overflows.
+  Widget _monthDeductionControls() {
+    final typography = context.typography;
+    final leftBtn = _pillButton(
+        icon: LucideIcons.chevronLeft,
+        onTap: () => setState(() => _month = DateTime(_month.year, _month.month - 1)));
+    final rightBtn = _pillButton(
+        icon: LucideIcons.chevronRight,
+        onTap: () => setState(() => _month = DateTime(_month.year, _month.month + 1)));
+    final monthLabel = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+      child: Text(DateFormat('MMMM yyyy').format(_month),
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: typography.bodyMediumSemiBold.copyWith(color: Colors.white)),
+    );
+    Widget deductionField({required bool fullWidth}) => SizedBox(
+          width: fullWidth ? double.infinity : 150,
+          child: TextField(
+            controller: _deductionCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+            style: const TextStyle(color: Colors.white),
+            onSubmitted: (_) => _applyDeduction(),
+            decoration: InputDecoration(
+              isDense: true,
+              prefixText: 'SAR ',
+              prefixStyle: const TextStyle(color: Colors.white70),
+              labelText: 'Deduct / missed class',
+              labelStyle: const TextStyle(color: Colors.white70, fontSize: 11),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              suffixIcon: IconButton(
+                icon: const Icon(LucideIcons.check, color: _gold, size: 18),
+                onPressed: _applyDeduction,
+              ),
+            ),
+          ),
+        );
+
+    if (context.isMobile) {
+      return Column(children: [
+        Row(children: [leftBtn, const Gap(8), Expanded(child: monthLabel), const Gap(8), rightBtn]),
+        const Gap(10),
+        deductionField(fullWidth: true),
+      ]);
+    }
+    return Row(children: [
+      leftBtn, const Gap(8), monthLabel, const Gap(8), rightBtn,
+      const Spacer(),
+      deductionField(fullWidth: false),
+    ]);
   }
 
   Widget _pillButton({required IconData icon, required VoidCallback onTap}) => Material(

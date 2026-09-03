@@ -7,6 +7,7 @@ class RouteNames {
   static const String bulkAddStudents = '/bulk-add-students';
   static const String editStudent = '/edit-student';
   static const String studentProfile = '/student-profile';
+  static const String studentPortal = '/student-portal';
   static const String attendance = '/attendance';
   static const String studentAttendanceReport = '/attendance-report/student';
   static const String teacherAttendanceReport = '/attendance-report/teacher';
@@ -35,5 +36,6 @@ class RouteNames {
   static const String institutes = '/institutes';
   static const String parentPortal = '/parent-portal';
   static const String onlineAdmission = '/online-admission';
+  static const String websiteContent = '/website-content';
 }
 

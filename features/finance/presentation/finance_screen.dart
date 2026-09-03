@@ -20,6 +20,14 @@ final _categoriesProvider = FutureProvider<List<FinanceCategory>>((ref) async {
   return ref.watch(madrassaFinanceRepositoryProvider).getCategories();
 });
 
+// Two summary cards side-by-side on wide screens, stacked full-width on phones.
+Widget _statPair(BuildContext context, Widget a, Widget b) {
+  if (context.isMobile) {
+    return Column(children: [a, const Gap(12), b]);
+  }
+  return Row(children: [Expanded(child: a), const Gap(16), Expanded(child: b)]);
+}
+
 // ─── Finance Screen ────────────────────────────────────────────────────────────
 
 class FinanceScreen extends ConsumerStatefulWidget {
@@ -32,6 +40,7 @@ class FinanceScreen extends ConsumerStatefulWidget {
 class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   DateTime _selectedMonth = DateTime.now();
   String? _selectedCategory;
+  int _tab = 0; // 0 = Expenditure, 1 = Income
 
   Future<void> _exportFinanceReportPdf() async {
     try {
@@ -108,7 +117,85 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
           const Gap(8),
         ],
       ),
-      body: _buildExpensesBody(context),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            child: _FinanceTabs(
+              index: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+          ),
+          Expanded(
+            child: _tab == 0 ? _buildExpensesBody(context) : _buildIncomeBody(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIncomeBody(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+    return FutureBuilder<Map<String, dynamic>>(
+      future: ref.read(madrassaFinanceRepositoryProvider).getPnlReport(
+            month: DateFormat('yyyy-MM').format(_selectedMonth),
+          ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        final data = snapshot.data ?? const {};
+        final totalIncome = (data['totalIncomes'] as num?)?.toDouble() ?? 0;
+        final totalExpense = (data['totalExpenses'] as num?)?.toDouble() ?? 0;
+        final net = (data['netBalance'] as num?)?.toDouble() ?? (totalIncome - totalExpense);
+        final incomes = (data['incomes'] as List?) ?? [];
+        // Only actual collections (amount > 0)
+        final collected = incomes.where((e) => ((e['amount'] as num?) ?? 0) > 0).toList();
+
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _statPair(
+                context,
+                _IncomeStatCard(
+                  label: 'Total Income',
+                  value: totalIncome,
+                  tint: colors.primary,
+                  icon: LucideIcons.trendingUp,
+                  subtitle: DateFormat('MMMM yyyy').format(_selectedMonth),
+                ),
+                _IncomeStatCard(
+                  label: 'Net Balance',
+                  value: net,
+                  tint: net >= 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                  icon: LucideIcons.scale,
+                  subtitle: 'Income − Expenditure',
+                ),
+              ),
+              const Gap(32),
+              Text('Fee Income', style: typography.h4),
+              const Gap(4),
+              Text('Fees collected this month', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+              const Gap(16),
+              Expanded(
+                child: collected.isEmpty
+                    ? _buildEmptyState(context)
+                    : ListView.separated(
+                        itemCount: collected.length,
+                        separatorBuilder: (_, _) => const Gap(10),
+                        itemBuilder: (context, index) => _IncomeCard(row: Map<String, dynamic>.from(collected[index])),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -177,70 +264,45 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final colors = context.colors;
     final typography = context.typography;
 
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [colors.primary, colors.primary.withValues(alpha: 0.8)],
-              ),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Total Expenditure',
-                  style: typography.bodyMedium.copyWith(color: Colors.white70),
-                ),
-                const Gap(8),
-                Text(
-                  'SAR ${total.toStringAsFixed(2)}',
-                  style: typography.h2.copyWith(color: Colors.white),
-                ),
-                const Gap(4),
-                Text(
-                  DateFormat('MMMM yyyy').format(_selectedMonth),
-                  style: typography.bodySmall.copyWith(color: Colors.white60),
-                ),
-              ],
-            ),
+    final expenditureCard = Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [colors.primary, colors.primary.withValues(alpha: 0.8)]),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Total Expenditure', style: typography.bodyMedium.copyWith(color: Colors.white70)),
+          const Gap(8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text('SAR ${total.toStringAsFixed(0)}', style: typography.h2.copyWith(color: Colors.white)),
           ),
-        ),
-        const Gap(16),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: colors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: colors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Transaction Count',
-                  style: typography.bodyMedium.copyWith(color: colors.textSecondary),
-                ),
-                const Gap(8),
-                Text(
-                  '$count',
-                  style: typography.h2.copyWith(color: colors.primary),
-                ),
-                const Gap(4),
-                Text(
-                  'Entries recorded',
-                  style: typography.bodySmall.copyWith(color: colors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+          const Gap(4),
+          Text(DateFormat('MMMM yyyy').format(_selectedMonth),
+              style: typography.bodySmall.copyWith(color: Colors.white60)),
+        ],
+      ),
     );
+    final countCard = Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Transaction Count', style: typography.bodyMedium.copyWith(color: colors.textSecondary)),
+          const Gap(8),
+          Text('$count', style: typography.h2.copyWith(color: colors.primary)),
+          const Gap(4),
+          Text('Entries recorded', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+        ],
+      ),
+    );
+    return _statPair(context, expenditureCard, countCard);
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -493,7 +555,7 @@ class _CategoryManagerDialogState extends ConsumerState<_CategoryManagerDialog> 
         ],
       ),
       content: SizedBox(
-        width: 400,
+        width: MediaQuery.sizeOf(context).width * 0.9 < 400 ? MediaQuery.sizeOf(context).width * 0.9 : 400,
         height: 420,
         child: categoriesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -788,5 +850,171 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+// ─── Income tab widgets ─────────────────────────────────────────────────────
+
+class _FinanceTabs extends StatelessWidget {
+  const _FinanceTabs({required this.index, required this.onChanged});
+  final int index;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    Widget tab(int i, String label, IconData icon) {
+      final active = index == i;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => onChanged(i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              color: active ? colors.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: active ? Colors.white : colors.textSecondary),
+                const Gap(7),
+                Text(label,
+                    style: context.typography.bodyMediumSemiBold
+                        .copyWith(color: active ? Colors.white : colors.textSecondary)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(children: [
+        tab(0, 'Expenditure', LucideIcons.trendingDown),
+        tab(1, 'Income', LucideIcons.trendingUp),
+      ]),
+    );
+  }
+}
+
+class _IncomeStatCard extends StatelessWidget {
+  const _IncomeStatCard({
+    required this.label,
+    required this.value,
+    required this.tint,
+    required this.icon,
+    required this.subtitle,
+  });
+  final String label, subtitle;
+  final double value;
+  final Color tint;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final typography = context.typography;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [tint, tint.withValues(alpha: 0.8)]),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, color: Colors.white70, size: 18),
+            const Gap(8),
+            Text(label, style: typography.bodyMedium.copyWith(color: Colors.white70)),
+          ]),
+          const Gap(8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text('SAR ${value.toStringAsFixed(0)}', style: typography.h2.copyWith(color: Colors.white)),
+          ),
+          const Gap(4),
+          Text(subtitle, style: typography.bodySmall.copyWith(color: Colors.white60), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _IncomeCard extends StatelessWidget {
+  const _IncomeCard({required this.row});
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+    final name = (row['studentName'] ?? 'Fee payment').toString();
+    final adm = (row['admissionNumber'] ?? '').toString();
+    final grade = (row['grade'] ?? '').toString();
+    final month = (row['monthLabel'] ?? '').toString();
+    final amount = ((row['amount'] as num?) ?? 0).toDouble();
+    final receipt = (row['receiptNumber'] ?? '').toString();
+    final paidOn = row['paidOn'] != null ? DateTime.tryParse(row['paidOn'].toString()) : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42, height: 42,
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(LucideIcons.banknote, color: colors.primary, size: 20),
+          ),
+          const Gap(14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: typography.bodyMediumSemiBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                const Gap(2),
+                Text(
+                  [
+                    if (adm.isNotEmpty) 'ID $adm',
+                    if (grade.isNotEmpty) grade,
+                    if (month.isNotEmpty) month,
+                    if (receipt.isNotEmpty) receipt,
+                  ].join('  •  '),
+                  style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const Gap(10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('+ SAR ${amount.toStringAsFixed(0)}',
+                  style: typography.bodyMediumSemiBold.copyWith(color: const Color(0xFF16A34A))),
+              if (paidOn != null)
+                Text(DateFormat('dd MMM').format(paidOn),
+                    style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
