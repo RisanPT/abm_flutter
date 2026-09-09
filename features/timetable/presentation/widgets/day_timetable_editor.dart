@@ -20,6 +20,7 @@ Future<void> showDayTimetableEditor(
   required VoidCallback onChanged,
   required Future<void> Function() onMarkHoliday,
   required Future<void> Function() onCancelDay,
+  String? initialClassroom,
 }) {
   return showModalBottomSheet(
     context: context,
@@ -36,6 +37,7 @@ Future<void> showDayTimetableEditor(
       onChanged: onChanged,
       onMarkHoliday: onMarkHoliday,
       onCancelDay: onCancelDay,
+      initialClassroom: initialClassroom,
     ),
   );
 }
@@ -78,6 +80,7 @@ class DayTimetableEditor extends ConsumerStatefulWidget {
     required this.onChanged,
     required this.onMarkHoliday,
     required this.onCancelDay,
+    this.initialClassroom,
   });
 
   final DateTime date;
@@ -87,6 +90,7 @@ class DayTimetableEditor extends ConsumerStatefulWidget {
   final VoidCallback onChanged;
   final Future<void> Function() onMarkHoliday;
   final Future<void> Function() onCancelDay;
+  final String? initialClassroom;
 
   @override
   ConsumerState<DayTimetableEditor> createState() => _DayTimetableEditorState();
@@ -129,7 +133,10 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
         shift: widget.shift,
       );
       _data = data;
-      _classroom = data.classrooms.isNotEmpty ? data.classrooms.first.name : null;
+      final wanted = widget.initialClassroom;
+      _classroom = (wanted != null && data.classrooms.any((c) => c.name == wanted))
+          ? wanted
+          : (data.classrooms.isNotEmpty ? data.classrooms.first.name : null);
       _rebuildRows();
     } catch (e) {
       _error = '$e';

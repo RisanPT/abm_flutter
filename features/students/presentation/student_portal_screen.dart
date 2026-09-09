@@ -49,6 +49,8 @@ class _PortalBody extends ConsumerWidget {
             delegate: SliverChildListDelegate([
               _StatRow(data: data, isWide: isWide),
               const Gap(22),
+              const _TimetableCard(),
+              const Gap(20),
               if (isWide)
                 IntrinsicHeight(
                   child: Row(
@@ -471,6 +473,148 @@ class _ReportsCard extends StatelessWidget {
                   ),
               ],
             ),
+    );
+  }
+}
+
+class _TimetableCard extends ConsumerStatefulWidget {
+  const _TimetableCard();
+  @override
+  ConsumerState<_TimetableCard> createState() => _TimetableCardState();
+}
+
+class _TimetableCardState extends ConsumerState<_TimetableCard> {
+  int _sel = -1; // -1 → auto-select today (or first upcoming)
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(studentTimetableProvider);
+    return _SectionCard(
+      title: 'My Timetable',
+      icon: LucideIcons.calendarClock,
+      child: async.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+        ),
+        error: (e, _) => _empty(context, 'Couldn’t load your timetable.'),
+        data: (tt) {
+          final days = tt.days;
+          if (days.isEmpty) {
+            return _empty(context, 'No classes scheduled in the next two weeks.');
+          }
+          final todayIdx = days.indexWhere((d) => d.isToday);
+          final sel = (_sel >= 0 && _sel < days.length) ? _sel : (todayIdx >= 0 ? todayIdx : 0);
+          final day = days[sel];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 62,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: days.length,
+                  separatorBuilder: (_, _) => const Gap(8),
+                  itemBuilder: (_, i) => _dayChip(context, days[i], i == sel, () => setState(() => _sel = i)),
+                ),
+              ),
+              const Gap(16),
+              Row(
+                children: [
+                  Text(
+                    day.isToday
+                        ? 'Today'
+                        : (day.date != null ? DateFormat('EEEE, dd MMM').format(day.date!) : day.weekday),
+                    style: context.typography.bodyMediumSemiBold,
+                  ),
+                  const Gap(8),
+                  if (day.shift.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: context.colors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(day.shift,
+                          style: context.typography.bodySmall
+                              .copyWith(color: context.colors.primary, fontWeight: FontWeight.w600, fontSize: 11)),
+                    ),
+                ],
+              ),
+              const Gap(10),
+              if (day.periods.isEmpty)
+                _empty(context, 'No classes on this day.')
+              else
+                for (final p in day.periods) _periodRow(context, p),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _dayChip(BuildContext context, PortalDay d, bool selected, VoidCallback onTap) {
+    final colors = context.colors;
+    final wd = d.weekday.length >= 3 ? d.weekday.substring(0, 3) : d.weekday;
+    final dayNum = d.date != null ? DateFormat('d').format(d.date!) : '';
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 52,
+        decoration: BoxDecoration(
+          color: selected ? colors.primary : colors.background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: d.isToday && !selected ? colors.primary : colors.border),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(wd,
+                style: context.typography.bodySmall.copyWith(
+                    color: selected ? Colors.white70 : colors.textSecondary, fontSize: 11)),
+            const Gap(2),
+            Text(dayNum,
+                style: context.typography.bodyLargeSemiBold
+                    .copyWith(color: selected ? Colors.white : colors.textPrimary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _periodRow(BuildContext context, PortalPeriod p) {
+    final colors = context.colors;
+    final time = p.startTime.isEmpty ? '' : (p.endTime.isEmpty ? p.startTime : '${p.startTime}–${p.endTime}');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: colors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(9)),
+            child: Text('${p.period}', style: context.typography.bodyMediumSemiBold.copyWith(color: colors.primary)),
+          ),
+          const Gap(12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(p.subjectName, style: context.typography.bodyMediumSemiBold),
+                if (p.teacherName.isNotEmpty)
+                  Text(p.teacherName, style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+              ],
+            ),
+          ),
+          if (time.isNotEmpty) ...[
+            const Gap(8),
+            Text(time, style: context.typography.bodySmall.copyWith(color: colors.primary, fontWeight: FontWeight.w600)),
+          ],
+        ],
+      ),
     );
   }
 }

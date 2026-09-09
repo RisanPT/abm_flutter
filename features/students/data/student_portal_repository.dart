@@ -152,6 +152,62 @@ class StudentPortalData {
       );
 }
 
+class PortalPeriod {
+  const PortalPeriod({
+    required this.period,
+    required this.subjectName,
+    required this.teacherName,
+    required this.startTime,
+    required this.endTime,
+    required this.shift,
+  });
+  final int period;
+  final String subjectName, teacherName, startTime, endTime, shift;
+  factory PortalPeriod.fromJson(Map<String, dynamic> j) => PortalPeriod(
+        period: (j['period'] ?? 0) as int,
+        subjectName: (j['subjectName'] ?? '').toString(),
+        teacherName: (j['teacherName'] ?? '').toString(),
+        startTime: (j['startTime'] ?? '').toString(),
+        endTime: (j['endTime'] ?? '').toString(),
+        shift: (j['shift'] ?? '').toString(),
+      );
+}
+
+class PortalDay {
+  const PortalDay({
+    required this.date,
+    required this.weekday,
+    required this.shift,
+    required this.isToday,
+    required this.periods,
+  });
+  final DateTime? date;
+  final String weekday, shift;
+  final bool isToday;
+  final List<PortalPeriod> periods;
+  factory PortalDay.fromJson(Map<String, dynamic> j) => PortalDay(
+        date: j['date'] != null ? DateTime.tryParse(j['date'].toString()) : null,
+        weekday: (j['weekday'] ?? '').toString(),
+        shift: (j['shift'] ?? '').toString(),
+        isToday: (j['isToday'] ?? false) as bool,
+        periods: ((j['periods'] as List?) ?? [])
+            .map((e) => PortalPeriod.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+      );
+}
+
+class StudentTimetable {
+  const StudentTimetable({required this.grade, required this.days});
+  final String grade;
+  final List<PortalDay> days;
+  factory StudentTimetable.fromJson(Map<String, dynamic> j) => StudentTimetable(
+        grade: (j['grade'] ?? '').toString(),
+        days: ((j['days'] as List?) ?? [])
+            .map((e) => PortalDay.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+      );
+}
+
 // ── Repository + provider ────────────────────────────────────────────────────
 
 final studentPortalRepositoryProvider =
@@ -165,9 +221,19 @@ class StudentPortalRepository {
     final r = await _dio.get('/student-portal/me');
     return StudentPortalData.fromJson(Map<String, dynamic>.from(r.data));
   }
+
+  Future<StudentTimetable> getMyTimetable() async {
+    final r = await _dio.get('/student-portal/me/timetable');
+    return StudentTimetable.fromJson(Map<String, dynamic>.from(r.data));
+  }
 }
 
 /// Auto-loading portal data for the current student.
 final studentPortalProvider = FutureProvider.autoDispose<StudentPortalData>((ref) {
   return ref.watch(studentPortalRepositoryProvider).getMyPortal();
+});
+
+/// The student's own class timetable for the upcoming class days.
+final studentTimetableProvider = FutureProvider.autoDispose<StudentTimetable>((ref) {
+  return ref.watch(studentPortalRepositoryProvider).getMyTimetable();
 });

@@ -5,7 +5,10 @@ import 'package:abm_madrasa/features/timetable/domain/planning_models.dart';
 import 'package:abm_madrasa/features/timetable/presentation/planner_controller.dart';
 import 'package:abm_madrasa/features/timetable/presentation/planner_status.dart';
 import 'package:abm_madrasa/features/timetable/presentation/widgets/day_timetable_editor.dart';
+import 'package:abm_madrasa/features/timetable/presentation/widgets/day_timetable_view.dart';
 import 'package:abm_madrasa/features/timetable/presentation/widgets/add_class_sheet.dart';
+import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -70,7 +73,7 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
     } else if (status == 'Holiday') {
       _showHolidayInfo(date);
     } else {
-      _openEditor(date);
+      _openView(date);
     }
   }
 
@@ -88,7 +91,7 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
     }
   }
 
-  void _openEditor(DateTime date) {
+  void _openEditor(DateTime date, {String? initialClassroom}) {
     showDayTimetableEditor(
       context,
       date: date,
@@ -98,6 +101,23 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
       onChanged: _refresh,
       onMarkHoliday: () => _markHoliday(date),
       onCancelDay: () => _cancelDay(date),
+      initialClassroom: initialClassroom,
+    );
+  }
+
+  /// Read-only whole-day grid (all classes at once, like the printed timetable).
+  /// Admins get Edit (whole day, or tap a class column to edit that class).
+  void _openView(DateTime date) {
+    final canEdit = ref.read(authControllerProvider).value?.role.canManageTimetable ?? false;
+    showDayTimetableView(
+      context,
+      date: date,
+      shift: _shift,
+      academicYear: _academicYear,
+      instituteId: _instituteId,
+      canEdit: canEdit,
+      onEditDay: () => _openEditor(date),
+      onEditClass: (cls) => _openEditor(date, initialClassroom: cls),
     );
   }
 
