@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -28,7 +29,6 @@ class ABMPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     final typography = context.typography;
     final isMobile = context.isMobile;
     final bool hasBanner = instituteBanner != null;
@@ -41,7 +41,7 @@ class ABMPageHeader extends StatelessWidget {
       width: double.infinity,
       height: effectiveHeight,
       decoration: BoxDecoration(
-        color: colors.primary,
+        gradient: abmGreenGradient(context),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
       ),
       child: Stack(
@@ -71,8 +71,8 @@ class ABMPageHeader extends StatelessWidget {
                           icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
                           onPressed: () => Navigator.of(context).maybePop(),
                         )
-                      else if (leading != null)
-                        leading!,
+                      else
+                        ?leading,
                       const Spacer(),
                       if (actions != null) ...actions!,
                     ],

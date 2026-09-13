@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:abm_madrasa/features/events/domain/event_model.dart';
 import 'package:abm_madrasa/features/events/presentation/event_controller.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -28,15 +29,22 @@ class EventListScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: Text('Administration', style: typography.h3.copyWith(color: colors.primary)),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        titleSpacing: 56,
+        flexibleSpace: Container(decoration: BoxDecoration(gradient: abmGreenGradient(context))),
+        title: Text('Administration', style: typography.h3.copyWith(color: Colors.white)),
         actions: [
           if (isAdmin)
             Padding(
               padding: const EdgeInsets.only(right: 16.0),
               child: ElevatedButton.icon(
                 onPressed: () => _showEventDialog(context, ref),
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add Event'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: abmGreen(context)),
               ),
             ),
         ],
@@ -229,6 +237,7 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
   final List<XFile> _images = [];
   final List<Uint8List> _imagesBytes = [];
   bool _isUploading = false;
+  bool _notify = true; // notify students & teachers on create
   EventStatus _status = EventStatus.upcoming;
 
   @override
@@ -328,7 +337,7 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
         if (widget.event != null) {
           await ref.read(eventControllerProvider.notifier).updateEvent(widget.event!.id!, updatedEvent);
         } else {
-          await ref.read(eventControllerProvider.notifier).addEvent(updatedEvent);
+          await ref.read(eventControllerProvider.notifier).addEvent(updatedEvent, notify: _notify);
         }
 
         if (!mounted) return;
@@ -514,6 +523,21 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
                           onRemoveNew: _removeImage,
                           onRemoveExisting: _removeExistingImage,
                         ),
+                        // Only new events fire a notification (an edit shouldn't
+                        // re-notify everyone).
+                        if (widget.event == null) ...[
+                          const Gap(8),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            activeColor: colors.primary,
+                            value: _notify,
+                            onChanged: (v) => setState(() => _notify = v ?? true),
+                            title: Text('Notify students & teachers', style: typography.bodyMediumSemiBold),
+                            subtitle: Text('Send an in-app notification about this event.',
+                                style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                          ),
+                        ],
                       ],
                     ),
                   ),

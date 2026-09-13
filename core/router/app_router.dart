@@ -38,6 +38,8 @@ import 'package:abm_madrasa/features/classrooms/presentation/classroom_managemen
 import 'package:abm_madrasa/features/user_admin/presentation/institute_management_screen.dart';
 import 'package:abm_madrasa/features/website_management/presentation/website_management_screen.dart';
 import 'package:abm_madrasa/features/transportation/presentation/fleet_management_screen.dart';
+import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
+import 'package:abm_madrasa/features/notifications/presentation/notification_compose_screen.dart';
 import 'package:abm_madrasa/shared/widgets/main_shell_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -48,11 +50,26 @@ part 'app_router.g.dart';
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
+/// Bridges Riverpod auth/permission changes to GoRouter's refreshListenable so
+/// the router re-evaluates its redirect when the session changes.
+class _RouterRefresh extends ChangeNotifier {
+  _RouterRefresh(Ref ref) {
+    ref.listen(authControllerProvider, (_, _) => notifyListeners());
+    ref.listen(permissionControllerProvider, (_, _) => notifyListeners());
+  }
+}
+
 @riverpod
 GoRouter router(Ref ref) {
+  // Re-run the redirect whenever auth or permissions change, so a session
+  // restored on cold start (or a logout) actually navigates instead of leaving
+  // the app stuck on the login screen.
+  final refresh = _RouterRefresh(ref);
+  ref.onDispose(refresh.dispose);
   return GoRouter(
     initialLocation: RouteNames.login,
     navigatorKey: _rootNavigatorKey,
+    refreshListenable: refresh,
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
       final user = authState.value;
@@ -275,6 +292,15 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.settings,
             builder: (context, state) => const SettingsScreen(),
+          ),
+          // The inbox is for every role; the compose screen guards itself by role.
+          GoRoute(
+            path: RouteNames.notifications,
+            builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.notificationsCompose,
+            builder: (context, state) => const NotificationComposeScreen(),
           ),
           GoRoute(
             path: RouteNames.permissions,

@@ -32,10 +32,10 @@ class EventController extends _$EventController {
     }
   }
 
-  Future<void> addEvent(EventModel event) async {
+  Future<void> addEvent(EventModel event, {bool notify = true}) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
-      await ref.read(eventRepositoryProvider).addEvent(event);
+      await ref.read(eventRepositoryProvider).addEvent(event, notify: notify);
       return _fetchEvents();
     });
   }

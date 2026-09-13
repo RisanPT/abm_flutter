@@ -19,7 +19,7 @@ import 'package:go_router/go_router.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/utils/institute_time.dart';
 
-const _maroon = Color(0xFF5A2A2A);
+const _maroon = Color(0xFF1B3D2F);
 
 class ShiftPlannerScreen extends ConsumerStatefulWidget {
   const ShiftPlannerScreen({super.key});

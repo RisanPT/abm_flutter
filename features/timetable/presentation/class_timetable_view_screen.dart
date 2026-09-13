@@ -10,7 +10,7 @@ import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-const _maroon = Color(0xFF5A2A2A);
+const _maroon = Color(0xFF1B3D2F);
 
 /// Read-only viewer: pick Shift + Class + Date → instantly see that class's
 /// timetable for the date, reflecting the shift allocation.

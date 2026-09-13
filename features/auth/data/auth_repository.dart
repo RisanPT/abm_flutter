@@ -1,8 +1,10 @@
+import 'dart:convert';
+
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/network/session_store.dart';
 import 'package:dio/dio.dart';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'auth_repository.g.dart';
@@ -10,15 +12,15 @@ part 'auth_repository.g.dart';
 @Riverpod(keepAlive: true)
 AuthRepository authRepository(Ref ref) {
   final dio = ref.watch(dioProvider);
-  final storage = ref.watch(secureStorageProvider);
-  return AuthRepository(dio, storage);
+  final store = ref.watch(sessionStoreProvider);
+  return AuthRepository(dio, store);
 }
 
 class AuthRepository {
   final Dio _dio;
-  final FlutterSecureStorage _storage;
+  final SessionStore _store;
 
-  AuthRepository(this._dio, this._storage);
+  AuthRepository(this._dio, this._store);
 
   Future<UserModel> login(
     String username,
@@ -31,18 +33,25 @@ class AuthRepository {
       });
 
       final String token = response.data['token'];
-      final userData = response.data['user'];
+      final userData = Map<String, dynamic>.from(response.data['user'] as Map);
 
-      await _storage.write(key: 'auth_token', value: token);
+      // Persist BOTH the token and the user so the session survives restarts
+      // even with no network on the next launch.
+      await _store.saveToken(token);
+      await _store.saveUser(jsonEncode(userData));
 
-      final user = UserModel.fromJson(userData);
-
-      return user;
+      return UserModel.fromJson(userData);
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
         throw Exception('Invalid username or password');
       }
-      throw Exception(e.response?.data['message'] ?? 'Failed to login');
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        throw Exception('Network connection error. Please check your internet connection.');
+      }
+      final msg = e.response?.data is Map ? e.response?.data['message'] : null;
+      throw Exception(msg ?? e.message ?? 'Failed to login');
     }
   }
 
@@ -52,22 +61,47 @@ class AuthRepository {
     } catch (_) {
       // Clear local session even if the backend request fails.
     } finally {
-      await _storage.delete(key: 'auth_token');
+      await _store.clear();
     }
   }
 
+  /// Restore the session on app start / resume.
+  ///
+  /// Critically, this NEVER clears the token on a transient failure. It only
+  /// signs the user out on a confirmed 401 (token invalid/expired). On any
+  /// other error (no network, timeout, 5xx) it falls back to the cached user so
+  /// the app stays logged in — the previous version wiped the token on ANY
+  /// error, which caused the auto-logout on resume.
   Future<UserModel?> getCurrentUser() async {
-    final token = await _storage.read(key: 'auth_token');
-    if (token == null) return null;
+    final token = await _store.readToken();
+    if (token == null || token.isEmpty) return null;
+
+    // Optimistic session from the cached user (works offline).
+    UserModel? cached;
+    final cachedJson = await _store.readUser();
+    if (cachedJson != null && cachedJson.isNotEmpty) {
+      try {
+        cached = UserModel.fromJson(Map<String, dynamic>.from(jsonDecode(cachedJson) as Map));
+      } catch (_) {
+        cached = null;
+      }
+    }
 
     try {
-      // The backend needs a route to get current user info OR we decode token
-      // For now, let's assume /auth/me exists as per common patterns
-      final response = await _dio.get('/auth/me'); 
-      return UserModel.fromJson(response.data);
+      final response = await _dio.get('/auth/me');
+      final data = Map<String, dynamic>.from(response.data as Map);
+      await _store.saveUser(jsonEncode(data));
+      return UserModel.fromJson(data);
+    } on DioException catch (e) {
+      // Only a real 401 means the token is no longer valid → sign out.
+      if (e.response?.statusCode == 401) {
+        await _store.clear();
+        return null;
+      }
+      // Network / server error → keep the session, use the cached user.
+      return cached;
     } catch (_) {
-      await logout();
-      return null;
+      return cached;
     }
   }
 }

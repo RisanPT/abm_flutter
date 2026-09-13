@@ -26,10 +26,13 @@ class EventRepository {
     }
   }
 
-  Future<EventModel> addEvent(EventModel event) async {
+  Future<EventModel> addEvent(EventModel event, {bool notify = true}) async {
     try {
       final data = event.toJson();
       data.remove('_id');
+      // `notify` drives the backend's in-app notification trigger; it is not part
+      // of the EventModel (which is serialized elsewhere, e.g. on patch/upload).
+      data['notify'] = notify;
       final response = await _dio.post('/events', data: data);
       return EventModel.fromJson(response.data);
     } catch (e) {

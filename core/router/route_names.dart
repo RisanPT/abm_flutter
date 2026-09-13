@@ -37,5 +37,7 @@ class RouteNames {
   static const String parentPortal = '/parent-portal';
   static const String onlineAdmission = '/online-admission';
   static const String websiteContent = '/website-content';
+  static const String notifications = '/notifications';
+  static const String notificationsCompose = '/notifications/compose';
 }
 

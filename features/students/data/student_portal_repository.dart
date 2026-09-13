@@ -13,12 +13,16 @@ class PortalProfile {
     this.gender,
     this.guardianName,
     this.parentContact,
+    this.parentIqamaId,
     this.address,
     this.photoUrl,
     this.bloodGroup,
+    this.dateOfBirth,
+    this.admissionDate,
   });
   final String fullName, admissionNumber, grade;
-  final String? shift, gender, guardianName, parentContact, address, photoUrl, bloodGroup;
+  final String? shift, gender, guardianName, parentContact, parentIqamaId, address, photoUrl, bloodGroup;
+  final DateTime? dateOfBirth, admissionDate;
 
   factory PortalProfile.fromJson(Map<String, dynamic> j) => PortalProfile(
         fullName: (j['fullName'] ?? '').toString(),
@@ -28,9 +32,26 @@ class PortalProfile {
         gender: j['gender'] as String?,
         guardianName: j['guardianName'] as String?,
         parentContact: j['parentContact'] as String?,
+        parentIqamaId: j['parentIqamaId'] as String?,
         address: j['address'] as String?,
         photoUrl: j['photoUrl'] as String?,
         bloodGroup: j['bloodGroup'] as String?,
+        dateOfBirth: j['dateOfBirth'] != null ? DateTime.tryParse(j['dateOfBirth'].toString()) : null,
+        admissionDate: j['admissionDate'] != null ? DateTime.tryParse(j['admissionDate'].toString()) : null,
+      );
+}
+
+class StudyMaterial {
+  const StudyMaterial({required this.title, required this.subject, required this.description, required this.url, required this.grade, this.createdAt});
+  final String title, subject, description, url, grade;
+  final DateTime? createdAt;
+  factory StudyMaterial.fromJson(Map<String, dynamic> j) => StudyMaterial(
+        title: (j['title'] ?? '').toString(),
+        subject: (j['subject'] ?? '').toString(),
+        description: (j['description'] ?? '').toString(),
+        url: (j['url'] ?? '').toString(),
+        grade: (j['grade'] ?? 'all').toString(),
+        createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
       );
 }
 
@@ -226,6 +247,11 @@ class StudentPortalRepository {
     final r = await _dio.get('/student-portal/me/timetable');
     return StudentTimetable.fromJson(Map<String, dynamic>.from(r.data));
   }
+
+  Future<List<StudyMaterial>> getMyMaterials() async {
+    final r = await _dio.get('/student-portal/me/materials');
+    return ((r.data['items'] as List?) ?? []).map((e) => StudyMaterial.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
 }
 
 /// Auto-loading portal data for the current student.
@@ -236,4 +262,8 @@ final studentPortalProvider = FutureProvider.autoDispose<StudentPortalData>((ref
 /// The student's own class timetable for the upcoming class days.
 final studentTimetableProvider = FutureProvider.autoDispose<StudentTimetable>((ref) {
   return ref.watch(studentPortalRepositoryProvider).getMyTimetable();
+});
+
+final studentMaterialsProvider = FutureProvider.autoDispose<List<StudyMaterial>>((ref) {
+  return ref.watch(studentPortalRepositoryProvider).getMyMaterials();
 });

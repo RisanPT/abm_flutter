@@ -1,19 +1,19 @@
+import 'package:abm_madrasa/core/network/session_store.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthInterceptor extends Interceptor {
-  final FlutterSecureStorage _storage;
+  final SessionStore _store;
 
-  AuthInterceptor(this._storage);
+  AuthInterceptor(this._store);
 
   @override
   Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
-    final token = await _storage.read(key: 'auth_token');
-    
-    if (token != null) {
+    final token = await _store.readToken();
+
+    if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
-    
+
     return handler.next(options);
   }
 

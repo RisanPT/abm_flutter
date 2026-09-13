@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:flutter/material.dart';
@@ -21,10 +22,11 @@ class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        title: Text('Settings', style: typography.h3.copyWith(color: colors.primary)),
-      ),
-      body: userAsync.when(
+      body: Column(
+        children: [
+          AbmGradientHeader(title: 'Settings', leading: const SizedBox(width: 40)),
+          Expanded(
+            child: userAsync.when(
         data: (user) {
           if (user == null) return const Center(child: Text('User not found'));
 
@@ -62,8 +64,8 @@ class SettingsScreen extends ConsumerWidget {
               _SettingsTile(
                 icon: Icons.notifications_none_outlined,
                 title: 'Notifications',
-                subtitle: 'Manage your alert preferences',
-                onTap: () {},
+                subtitle: 'View your inbox and send notices',
+                onTap: () => context.push(RouteNames.notifications),
               ),
               const Gap(12),
               _SettingsTile(
@@ -174,8 +176,11 @@ class SettingsScreen extends ConsumerWidget {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, stack) => Center(child: Text('Error: $err')),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -3,10 +3,10 @@ import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
-import 'package:abm_madrasa/shared/widgets/institute_banner_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -137,9 +137,14 @@ class _IncomeEntryScreenState extends ConsumerState<IncomeEntryScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: Text('Daily Income Entry', style: typography.h3),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        titleSpacing: 56,
+        flexibleSpace: Container(decoration: BoxDecoration(gradient: abmGreenGradient(context))),
+        title: Text('Daily Income Entry', style: typography.h3.copyWith(color: Colors.white)),
         actions: [
-          const InstituteBannerChip(),
           IconButton(
             onPressed: _pickMonth,
             icon: const Icon(LucideIcons.calendar),

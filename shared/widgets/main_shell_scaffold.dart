@@ -5,6 +5,9 @@ import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
+import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
+import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -288,37 +291,51 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
             Positioned(
               top: MediaQuery.of(context).padding.top + 10,
               left: 12,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _scaffoldKey.currentState?.openDrawer(),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: colors.white.withValues(alpha: 0.95),
+              child: Builder(
+                builder: (context) {
+                  // Back when there is somewhere to pop (pushed detail screens),
+                  // otherwise the drawer menu (top-level nav destinations).
+                  final canPop = context.canPop();
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => canPop ? context.pop() : _scaffoldKey.currentState?.openDrawer(),
                       borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: colors.white.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ],
+                        child: Icon(
+                          canPop ? Icons.arrow_back_rounded : Icons.menu_rounded,
+                          color: colors.primary,
+                        ),
+                      ),
                     ),
-                    child: Icon(
-                      Icons.menu_rounded,
-                      color: colors.primary,
-                    ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
+          // Floating notification bell (top-right) — one entry point that works
+          // for every staff/admin role on mobile and desktop.
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            right: 12,
+            child: _ShellNotificationBell(),
+          ),
         ],
       ),
       bottomNavigationBar: context.isMobile && mobileNavItems.length >= 2
-          ? NavigationBar(
+          ? AbmBottomNav(
               selectedIndex: (() {
                 final mobileIndex = mobileNavItems.indexWhere(
                   (item) =>
@@ -327,15 +344,9 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                 );
                 return mobileIndex < 0 ? 0 : mobileIndex;
               })(),
-              onDestinationSelected: (index) =>
-                  _onItemTapped(index, context, mobileNavItems),
-              destinations: mobileNavItems
-                  .map(
-                    (item) => NavigationDestination(
-                      icon: Icon(item.icon),
-                      label: item.mobileLabel ?? item.label,
-                    ),
-                  )
+              onTap: (index) => _onItemTapped(index, context, mobileNavItems),
+              items: mobileNavItems
+                  .map((item) => AbmNavItemData(icon: item.icon, label: item.mobileLabel ?? item.label))
                   .toList(),
             )
           : null,
@@ -434,6 +445,57 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
     context.go(RouteNames.login);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Logged out successfully')),
+    );
+  }
+}
+
+/// The shell's floating notification bell — a white rounded button matching the
+/// floating menu/back button, with an unread badge, opening the shared inbox.
+class _ShellNotificationBell extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final count = ref.watch(unreadCountProvider);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+        ),
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: colors.white.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Icon(LucideIcons.bell, color: colors.primary, size: 22),
+            ),
+            if (count > 0)
+              Positioned(
+                right: 4,
+                top: 4,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                  decoration: BoxDecoration(color: colors.red, borderRadius: BorderRadius.circular(9), border: Border.all(color: Colors.white, width: 1.4)),
+                  alignment: Alignment.center,
+                  child: Text(
+                    count > 9 ? '9+' : '$count',
+                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700, height: 1),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -844,13 +906,7 @@ class _DrawerInstituteHeader extends ConsumerWidget {
     final content = Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 36, 20, 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.primary, colors.primary.withValues(alpha: 0.85)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      decoration: BoxDecoration(gradient: abmGreenGradient(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

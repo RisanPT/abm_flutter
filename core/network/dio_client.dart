@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/auth_interceptor.dart';
+import 'package:abm_madrasa/core/network/session_store.dart';
 import 'package:dio/dio.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -25,7 +26,7 @@ Dio dio(Ref ref) {
   );
 
   dio.interceptors.addAll([
-    AuthInterceptor(ref.watch(secureStorageProvider)),
+    AuthInterceptor(ref.watch(sessionStoreProvider)),
     LogInterceptor(requestBody: true, responseBody: true),
   ]);
 

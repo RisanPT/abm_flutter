@@ -8,7 +8,7 @@ import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-const _maroon = Color(0xFF5A2A2A);
+const _maroon = Color(0xFF1B3D2F);
 
 /// Read-only, whole-day timetable grid — every class and period at a glance,
 /// laid out like a printed timetable (periods down, classes across). Opens as a

@@ -8,6 +8,7 @@ import 'package:abm_madrasa/features/dashboard/presentation/dashboard_controller
 import 'package:abm_madrasa/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:abm_madrasa/shared/widgets/institute_banner_chip.dart';
 import 'package:abm_madrasa/features/transportation/presentation/fleet_management_screen.dart';
 import 'package:abm_madrasa/features/teachers/presentation/progress_report_upload_screen.dart';
@@ -95,7 +96,7 @@ class DashboardScreen extends ConsumerWidget {
         right: 20,
       ),
       decoration: BoxDecoration(
-        color: colors.primary,
+        gradient: abmGreenGradient(context),
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(32),
           bottomRight: Radius.circular(32),
@@ -111,6 +112,8 @@ class DashboardScreen extends ConsumerWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Clear the shell's floating menu button (top-left).
+              const Gap(36),
               Row(
                 children: [
                   Expanded(

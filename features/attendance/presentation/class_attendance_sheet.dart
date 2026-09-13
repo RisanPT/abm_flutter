@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-const _maroon = Color(0xFF5A2A2A);
+const _maroon = Color(0xFF1B3D2F);
 const _statuses = ['Present', 'Absent', 'Late'];
 
 /// Attendance sheet for one published scheduled class.

@@ -7,6 +7,7 @@ import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pdf/pdf.dart';
@@ -88,37 +89,30 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final typography = context.typography;
     final user = ref.watch(authControllerProvider).asData?.value;
     final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
     final canEdit = user?.role.canEditFinance(allowedModules) ?? false;
 
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        title: Text('Madrassa Finance', style: typography.h3),
-        actions: [
-          if (canEdit)
-            IconButton(
-              onPressed: _showCategoryManager,
-              icon: const Icon(LucideIcons.tag),
-              tooltip: 'Manage Categories',
-            ),
-          IconButton(
-            onPressed: _pickMonth,
-            icon: const Icon(LucideIcons.calendar),
-            tooltip: 'Select Month',
-          ),
-          IconButton(
-            onPressed: _exportFinanceReportPdf,
-            icon: const Icon(LucideIcons.download),
-            tooltip: 'Export PDF',
-          ),
-          const Gap(8),
-        ],
-      ),
       body: Column(
         children: [
+          AbmGradientHeader(
+            title: 'Madrassa Finance',
+            leading: const SizedBox(width: 40),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (canEdit) ...[
+                  AbmHeaderIconButton(icon: LucideIcons.tag, onTap: _showCategoryManager, tooltip: 'Manage Categories'),
+                  const Gap(6),
+                ],
+                AbmHeaderIconButton(icon: LucideIcons.calendar, onTap: _pickMonth, tooltip: 'Select Month'),
+                const Gap(6),
+                AbmHeaderIconButton(icon: LucideIcons.download, onTap: _exportFinanceReportPdf, tooltip: 'Export PDF'),
+              ],
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
             child: _FinanceTabs(

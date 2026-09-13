@@ -1,6 +1,7 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:abm_madrasa/shared/widgets/custom_month_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -193,60 +194,51 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
 
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        title: Text(isStudent ? 'Student Report' : 'Teacher Report', style: typography.h3),
-        actions: [
-          // Refresh button
-          IconButton(
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
-          ),
-          // Export PDF button
-          IconButton(
-            onPressed: _exportAttendancePdf,
-            icon: const Icon(LucideIcons.download),
-            tooltip: 'Export PDF',
-          ),
-          // Custom Month picker button
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Center(
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _pickMonth,
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: colors.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.calendar, size: 16, color: colors.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          _monthLabel,
-                          style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(LucideIcons.chevronDown, size: 16, color: colors.primary),
-                      ],
-                    ),
+      body: Column(
+        children: [
+          AbmGradientHeader(
+            title: isStudent ? 'Student Report' : 'Teacher Report',
+            leading: const SizedBox(width: 40),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AbmHeaderIconButton(icon: LucideIcons.refreshCw, onTap: _refresh, tooltip: 'Refresh'),
+                const Gap(6),
+                AbmHeaderIconButton(icon: LucideIcons.download, onTap: _exportAttendancePdf, tooltip: 'Export PDF'),
+              ],
+            ),
+            bottom: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _pickMonth,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.calendar, size: 16, color: Colors.white),
+                      const SizedBox(width: 8),
+                      Text(_monthLabel, style: typography.bodyMediumSemiBold.copyWith(color: Colors.white)),
+                      const SizedBox(width: 4),
+                      const Icon(LucideIcons.chevronDown, size: 16, color: Colors.white),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
+          Expanded(
+            child: isStudent
+                ? _StudentReportTab(month: _monthKey, instituteId: institute.id)
+                : _TeacherReportTab(month: _monthKey, instituteId: institute.id),
+          ),
         ],
       ),
-      body: isStudent
-          ? _StudentReportTab(month: _monthKey, instituteId: institute.id)
-          : _TeacherReportTab(month: _monthKey, instituteId: institute.id),
     );
   }
 

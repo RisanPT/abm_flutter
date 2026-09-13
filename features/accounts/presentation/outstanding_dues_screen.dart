@@ -2,7 +2,8 @@ import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
-import 'package:abm_madrasa/shared/widgets/institute_banner_chip.dart';
+import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -137,56 +138,57 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
 
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        title: Text('Outstanding Dues', style: typography.h3),
-        actions: [
-          const InstituteBannerChip(),
-          asyncData.whenData((data) => IconButton(
-            onPressed: () => _exportPdf(data),
-            icon: const Icon(LucideIcons.download),
-            tooltip: 'Export PDF',
-          )).value ?? const SizedBox.shrink(),
-          
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Center(
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _pickMonth,
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: colors.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.calendar, size: 16, color: colors.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          _monthLabel,
-                          style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(LucideIcons.chevronDown, size: 16, color: colors.primary),
-                      ],
-                    ),
+      body: Column(
+        children: [
+          AbmGradientHeader(
+            title: 'Outstanding Dues',
+            leading: const SizedBox(width: 40),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AbmHeaderIconButton(
+                  icon: LucideIcons.bellRing,
+                  tooltip: 'Send fee reminders',
+                  onTap: _sendFeeReminders,
+                ),
+                const SizedBox(width: 8),
+                asyncData.whenData((data) => AbmHeaderIconButton(
+                      icon: LucideIcons.download,
+                      tooltip: 'Export PDF',
+                      onTap: () => _exportPdf(data),
+                    )).value ?? const SizedBox.shrink(),
+              ],
+            ),
+            bottom: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _pickMonth,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(999)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.calendar, size: 16, color: Colors.white),
+                      const SizedBox(width: 8),
+                      Text(_monthLabel, style: typography.bodyMediumSemiBold.copyWith(color: Colors.white)),
+                      const SizedBox(width: 4),
+                      const Icon(LucideIcons.chevronDown, size: 16, color: Colors.white),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
-          const Gap(4),
+          Expanded(
+            child: asyncData.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Error: $e')),
+              data: (data) => _buildBody(context, data),
+            ),
+          ),
         ],
-      ),
-      body: asyncData.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (data) => _buildBody(context, data),
       ),
     );
   }
@@ -332,6 +334,34 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
           _selectedDate = newMonth;
         });
       }
+    }
+  }
+
+  /// Generate a personal in-app fee-due notice for every student who still owes
+  /// for the selected month. Confirms first (it fans out to many students) and
+  /// is idempotent server-side, so a re-run only notifies newly-due students.
+  Future<void> _sendFeeReminders() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Send fee reminders?'),
+        content: Text('Each student with a pending balance for $_monthLabel will get an in-app fee-due notification.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Send')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final res = await ref.read(notificationRepositoryProvider).sendFeeReminders(month: _monthKey);
+      final created = res['created'] ?? 0;
+      final skipped = res['skipped'] ?? 0;
+      messenger.showSnackBar(SnackBar(content: Text('Fee reminders: $created sent, $skipped already notified.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Failed to send reminders: $e')));
     }
   }
 }

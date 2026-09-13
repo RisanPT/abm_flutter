@@ -7,7 +7,7 @@ import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-const _maroon = Color(0xFF5A2A2A);
+const _maroon = Color(0xFF1B3D2F);
 
 class StudentDashboardScreen extends ConsumerWidget {
   const StudentDashboardScreen({super.key, this.studentId, this.classroom});

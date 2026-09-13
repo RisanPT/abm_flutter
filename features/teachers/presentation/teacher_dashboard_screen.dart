@@ -1,6 +1,7 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/utils/institute_time.dart';
 import 'package:abm_madrasa/features/attendance/presentation/class_attendance_sheet.dart';
+import 'package:abm_madrasa/features/notifications/presentation/notification_bell.dart';
 import 'package:abm_madrasa/features/timetable/domain/planning_models.dart';
 import 'package:abm_madrasa/features/timetable/presentation/planner_controller.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,7 @@ import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-const _maroon = Color(0xFF5A2A2A);
+const _maroon = Color(0xFF1B3D2F);
 const _maroonDark = Color(0xFF3F1C1C);
 
 class TeacherDashboardScreen extends ConsumerWidget {
@@ -31,7 +32,7 @@ class TeacherDashboardScreen extends ConsumerWidget {
           backgroundColor: Colors.white,
           foregroundColor: _maroon,
           elevation: 0,
-          titleSpacing: 20,
+          titleSpacing: 56,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -43,6 +44,7 @@ class TeacherDashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
+          actions: const [NotificationBell(color: _maroon), SizedBox(width: 4)],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(48),
             child: Align(
