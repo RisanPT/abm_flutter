@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
 import 'package:flutter/material.dart';
@@ -62,7 +63,10 @@ class _OnlineAdmissionScreenState extends ConsumerState<OnlineAdmissionScreen> {
         _siblingCount = count;
         _showConcessionHint = count >= 2;
       });
-    } catch (_) {}
+    } catch (e) {
+      // Best-effort — a failure just means no concession hint. Not user-facing.
+      debugPrint('siblings-count lookup failed: $e');
+    }
   }
 
   Future<void> _pickDob() async {
@@ -106,7 +110,7 @@ class _OnlineAdmissionScreenState extends ConsumerState<OnlineAdmissionScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Submission failed: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Submission failed. ${friendlyErrorMessage(e)}'), backgroundColor: Colors.red),
         );
       }
     } finally {

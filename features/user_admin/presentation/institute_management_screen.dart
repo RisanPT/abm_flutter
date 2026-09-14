@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
@@ -55,7 +56,7 @@ class InstituteManagementScreen extends ConsumerWidget {
           },
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        error: (err, stack) => Center(child: Text(friendlyErrorMessage(err))),
       ),
     );
   }

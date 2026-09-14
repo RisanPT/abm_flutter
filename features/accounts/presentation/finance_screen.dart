@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/accounts/data/finance_repository.dart';
 import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_controller.dart';
@@ -119,7 +120,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
+        error: (err, _) => Center(child: Text(friendlyErrorMessage(err))),
       ),
     );
   }
@@ -146,7 +147,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+          SnackBar(content: Text(friendlyErrorMessage(e))),
         );
       }
     } finally {
@@ -573,7 +574,7 @@ class _AccountDetailsPanelState extends ConsumerState<_AccountDetailsPanel> {
         return _buildContent(context, details);
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Error: $err')),
+      error: (err, _) => Center(child: Text(friendlyErrorMessage(err))),
     );
   }
 
@@ -893,7 +894,7 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                                   } catch (e) {
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                                        SnackBar(content: Text(friendlyErrorMessage(e))),
                                       );
                                     }
                                   }
@@ -1829,7 +1830,7 @@ class _LedgerCard extends ConsumerWidget {
       _refresh(ref);
       if (context.mounted) _snack(context, 'Collected ${_sar(amount)} for ${m.monthLabel}');
     } catch (e) {
-      if (context.mounted) _snack(context, e.toString().replaceFirst('Exception: ', ''), ok: false);
+      if (context.mounted) _snack(context, friendlyErrorMessage(e), ok: false);
     }
   }
 
@@ -1864,7 +1865,7 @@ class _LedgerCard extends ConsumerWidget {
       _refresh(ref);
       if (context.mounted) _snack(context, 'Applied ${_sar(amount)} oldest-first');
     } catch (e) {
-      if (context.mounted) _snack(context, e.toString().replaceFirst('Exception: ', ''), ok: false);
+      if (context.mounted) _snack(context, friendlyErrorMessage(e), ok: false);
     }
   }
 
@@ -1874,7 +1875,7 @@ class _LedgerCard extends ConsumerWidget {
       _refresh(ref);
       if (context.mounted) _snack(context, m.waived ? '${m.monthLabel} restored' : '${m.monthLabel} waived');
     } catch (e) {
-      if (context.mounted) _snack(context, e.toString().replaceFirst('Exception: ', ''), ok: false);
+      if (context.mounted) _snack(context, friendlyErrorMessage(e), ok: false);
     }
   }
 

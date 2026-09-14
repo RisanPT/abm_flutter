@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/features/website_management/domain/website_content_model.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/website_management/presentation/website_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,7 +28,7 @@ class _WebsiteManagementScreenState extends ConsumerState<WebsiteManagementScree
       appBar: AppBar(title: const Text('Website Content Management')),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        error: (err, stack) => Center(child: Text(friendlyErrorMessage(err))),
         data: (content) {
           if (!_isInitialized) {
             _currentContent = content;

@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
@@ -184,7 +185,7 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
           Expanded(
             child: asyncData.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
               data: (data) => _buildBody(context, data),
             ),
           ),
@@ -361,7 +362,7 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
       final skipped = res['skipped'] ?? 0;
       messenger.showSnackBar(SnackBar(content: Text('Fee reminders: $created sent, $skipped already notified.')));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed to send reminders: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Failed to send reminders. ${friendlyErrorMessage(e)}')));
     }
   }
 }

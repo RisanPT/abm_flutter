@@ -1,5 +1,6 @@
 
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
@@ -102,7 +103,7 @@ class _IncomeEntryScreenState extends ConsumerState<IncomeEntryScreen> {
           pw.SizedBox(height: 8),
           pw.Text('Month: ${DateFormat('MMMM yyyy').format(_selectedMonth)}'),
           pw.SizedBox(height: 8),
-          pw.Text('Segment: $_selectedSegment'),
+          pw.Text('Segment. ${friendlyErrorMessage(_selectedSegment)}'),
           pw.SizedBox(height: 8),
           pw.Text('Total Income: SAR ${total.toStringAsFixed(2)}'),
           pw.SizedBox(height: 16),
@@ -255,7 +256,7 @@ class _IncomeEntryScreenState extends ConsumerState<IncomeEntryScreen> {
             Expanded(
               child: asyncData.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('Error: $e')),
+                error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
                 data: (data) {
                   final rawEntries = (data['entries'] as List?) ?? [];
                   final entries = rawEntries.map((e) => _IncomeEntry.fromJson(e as Map<String, dynamic>)).toList();
@@ -457,7 +458,7 @@ class _AddIncomeDialogState extends ConsumerState<_AddIncomeDialog> {
       widget.onSuccess();
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

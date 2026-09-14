@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/accounts/data/finance_repository.dart';
 import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
@@ -103,7 +104,7 @@ class _FeeStructureSetupScreenState extends ConsumerState<FeeStructureSetupScree
               );
             },
             loading: () => const SliverFillRemaining(child: Center(child: CircularProgressIndicator())),
-            error: (err, stack) => SliverFillRemaining(child: Center(child: Text('Error: $err'))),
+            error: (err, stack) => SliverFillRemaining(child: Center(child: Text(friendlyErrorMessage(err)))),
           ),
         ],
       ),
@@ -138,7 +139,7 @@ class _FeeStructureSetupScreenState extends ConsumerState<FeeStructureSetupScree
       try {
         await ref.read(feeStructureControllerProvider.notifier).deleteStructure(structure.id);
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     }
   }
@@ -698,7 +699,7 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -769,7 +770,7 @@ class _FeeTrackingDialogState extends ConsumerState<_FeeTrackingDialog> {
           );
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) setState(() { _saving = false; _error = e.toString().replaceFirst('Exception: ', ''); });
+      if (mounted) setState(() { _saving = false; _error = friendlyErrorMessage(e); });
     }
   }
 

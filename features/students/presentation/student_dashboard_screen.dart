@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/utils/institute_time.dart';
 import 'package:abm_madrasa/features/timetable/presentation/planner_controller.dart';
 import 'package:flutter/material.dart';
@@ -40,7 +41,7 @@ class StudentDashboardScreen extends ConsumerWidget {
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(e.toString().replaceFirst('Exception: ', ''))),
+        error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
         data: (periods) {
           if (periods.isEmpty) {
             return Center(

@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_controller.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
@@ -219,7 +220,7 @@ class _StudentProfileBody extends ConsumerWidget {
           context.go(RouteNames.students);
         }
       } catch (e) {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     }
   }
@@ -243,7 +244,7 @@ class _ErrorState extends StatelessWidget {
               const Gap(12),
               Text('Unable to load student details', style: context.typography.bodyLargeSemiBold.copyWith(color: const Color(0xFF163D32))),
               const Gap(8),
-              Text(message.replaceFirst('Exception: ', ''), textAlign: TextAlign.center, style: context.typography.bodyMedium.copyWith(color: const Color(0xFF6F7A75))),
+              Text(friendlyErrorMessage(message), textAlign: TextAlign.center, style: context.typography.bodyMedium.copyWith(color: const Color(0xFF6F7A75))),
             ],
           ),
         ),

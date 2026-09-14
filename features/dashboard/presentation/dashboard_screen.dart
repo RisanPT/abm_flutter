@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -77,7 +78,7 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error loading dashboard: $err')),
+        error: (err, stack) => Center(child: Text('Error loading dashboard. ${friendlyErrorMessage(err)}')),
       ),
     );
   }

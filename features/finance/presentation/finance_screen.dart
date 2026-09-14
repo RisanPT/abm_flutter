@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
@@ -80,7 +81,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to generate PDF: $e')),
+          SnackBar(content: Text('Failed to generate PDF. ${friendlyErrorMessage(e)}')),
         );
       }
     }
@@ -140,7 +141,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+          return Center(child: Text(friendlyErrorMessage(snapshot.error)));
         }
         final data = snapshot.data ?? const {};
         final totalIncome = (data['totalIncomes'] as num?)?.toDouble() ?? 0;
@@ -210,7 +211,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+          return Center(child: Text(friendlyErrorMessage(snapshot.error)));
         }
 
         final expenses = snapshot.data ?? [];
@@ -441,7 +442,7 @@ class _AddExpenseDialogState extends ConsumerState<_AddExpenseDialog> {
         children: [
           categoriesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Error loading categories: $e'),
+            error: (e, _) => Text('Error loading categories. ${friendlyErrorMessage(e)}'),
             data: (categories) {
               final expenseCategories = categories.where((c) => c.type == 'Expense').toList();
               // Default to first category if none selected
@@ -507,7 +508,7 @@ class _AddExpenseDialogState extends ConsumerState<_AddExpenseDialog> {
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -553,7 +554,7 @@ class _CategoryManagerDialogState extends ConsumerState<_CategoryManagerDialog> 
         height: 420,
         child: categoriesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
+          error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
           data: (categories) {
             if (categories.isEmpty) {
               return Center(
@@ -720,7 +721,7 @@ class _CategoryManagerDialogState extends ConsumerState<_CategoryManagerDialog> 
       widget.onChanged();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -839,7 +840,7 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

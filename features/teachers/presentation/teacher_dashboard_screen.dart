@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/utils/institute_time.dart';
 import 'package:abm_madrasa/features/attendance/presentation/class_attendance_sheet.dart';
 import 'package:abm_madrasa/features/notifications/presentation/notification_bell.dart';
@@ -86,7 +87,7 @@ class _ScheduleList extends ConsumerWidget {
     final async = ref.watch(teacherScheduleProvider(scope, teacherId: teacherId));
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator(color: _maroon)),
-      error: (e, _) => _error(context, e.toString().replaceFirst('Exception: ', '')),
+      error: (e, _) => _error(context, friendlyErrorMessage(e)),
       data: (classes) {
         if (classes.isEmpty) return _empty(context, scope);
 

@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/timetable/data/planner_repository.dart';
 import 'package:abm_madrasa/features/timetable/domain/planning_models.dart';
 import 'package:abm_madrasa/features/timetable/presentation/planner_status.dart';
@@ -214,7 +215,7 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
       );
     } catch (e) {
       if (!mounted) return;
-      final msg = e.toString().replaceFirst('Exception: ', '');
+      final msg = friendlyErrorMessage(e);
       // Delete is blocked once attendance exists — offer to cancel instead.
       if (msg.toLowerCase().contains('cancel')) {
         final doCancel = await showDialog<bool>(
@@ -249,7 +250,7 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
       widget.onChanged();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Class cancelled')));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) setState(() => _error = friendlyErrorMessage(e));
     }
   }
 
@@ -324,7 +325,7 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
         backgroundColor: const Color(0xFF16A34A),
       ));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) setState(() => _error = friendlyErrorMessage(e));
     }
   }
 
@@ -396,7 +397,7 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
       // If this day's classes were cancelled, refresh the editor to reflect it.
       if (includeThisDay) _load();
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) setState(() => _error = friendlyErrorMessage(e));
     }
   }
 

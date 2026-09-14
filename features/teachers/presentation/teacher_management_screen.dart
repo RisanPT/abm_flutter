@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
@@ -80,7 +81,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
         padding: EdgeInsets.all(context.isMobile ? 16 : 24),
         child: teachersAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Failed to load teachers: $error')),
+          error: (error, _) => Center(child: Text('Failed to load teachers. ${friendlyErrorMessage(error)}')),
           data: (teachers) {
             final selectedTeacher = _resolveSelectedTeacher(teachers);
 
@@ -251,7 +252,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
     }
   }
@@ -1345,7 +1346,7 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
     } finally {
       if (mounted) {

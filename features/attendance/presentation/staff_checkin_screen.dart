@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/attendance/data/staff_checkin_repository.dart';
 import 'package:abm_madrasa/features/attendance/domain/staff_checkin_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -31,7 +32,7 @@ class StaffCheckinScreen extends ConsumerWidget {
       messenger.showSnackBar(SnackBar(content: Text('Checked in — $status'), backgroundColor: _present));
     } catch (e) {
       messenger.showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        content: Text(friendlyErrorMessage(e)),
         backgroundColor: _absent,
       ));
     }
@@ -54,7 +55,7 @@ class StaffCheckinScreen extends ConsumerWidget {
               error: (e, _) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(28),
-                  child: Text(e.toString().replaceFirst('Exception: ', ''),
+                  child: Text(friendlyErrorMessage(e),
                       textAlign: TextAlign.center, style: TextStyle(color: colors.textSecondary)),
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/router/route_names.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -177,7 +178,7 @@ class SettingsScreen extends ConsumerWidget {
           );
         },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, stack) => Center(child: Text('Error: $err')),
+              error: (err, stack) => Center(child: Text(friendlyErrorMessage(err))),
             ),
           ),
         ],
@@ -353,7 +354,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Update failed: $e')),
+          SnackBar(content: Text('Update failed. ${friendlyErrorMessage(e)}')),
         );
       }
     } finally {

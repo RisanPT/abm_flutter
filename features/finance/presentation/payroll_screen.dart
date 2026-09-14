@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/finance/data/finance_repository.dart';
 import 'package:abm_madrasa/features/finance/domain/payroll_models.dart';
@@ -84,7 +85,7 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
       ));
     } catch (e) {
       messenger.showSnackBar(SnackBar(
-        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        content: Text(friendlyErrorMessage(e)),
         backgroundColor: _absent,
       ));
     }
@@ -106,7 +107,7 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
               error: (e, _) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(28),
-                  child: Text(e.toString().replaceFirst('Exception: ', ''),
+                  child: Text(friendlyErrorMessage(e),
                       textAlign: TextAlign.center, style: TextStyle(color: colors.textSecondary)),
                 ),
               ),

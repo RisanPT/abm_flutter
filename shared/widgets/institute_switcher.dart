@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,7 +82,7 @@ class InstituteSwitcher extends ConsumerWidget {
                   padding: EdgeInsets.all(20.0),
                   child: CircularProgressIndicator(),
                 )),
-                error: (err, stack) => Center(child: Text('Error: $err')),
+                error: (err, stack) => Center(child: Text(friendlyErrorMessage(err))),
               ),
             ],
           ),

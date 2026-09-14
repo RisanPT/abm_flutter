@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
 import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
@@ -66,7 +67,7 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
     } catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send. ${friendlyErrorMessage(e)}')));
     }
   }
 

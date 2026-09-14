@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/timetable/domain/planning_models.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,7 +20,7 @@ String describeApiError(Object e) {
     }
     return e.message ?? 'Request failed';
   }
-  return e.toString().replaceFirst('Exception: ', '');
+  return friendlyErrorMessage(e);
 }
 
 /// Outcome of a "mark holiday" request. When [needsDecision] is true the day

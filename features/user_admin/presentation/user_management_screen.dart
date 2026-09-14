@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/user_admin/domain/admin_user_model.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/admin_controller.dart';
@@ -168,7 +169,7 @@ class _UserTile extends ConsumerWidget {
               Navigator.pop(ctx);
               ref.read(adminControllerProvider.notifier).deleteUser(user.id).catchError((e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
                 }
               });
             },
@@ -254,7 +255,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -291,7 +292,7 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
           _selectedRole = name;
         });
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }

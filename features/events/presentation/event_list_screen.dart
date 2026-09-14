@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:abm_madrasa/features/events/domain/event_model.dart';
 import 'package:abm_madrasa/features/events/presentation/event_controller.dart';
@@ -64,7 +65,7 @@ class EventListScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        error: (err, stack) => Center(child: Text(friendlyErrorMessage(err))),
       ),
     );
   }
@@ -344,7 +345,7 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
         nav.pop();
       } catch (e) {
         if (mounted) {
-          messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
+          messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
           setState(() => _isUploading = false);
         }
       }

@@ -3,6 +3,7 @@ import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/domain/bulk_import_result.dart';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'student_repository.g.dart';
@@ -133,6 +134,9 @@ class StudentRepository {
       final response = await _dio.get('/students/siblings-count/$parentId');
       return response.data['count'] as int;
     } catch (e) {
+      // Best-effort concession helper — a failure just means no banner. Log it
+      // (debug only) so it's diagnosable instead of vanishing silently.
+      debugPrint('getSiblingCount failed for $parentId: $e');
       return 0;
     }
   }

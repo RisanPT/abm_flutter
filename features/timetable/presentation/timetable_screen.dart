@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -60,7 +61,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
       body: timetableAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) =>
-            Center(child: Text('Failed to load timetable: $error')),
+            Center(child: Text('Failed to load timetable. ${friendlyErrorMessage(error)}')),
         data: (data) {
           final filteredEntries = data.schedule.where((entry) {
             final classMatches =

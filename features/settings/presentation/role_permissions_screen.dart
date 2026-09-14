@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:flutter/material.dart';
@@ -80,7 +81,7 @@ class RolePermissionsScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(child: Text('Error loading permissions: $e')),
+        error: (e, st) => Center(child: Text('Error loading permissions. ${friendlyErrorMessage(e)}')),
       ),
     );
   }

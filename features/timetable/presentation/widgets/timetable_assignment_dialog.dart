@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/students/domain/classroom_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
@@ -407,7 +408,7 @@ class _TimetableAssignmentDialogState
       if (!mounted) return;
       setState(() => _isLoadingSchedule = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
     }
   }
@@ -480,7 +481,7 @@ class _TimetableAssignmentDialogState
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(content: Text(friendlyErrorMessage(e))),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);

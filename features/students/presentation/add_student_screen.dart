@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
@@ -246,7 +247,10 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           _showConcessionBanner = count >= 2;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      // Best-effort — a failure just means no concession banner. Not user-facing.
+      debugPrint('siblings-count lookup failed: $e');
+    }
   }
 
 
@@ -323,7 +327,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -808,7 +812,7 @@ class _StudentLoginSectionState extends ConsumerState<_StudentLoginSection> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _busy = false; _error = e.toString().replaceFirst('Exception: ', ''); });
+        setState(() { _busy = false; _error = friendlyErrorMessage(e); });
       }
     }
   }

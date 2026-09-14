@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/transportation/domain/transport_models.dart';
 import 'package:abm_madrasa/features/transportation/presentation/transport_controller.dart';
@@ -353,7 +354,7 @@ class _VehiclesList extends ConsumerWidget {
         },
       ),
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
     );
   }
 
@@ -456,7 +457,7 @@ class _DriversList extends ConsumerWidget {
         },
       ),
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
     );
   }
 }
@@ -528,7 +529,7 @@ class _RoutesList extends ConsumerWidget {
         },
       ),
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
     );
   }
 }
@@ -603,7 +604,7 @@ class _StudentAssignmentList extends ConsumerWidget {
               },
             ),
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
     );
   }
 }
@@ -804,7 +805,7 @@ class _AssignStudentDialog extends ConsumerWidget {
                   );
                 },
                 loading: () => const CircularProgressIndicator(),
-                error: (e, _) => Text('Error: $e'),
+                error: (e, _) => Text(friendlyErrorMessage(e)),
               ),
               const Gap(16),
               routesAsync.when(
@@ -817,7 +818,7 @@ class _AssignStudentDialog extends ConsumerWidget {
                   onChanged: (v) => setState(() => selectedRouteId = v),
                 ),
                 loading: () => const CircularProgressIndicator(),
-                error: (e, _) => Text('Error: $e'),
+                error: (e, _) => Text(friendlyErrorMessage(e)),
               ),
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
@@ -879,7 +880,7 @@ class _InstitutePickerSheetSidebar extends ConsumerWidget {
             ),
             error: (e, _) => Padding(
               padding: const EdgeInsets.all(24),
-              child: Text('Could not load institutes: $e'),
+              child: Text('Could not load institutes. ${friendlyErrorMessage(e)}'),
             ),
           ),
         ],

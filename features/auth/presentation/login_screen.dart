@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -213,7 +214,7 @@ class _LoginCard extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                errorText.replaceFirst('Exception: ', ''),
+                friendlyErrorMessage(errorText),
                 style: typography.bodySmall.copyWith(color: Colors.red.shade700),
               ),
             ),

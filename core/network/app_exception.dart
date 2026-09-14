@@ -7,27 +7,54 @@ class AppException implements Exception {
   AppException(this.message, {this.statusCode});
 
   @override
-  String toString() => 'AppException: $message (Status: $statusCode)';
+  String toString() => message;
 
   factory AppException.fromDioError(DioException dioError) {
     switch (dioError.type) {
       case DioExceptionType.connectionTimeout:
-        return AppException('Connection timeout', statusCode: 408);
       case DioExceptionType.sendTimeout:
-        return AppException('Send timeout', statusCode: 408);
       case DioExceptionType.receiveTimeout:
-        return AppException('Receive timeout', statusCode: 408);
+        return AppException('The connection timed out. Please try again.', statusCode: 408);
       case DioExceptionType.badResponse:
-        final message = dioError.response?.data?['message'] ?? 'Unexpected server error';
-        return AppException(message, statusCode: dioError.response?.statusCode);
+        final data = dioError.response?.data;
+        final serverMsg = (data is Map &&
+                data['message'] is String &&
+                (data['message'] as String).trim().isNotEmpty)
+            ? (data['message'] as String).trim()
+            : null;
+        return AppException(
+          serverMsg ?? _statusMessage(dioError.response?.statusCode),
+          statusCode: dioError.response?.statusCode,
+        );
       case DioExceptionType.cancel:
-        return AppException('Request cancelled');
+        return AppException('Request cancelled.');
       case DioExceptionType.connectionError:
-        return AppException('Connection error');
+        return AppException('Network error. Please check your internet connection.');
       case DioExceptionType.unknown:
-        return AppException('Unknown error');
       default:
-        return AppException('Something went wrong');
+        // Often a network issue surfaced as "unknown".
+        return AppException('Couldn’t reach the server. Please check your connection and try again.');
+    }
+  }
+
+  static String _statusMessage(int? code) {
+    switch (code) {
+      case 400:
+        return 'The request was invalid. Please check the details and try again.';
+      case 401:
+        return 'Your session has expired. Please log in again.';
+      case 403:
+        return 'You don’t have permission to do this.';
+      case 404:
+        return 'The requested item was not found.';
+      case 409:
+        return 'This conflicts with existing data.';
+      case 500:
+      case 502:
+      case 503:
+        return 'The server had a problem. Please try again shortly.';
+      default:
+        return 'Something went wrong. Please try again.';
     }
   }
 }

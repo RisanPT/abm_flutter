@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
@@ -85,7 +86,7 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
       setState(() => _isLoadingStudents = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load students: $e')),
+          SnackBar(content: Text('Failed to load students. ${friendlyErrorMessage(e)}')),
         );
       }
     }
@@ -170,7 +171,7 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit: $e')),
+          SnackBar(content: Text('Failed to submit. ${friendlyErrorMessage(e)}')),
         );
       }
     } finally {

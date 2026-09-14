@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/router/route_names.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
@@ -155,7 +156,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
         }
       }
     }
@@ -244,7 +245,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error: $err')),
+        error: (err, _) => Center(child: Text(friendlyErrorMessage(err))),
       ),
     );
   }
@@ -270,7 +271,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
         );
       },
       loading: () => const SliverFillRemaining(child: Center(child: CircularProgressIndicator())),
-      error: (err, _) => SliverFillRemaining(child: Center(child: Text('Error: $err'))),
+      error: (err, _) => SliverFillRemaining(child: Center(child: Text(friendlyErrorMessage(err)))),
     );
   }
 }
