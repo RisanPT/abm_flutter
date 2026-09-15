@@ -200,9 +200,11 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
 
     final filtered = data.students.where((s) {
       if (_search.isEmpty) return true;
-      return s.fullName.toLowerCase().contains(_search.toLowerCase()) ||
-          s.classroom.toLowerCase().contains(_search.toLowerCase()) ||
-          s.guardianName.toLowerCase().contains(_search.toLowerCase());
+      final q = _search.toLowerCase();
+      return s.fullName.toLowerCase().contains(q) ||
+          s.classroom.toLowerCase().contains(q) ||
+          s.guardianName.toLowerCase().contains(q) ||
+          s.guardianContact.replaceAll(' ', '').contains(q.replaceAll(' ', ''));
     }).toList();
 
     return Padding(

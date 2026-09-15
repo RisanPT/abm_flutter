@@ -44,6 +44,7 @@ _StudentModel _$StudentModelFromJson(Map<String, dynamic> json) =>
       hasConcession: json['hasConcession'] as bool? ?? false,
       instituteId: json['instituteId'] as String? ?? '664c39f00000000000000001',
       scholarshipAmount: (json['scholarshipAmount'] as num?)?.toDouble(),
+      feeDiscount: (json['feeDiscount'] as num?)?.toDouble() ?? 0,
     );
 
 Map<String, dynamic> _$StudentModelToJson(_StudentModel instance) =>
@@ -80,6 +81,7 @@ Map<String, dynamic> _$StudentModelToJson(_StudentModel instance) =>
       'hasConcession': instance.hasConcession,
       'instituteId': instance.instituteId,
       'scholarshipAmount': instance.scholarshipAmount,
+      'feeDiscount': instance.feeDiscount,
     };
 
 const _$GenderEnumMap = {Gender.male: 'Male', Gender.female: 'Female'};

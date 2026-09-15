@@ -21,10 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
-import 'package:intl_phone_field/country_picker_dialog.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/phone_number.dart';
 import 'package:intl_phone_field/countries.dart';
@@ -57,6 +54,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   late TextEditingController _motherOccupationController;
   late TextEditingController _numberOfChildrenController;
   late TextEditingController _transportFeeController;
+  late TextEditingController _feeDiscountController;
   late List<TextEditingController> _childrenAgeControllers;
 
   String _fullGuardianContact = '';
@@ -138,6 +136,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     _motherOccupationController = TextEditingController(text: s?.motherOccupation ?? '');
     _numberOfChildrenController = TextEditingController(text: s?.numberOfChildren.toString() ?? '0');
     _transportFeeController = TextEditingController(text: s?.transportationFee.toString() ?? '0');
+    _feeDiscountController = TextEditingController(text: (s?.feeDiscount ?? 0) == 0 ? '' : s!.feeDiscount.toStringAsFixed(0));
     _needsTransportation = s?.needsTransportation ?? false;
     _shift = s?.shift ?? 'Shift-1';
     _admissionDate = s?.admissionDate ?? DateTime.now();
@@ -189,6 +188,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     _motherOccupationController.dispose();
     _numberOfChildrenController.dispose();
     _transportFeeController.dispose();
+    _feeDiscountController.dispose();
     for (var c in _childrenAgeControllers) {
       c.dispose();
     }
@@ -305,6 +305,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
         shift: _shift,
         needsTransportation: _needsTransportation,
         transportationFee: double.tryParse(_transportFeeController.text.trim()) ?? 0,
+        feeDiscount: double.tryParse(_feeDiscountController.text.trim()) ?? 0,
         photoUrl: finalPhotoUrl,
         instituteId: _selectedInstituteId,
         admissionDate: _admissionDate,
@@ -581,6 +582,14 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                             prefixIcon:  LucideIcons.banknote,
                           ),
                         ],
+                        const Gap(16),
+                        ABMTextField(
+                          label: 'Monthly Fee Discount (optional)',
+                          hint: 'e.g. sibling / 3rd-child concession',
+                          controller: _feeDiscountController,
+                          keyboardType: TextInputType.number,
+                          prefixIcon: LucideIcons.badgePercent,
+                        ),
                         if (_isEdit &&
                             const [AppRoles.itAdmin, AppRoles.superAdmin, AppRoles.headMaster]
                                 .contains(ref.watch(authControllerProvider).value?.role)) ...[

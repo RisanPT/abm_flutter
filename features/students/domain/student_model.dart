@@ -45,6 +45,7 @@ abstract class StudentModel with _$StudentModel {
     @Default(false) bool hasConcession,
     @Default('664c39f00000000000000001') String instituteId,
     double? scholarshipAmount,
+    @Default(0) double feeDiscount,
   }) = _StudentModel;
 
   factory StudentModel.fromJson(Map<String, dynamic> json) => _$StudentModelFromJson(json);
