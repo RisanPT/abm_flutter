@@ -1,11 +1,13 @@
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
-import 'package:abm_madrasa/features/notifications/presentation/notification_compose_screen.dart';
+import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -31,22 +33,46 @@ class NotificationsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        backgroundColor: colors.primary,
-        foregroundColor: Colors.white,
-        actions: [
-          feedAsync.maybeWhen(
-            data: (f) => f.unreadCount > 0
-                ? TextButton(
-                    onPressed: () async {
-                      await ref.read(notificationRepositoryProvider).markAllRead();
-                      ref.invalidate(myNotificationsProvider);
-                    },
-                    child: const Text('Mark all read', style: TextStyle(color: Colors.white)),
-                  )
-                : const SizedBox.shrink(),
-            orElse: () => const SizedBox.shrink(),
+      body: Column(
+        children: [
+          ABMPageHeader(
+            title: 'Notifications',
+            subtitle: 'Your notices, circulars and reminders.',
+            actions: [
+              feedAsync.maybeWhen(
+                data: (f) => f.unreadCount > 0
+                    ? TextButton.icon(
+                        onPressed: () async {
+                          await ref.read(notificationRepositoryProvider).markAllRead();
+                          ref.invalidate(myNotificationsProvider);
+                        },
+                        icon: const Icon(LucideIcons.checkCheck, size: 16, color: Colors.white),
+                        label: const Text('Mark all read', style: TextStyle(color: Colors.white)),
+                      )
+                    : const SizedBox.shrink(),
+                orElse: () => const SizedBox.shrink(),
+              ),
+            ],
+          ),
+          Expanded(
+            child: feedAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => _empty(context, LucideIcons.wifiOff, 'Couldn’t load', 'Please pull to refresh.'),
+              data: (feed) => feed.items.isEmpty
+                  ? _empty(context, LucideIcons.bellOff, 'No notifications', 'You’re all caught up.')
+                  : RefreshIndicator(
+                      color: colors.primary,
+                      onRefresh: () async => ref.invalidate(myNotificationsProvider),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: feed.items.length,
+                        itemBuilder: (_, i) => _NotificationTile(
+                          item: feed.items[i],
+                          onTap: () => _markRead(ref, feed.items[i]),
+                        ),
+                      ),
+                    ),
+            ),
           ),
         ],
       ),
@@ -56,29 +82,9 @@ class NotificationsScreen extends ConsumerWidget {
               foregroundColor: Colors.white,
               icon: const Icon(LucideIcons.plus),
               label: const Text('Compose'),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const NotificationComposeScreen()),
-              ),
+              onPressed: () => context.push(RouteNames.notificationsCompose),
             )
           : null,
-      body: feedAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _empty(context, LucideIcons.wifiOff, 'Couldn’t load', 'Please pull to refresh.'),
-        data: (feed) => feed.items.isEmpty
-            ? _empty(context, LucideIcons.bellOff, 'No notifications', 'You’re all caught up.')
-            : RefreshIndicator(
-                color: colors.primary,
-                onRefresh: () async => ref.invalidate(myNotificationsProvider),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: feed.items.length,
-                  itemBuilder: (_, i) => _NotificationTile(
-                    item: feed.items[i],
-                    onTap: () => _markRead(ref, feed.items[i]),
-                  ),
-                ),
-              ),
-      ),
     );
   }
 

@@ -7,7 +7,6 @@ import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
-import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -460,9 +459,7 @@ class _ShellNotificationBell extends ConsumerWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-        ),
+        onTap: () => context.push(RouteNames.notifications),
         borderRadius: BorderRadius.circular(14),
         child: Stack(
           clipBehavior: Clip.none,

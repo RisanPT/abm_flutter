@@ -1,8 +1,9 @@
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
-import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 /// A bell icon with an unread badge that opens the shared [NotificationsScreen].
@@ -23,9 +24,7 @@ class NotificationBell extends ConsumerWidget {
         IconButton(
           icon: Icon(LucideIcons.bell, color: color, size: size),
           tooltip: 'Notifications',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-          ),
+          onPressed: () => context.push(RouteNames.notifications),
         ),
         if (count > 0)
           Positioned(
