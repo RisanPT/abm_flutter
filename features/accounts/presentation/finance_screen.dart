@@ -125,13 +125,14 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     );
   }
 
-  Future<void> _handlePayment(String studentId, double amount, List<String> items) async {
+  Future<void> _handlePayment(String studentId, double amount, List<String> items, {String? monthLabel}) async {
     setState(() => _processingPayment = true);
     try {
       final receipt = await ref.read(accountRepositoryProvider).processPayment(
             studentId: studentId,
             amount: amount,
             items: items,
+            monthLabel: monthLabel,
           );
       ref.invalidate(accountSummariesProvider);
       ref.invalidate(studentAccountDetailsProvider(studentId));
@@ -204,7 +205,7 @@ class _MobileLayout extends StatelessWidget {
   final String? selectedStudentId;
   final bool processingPayment;
   final void Function(String id) onSelectStudent;
-  final Future<void> Function(String studentId, double amount, List<String> items) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel}) onProcessPayment;
   final TextEditingController searchController;
   final String query;
   final void Function(String) onQueryChanged;
@@ -546,7 +547,7 @@ class _AccountDetailsPanel extends ConsumerStatefulWidget {
 
   final String studentId;
   final bool processingPayment;
-  final Future<void> Function(String studentId, double amount, List<String> items) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel}) onProcessPayment;
   final VoidCallback onBack;
 
   @override
@@ -754,7 +755,7 @@ class _FeeBreakdownCard extends ConsumerStatefulWidget {
   final StudentAccountDetails details;
   final TextEditingController amountController;
   final bool processingPayment;
-  final Future<void> Function(String studentId, double amount, List<String> items) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel}) onProcessPayment;
 
   @override
   ConsumerState<_FeeBreakdownCard> createState() => _FeeBreakdownCardState();
@@ -763,6 +764,20 @@ class _FeeBreakdownCard extends ConsumerStatefulWidget {
 class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
   // Which fee items the office admin is collecting in this payment.
   late final Set<String> _selected = widget.details.lineItems.map((e) => e.title).toSet();
+
+  // The month being collected for — current by default, but the office can pick
+  // an advance (future) or backlog (past) month.
+  late String _payMonth = widget.details.monthLabel;
+
+  List<String> get _monthOptions {
+    final now = DateTime.now();
+    final labels = <String>{widget.details.monthLabel};
+    for (int i = -6; i <= 3; i++) {
+      labels.add(DateFormat('MMMM yyyy').format(DateTime(now.year, now.month + i, 1)));
+    }
+    return labels.toList()
+      ..sort((a, b) => DateFormat('MMMM yyyy').parse(a).compareTo(DateFormat('MMMM yyyy').parse(b)));
+  }
 
   double _selectedTotal() => widget.details.lineItems
       .where((i) => _selected.contains(i.title))
@@ -850,6 +865,41 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
               ],
             ),
           ),
+
+          // Fee month selector — collect for the current month, or take an
+          // advance / backlog payment for another month.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Row(
+              children: [
+                Icon(LucideIcons.calendar, size: 16, color: colors.textSecondary),
+                const Gap(8),
+                Text('Fee month', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                const Gap(12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _monthOptions.contains(_payMonth) ? _payMonth : details.monthLabel,
+                    isDense: true,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    items: _monthOptions.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                    onChanged: isPaid ? null : (v) => setState(() => _payMonth = v ?? details.monthLabel),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_payMonth != details.monthLabel)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Text(
+                'Collecting for $_payMonth (${DateFormat('MMMM yyyy').parse(_payMonth).isAfter(DateTime.now()) ? 'advance' : 'backlog'}).',
+                style: typography.bodySmall.copyWith(color: colors.primary),
+              ),
+            ),
 
           // Line items
           Padding(
@@ -1063,7 +1113,8 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                                   return;
                                 }
                                 await onProcessPayment(
-                                    details.summary.studentId, amount, _selected.toList());
+                                    details.summary.studentId, amount, _selected.toList(),
+                                    monthLabel: _payMonth == details.monthLabel ? null : _payMonth);
                               },
                         borderRadius: BorderRadius.circular(16),
                         child: Row(

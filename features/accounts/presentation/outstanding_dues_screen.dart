@@ -207,6 +207,15 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
           s.guardianContact.replaceAll(' ', '').contains(q.replaceAll(' ', ''));
     }).toList();
 
+    // Group children by their parent's contact so a parent with 2+ enrolled
+    // children can get one consolidated invoice.
+    final families = <String, List<_DueStudent>>{};
+    for (final s in data.students) {
+      final key = s.guardianContact.replaceAll(' ', '');
+      if (key.isNotEmpty) (families[key] ??= []).add(s);
+    }
+    List<_DueStudent> familyOf(_DueStudent s) => families[s.guardianContact.replaceAll(' ', '')] ?? [s];
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -280,10 +289,14 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
                   )
                 : ListView.builder(
                     itemCount: filtered.length,
-                    itemBuilder: (context, index) => _DueCard(
-                      student: filtered[index],
-                      onTap: () => context.push(RouteNames.accounts),
-                    ),
+                    itemBuilder: (context, index) {
+                      final fam = familyOf(filtered[index]);
+                      return _DueCard(
+                        student: filtered[index],
+                        onTap: () => context.push(RouteNames.accounts),
+                        onFamilyInvoice: fam.length >= 2 ? () => _familyInvoice(fam) : null,
+                      );
+                    },
                   ),
           ),
         ],
@@ -318,6 +331,66 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
       ),
     );
     await Printing.layoutPdf(onLayout: (_) => pdf.save());
+  }
+
+  /// One consolidated invoice for a parent with several enrolled children —
+  /// each child's dues listed, with a family grand total.
+  Future<void> _familyInvoice(List<_DueStudent> family) async {
+    final parent = family.first;
+    final grandTotal = family.fold<double>(0, (s, c) => s + c.balance);
+    final pdf = pw.Document();
+    pdf.addPage(pw.Page(
+      pageFormat: PdfPageFormat.a5,
+      margin: const pw.EdgeInsets.all(28),
+      build: (ctx) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Center(
+            child: pw.Column(children: [
+              pw.Text('ANAS BIN MALIK MADRASA', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+              pw.SizedBox(height: 4),
+              pw.Text('FAMILY FEE INVOICE', style: pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
+            ]),
+          ),
+          pw.SizedBox(height: 14),
+          pw.Divider(),
+          pw.SizedBox(height: 8),
+          pw.Text('Guardian: ${parent.guardianName}', style: const pw.TextStyle(fontSize: 11)),
+          if (parent.guardianContact.isNotEmpty)
+            pw.Text('Contact: ${parent.guardianContact}', style: const pw.TextStyle(fontSize: 11)),
+          pw.Text('Children enrolled: ${family.length}', style: const pw.TextStyle(fontSize: 11)),
+          pw.SizedBox(height: 10),
+          pw.TableHelper.fromTextArray(
+            headers: ['Student', 'Class', 'Month', 'Balance (SAR)'],
+            cellStyle: const pw.TextStyle(fontSize: 10),
+            headerStyle: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            cellAlignments: {3: pw.Alignment.centerRight},
+            data: family
+                .map((c) => [c.fullName, c.classroom, c.monthLabel, c.balance.toStringAsFixed(0)])
+                .toList(),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Divider(thickness: 1.2),
+          pw.SizedBox(height: 6),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Grand Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
+              pw.Text('SAR ${grandTotal.toStringAsFixed(0)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+          pw.SizedBox(height: 16),
+          pw.Center(
+            child: pw.Text('Please clear the total at the office. JazakAllah khair.',
+                style: pw.TextStyle(fontStyle: pw.FontStyle.italic, color: PdfColors.grey600, fontSize: 10)),
+          ),
+        ],
+      ),
+    ));
+    await Printing.layoutPdf(
+      onLayout: (_) => pdf.save(),
+      name: 'FamilyInvoice_${parent.guardianName.replaceAll(RegExp(r'[^A-Za-z0-9]'), '')}.pdf',
+    );
   }
 
   Future<void> _pickMonth() async {
@@ -411,9 +484,10 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _DueCard extends StatelessWidget {
-  const _DueCard({required this.student, required this.onTap});
+  const _DueCard({required this.student, required this.onTap, this.onFamilyInvoice});
   final _DueStudent student;
   final VoidCallback onTap;
+  final VoidCallback? onFamilyInvoice;
 
   @override
   Widget build(BuildContext context) {
@@ -475,6 +549,25 @@ class _DueCard extends StatelessWidget {
                   child: Text(student.status,
                       style: TextStyle(color: statusColor, fontWeight: FontWeight.w700, fontSize: 11)),
                 ),
+                if (onFamilyInvoice != null) ...[
+                  const Gap(6),
+                  InkWell(
+                    onTap: onFamilyInvoice,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.users, size: 13, color: colors.primary),
+                          const Gap(4),
+                          Text('Family invoice',
+                              style: typography.caption.copyWith(color: colors.primary, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
