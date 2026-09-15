@@ -721,10 +721,22 @@ class _FeeTrackingDialogState extends ConsumerState<_FeeTrackingDialog> {
   bool _loading = true, _saving = false;
   String? _error;
 
+  // Automatic sibling / multi-child discount config.
+  bool _siblingEnabled = false;
+  final _siblingFromChildCtrl = TextEditingController(text: '3');
+  final _siblingAmountCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _siblingFromChildCtrl.dispose();
+    _siblingAmountCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -736,6 +748,9 @@ class _FeeTrackingDialogState extends ConsumerState<_FeeTrackingDialog> {
           _vacationPeriods
             ..clear()
             ..addAll(cfg.vacationPeriods);
+          _siblingEnabled = cfg.siblingDiscountEnabled;
+          _siblingFromChildCtrl.text = cfg.siblingDiscountFromChild.toString();
+          _siblingAmountCtrl.text = cfg.siblingDiscountAmount == 0 ? '' : cfg.siblingDiscountAmount.toStringAsFixed(0);
           _loading = false;
         });
       }
@@ -767,6 +782,9 @@ class _FeeTrackingDialogState extends ConsumerState<_FeeTrackingDialog> {
             feesStartMonth: _startMonth,
             waivedMonths: [], // Kept empty as we moved to vacationPeriods
             vacationPeriods: _vacationPeriods,
+            siblingDiscountEnabled: _siblingEnabled,
+            siblingDiscountFromChild: int.tryParse(_siblingFromChildCtrl.text.trim()) ?? 3,
+            siblingDiscountAmount: double.tryParse(_siblingAmountCtrl.text.trim()) ?? 0,
           );
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -835,6 +853,38 @@ class _FeeTrackingDialogState extends ConsumerState<_FeeTrackingDialog> {
                       }
                     },
                   ),
+                  const Gap(20),
+                  Text('Automatic sibling discount', style: context.typography.bodyMediumSemiBold),
+                  const Gap(2),
+                  Text('Auto-reduce tuition for a family\'s Nth child onward. A student\'s manual discount always overrides this.',
+                      style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _siblingEnabled,
+                    activeThumbColor: colors.primary,
+                    title: const Text('Enable sibling discount'),
+                    onChanged: (v) => setState(() => _siblingEnabled = v),
+                  ),
+                  if (_siblingEnabled)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _siblingFromChildCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'From child #', hintText: '3', isDense: true),
+                          ),
+                        ),
+                        const Gap(12),
+                        Expanded(
+                          child: TextField(
+                            controller: _siblingAmountCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Discount (SAR off tuition)', hintText: 'e.g. 35', isDense: true),
+                          ),
+                        ),
+                      ],
+                    ),
                   if (_error != null) ...[
                     const Gap(8),
                     Text(_error!, style: context.typography.bodySmall.copyWith(color: const Color(0xFFDC2626))),

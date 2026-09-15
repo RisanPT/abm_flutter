@@ -585,7 +585,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
                         const Gap(16),
                         ABMTextField(
                           label: 'Monthly Fee Discount (optional)',
-                          hint: 'e.g. sibling / 3rd-child concession',
+                          hint: 'Manual override — beats the auto sibling rule',
                           controller: _feeDiscountController,
                           keyboardType: TextInputType.number,
                           prefixIcon: LucideIcons.badgePercent,

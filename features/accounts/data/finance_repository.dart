@@ -146,12 +146,21 @@ class AccountRepository {
     DateTime? feesStartMonth,
     required List<String> waivedMonths,
     required List<VacationPeriod> vacationPeriods,
+    bool? siblingDiscountEnabled,
+    int? siblingDiscountFromChild,
+    double? siblingDiscountAmount,
   }) async {
     try {
       final r = await _dio.put('/institutes/$instituteId/fee-config', data: {
         'feesStartMonth': feesStartMonth?.toIso8601String(),
         'waivedMonths': waivedMonths,
         'vacationPeriods': vacationPeriods.map((v) => v.toJson()).toList(),
+        if (siblingDiscountEnabled != null)
+          'siblingDiscount': {
+            'enabled': siblingDiscountEnabled,
+            'fromChild': siblingDiscountFromChild ?? 3,
+            'amount': siblingDiscountAmount ?? 0,
+          },
       });
       return InstituteFeeConfig.fromJson(Map<String, dynamic>.from(r.data));
     } on DioException catch (e) {
@@ -181,21 +190,35 @@ class VacationPeriod {
 
 class InstituteFeeConfig {
   const InstituteFeeConfig({
-    this.feesStartMonth, 
+    this.feesStartMonth,
     required this.waivedMonths,
     required this.vacationPeriods,
+    this.siblingDiscountEnabled = false,
+    this.siblingDiscountFromChild = 3,
+    this.siblingDiscountAmount = 0,
   });
   final DateTime? feesStartMonth;
   final List<String> waivedMonths;
   final List<VacationPeriod> vacationPeriods;
+  // Automatic multi-child rule: the Nth+ child in a family gets `amount` off
+  // tuition. A student's manual discount overrides this.
+  final bool siblingDiscountEnabled;
+  final int siblingDiscountFromChild;
+  final double siblingDiscountAmount;
 
-  factory InstituteFeeConfig.fromJson(Map<String, dynamic> j) => InstituteFeeConfig(
-        feesStartMonth: j['feesStartMonth'] != null ? DateTime.tryParse(j['feesStartMonth'].toString()) : null,
-        waivedMonths: ((j['waivedMonths'] as List?) ?? []).map((e) => e.toString()).toList(),
-        vacationPeriods: ((j['vacationPeriods'] as List?) ?? [])
-            .map((e) => VacationPeriod.fromJson(Map<String, dynamic>.from(e)))
-            .toList(),
-      );
+  factory InstituteFeeConfig.fromJson(Map<String, dynamic> j) {
+    final sd = Map<String, dynamic>.from(j['siblingDiscount'] as Map? ?? {});
+    return InstituteFeeConfig(
+      feesStartMonth: j['feesStartMonth'] != null ? DateTime.tryParse(j['feesStartMonth'].toString()) : null,
+      waivedMonths: ((j['waivedMonths'] as List?) ?? []).map((e) => e.toString()).toList(),
+      vacationPeriods: ((j['vacationPeriods'] as List?) ?? [])
+          .map((e) => VacationPeriod.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      siblingDiscountEnabled: sd['enabled'] == true,
+      siblingDiscountFromChild: (sd['fromChild'] as num?)?.toInt() ?? 3,
+      siblingDiscountAmount: (sd['amount'] as num?)?.toDouble() ?? 0,
+    );
+  }
 }
 
 // ── Ledger models ────────────────────────────────────────────────────────────
