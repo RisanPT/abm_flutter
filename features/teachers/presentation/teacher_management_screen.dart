@@ -887,9 +887,9 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
   String _fullPhone = '';
   String _fullWhatsapp = '';
 
-  String _phoneCountryCode = 'IN';
+  String _phoneCountryCode = 'SA';
   String _phoneNationalNumber = '';
-  String _whatsappCountryCode = 'IN';
+  String _whatsappCountryCode = 'SA';
   String _whatsappNationalNumber = '';
 
   DateTime _joinedDate = DateTime.now();
@@ -926,10 +926,10 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
             final phone = PhoneNumber.fromCompleteNumber(completeNumber: fullPhone);
             onParsed(phone.countryISOCode, phone.number);
           } catch (_) {
-            onParsed('IN', fullPhone);
+            onParsed('SA', fullPhone);
           }
         } else {
-          onParsed('IN', fullPhone);
+          onParsed('SA', fullPhone);
         }
       }
 

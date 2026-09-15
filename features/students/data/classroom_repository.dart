@@ -56,6 +56,29 @@ class ClassroomRepository {
       throw Exception('Failed to update subjects: $e');
     }
   }
+
+  Future<ClassroomModel> updateClassroom(String id, {String? name, String? description, String? shift}) async {
+    try {
+      final response = await _dio.patch('/classrooms/$id', data: {
+        if (name != null) 'name': name,
+        if (description != null) 'description': description,
+        if (shift != null) 'shift': shift,
+      });
+      return ClassroomModel.fromJson(response.data);
+    } catch (e) {
+      if (e is DioException) rethrow;
+      throw Exception('Failed to update classroom: $e');
+    }
+  }
+
+  Future<void> deleteClassroom(String id) async {
+    try {
+      await _dio.delete('/classrooms/$id');
+    } catch (e) {
+      if (e is DioException) rethrow;
+      throw Exception('Failed to delete classroom: $e');
+    }
+  }
 }
 
 @riverpod

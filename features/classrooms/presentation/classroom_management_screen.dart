@@ -1,6 +1,7 @@
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/utils/class_sort.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
@@ -84,7 +85,7 @@ class ClassroomManagementScreen extends ConsumerWidget {
           Expanded(
             child: classroomsAsync.when(
               data: (classrooms) => studentsAsync.when(
-                data: (students) => _buildGrid(context, classrooms, students),
+                data: (students) => _buildGrid(context, ref, classrooms, students, canEditAdmin),
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => _errorView(context, ref, e, 'students'),
               ),
@@ -176,7 +177,9 @@ class ClassroomManagementScreen extends ConsumerWidget {
     return 'Something went wrong. Please try again.';
   }
 
-  Widget _buildGrid(BuildContext context, List classrooms, List students) {
+  Widget _buildGrid(BuildContext context, WidgetRef ref, List<ClassroomModel> classrooms, List<StudentModel> students, bool canEdit) {
+    // Register order: pre-primary (incl. UKG) first, then numbered standards.
+    final sorted = sortByClassName<ClassroomModel>(classrooms, (c) => c.name);
     return GridView.builder(
       padding: const EdgeInsets.all(24),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -185,25 +188,97 @@ class ClassroomManagementScreen extends ConsumerWidget {
         mainAxisSpacing: 24,
         childAspectRatio: 1.4,
       ),
-      itemCount: classrooms.length,
+      itemCount: sorted.length,
       itemBuilder: (context, index) {
-        final classroom = classrooms[index];
+        final classroom = sorted[index];
         final count = students.where((s) => s.classroom == classroom.name).length;
-
 
         return ClassroomCard(
           title: classroom.name,
           studentCount: count,
           shift: classroom.shift,
           onViewStudents: () => context.push(RouteNames.students, extra: classroom.name),
-          onManageSubjects: () => showDialog(
-            context: context,
-            builder: (context) => ClassroomSubjectsDialog(classroom: classroom),
-          ),
+          onEdit: canEdit ? () => _showRenameDialog(context, ref, classroom) : null,
+          onDelete: canEdit ? () => _confirmDelete(context, ref, classroom, count) : null,
+          onManageSubjects: canEdit
+              ? () => showDialog(
+                    context: context,
+                    builder: (context) => ClassroomSubjectsDialog(classroom: classroom),
+                  )
+              : null,
           onManageTimetable: () => context.push(RouteNames.timetable),
         );
       },
     );
+  }
+
+  Future<void> _showRenameDialog(BuildContext context, WidgetRef ref, ClassroomModel classroom) async {
+    final ctrl = TextEditingController(text: classroom.name);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Rename Class'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Class Name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(dCtx, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    final newName = ctrl.text.trim();
+    if (ok == true && newName.isNotEmpty && newName != classroom.name) {
+      try {
+        await ref.read(classroomControllerProvider.notifier).renameClassroom(classroom.id, newName);
+        ref.invalidate(studentControllerProvider); // enrolled students were re-pointed
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Class renamed.')));
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyError(e))));
+        }
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, ClassroomModel classroom, int count) async {
+    if (count > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Cannot delete "${classroom.name}" — $count student(s) are still enrolled. Move or remove them first.'),
+      ));
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Delete Class'),
+        content: Text('Delete "${classroom.name}"? This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: context.colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      try {
+        await ref.read(classroomControllerProvider.notifier).deleteClassroom(classroom.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Class deleted.')));
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyError(e))));
+        }
+      }
+    }
   }
 
   Future<void> _showAddClassDialog(BuildContext context, WidgetRef ref) async {

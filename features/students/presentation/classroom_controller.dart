@@ -46,4 +46,21 @@ class ClassroomController extends _$ClassroomController {
     final result = await AsyncValue.guard(() => repo.getClassrooms(instituteId: instituteId));
     if (ref.mounted) state = result;
   }
+
+  Future<void> renameClassroom(String id, String name) async {
+    final repo = ref.read(classroomRepositoryProvider);
+    final instituteId = ref.read(selectedInstituteProvider).id;
+    // Let failures (e.g. a duplicate name) surface to the caller for a snackbar.
+    await repo.updateClassroom(id, name: name);
+    final result = await AsyncValue.guard(() => repo.getClassrooms(instituteId: instituteId));
+    if (ref.mounted) state = result;
+  }
+
+  Future<void> deleteClassroom(String id) async {
+    final repo = ref.read(classroomRepositoryProvider);
+    final instituteId = ref.read(selectedInstituteProvider).id;
+    await repo.deleteClassroom(id);
+    final result = await AsyncValue.guard(() => repo.getClassrooms(instituteId: instituteId));
+    if (ref.mounted) state = result;
+  }
 }

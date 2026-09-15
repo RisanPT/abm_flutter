@@ -23,11 +23,20 @@ class _ClassroomSubjectsDialogState extends ConsumerState<ClassroomSubjectsDialo
   @override
   void initState() {
     super.initState();
-    final currentSubjects = widget.classroom.subjects;
-    for (int i = 0; i < 7; i++) {
-      final text = i < currentSubjects.length ? currentSubjects[i] : '';
-      _controllers.add(TextEditingController(text: text));
+    for (final s in widget.classroom.subjects) {
+      _controllers.add(TextEditingController(text: s));
     }
+    // Always show at least one empty row to type into.
+    if (_controllers.isEmpty) _controllers.add(TextEditingController());
+  }
+
+  void _addRow() => setState(() => _controllers.add(TextEditingController()));
+
+  void _removeRow(int index) {
+    setState(() {
+      _controllers.removeAt(index).dispose();
+      if (_controllers.isEmpty) _controllers.add(TextEditingController());
+    });
   }
 
   @override
@@ -104,24 +113,44 @@ class _ClassroomSubjectsDialogState extends ConsumerState<ClassroomSubjectsDialo
               ),
               const Gap(24),
               const Text(
-                'Enter up to 7 subject names for this classroom. These will be available in the timetable grid.',
+                'Add as many subjects as the class needs. These will be available in the timetable grid.',
                 style: TextStyle(fontSize: 13, color: Colors.grey),
               ),
               const Gap(20),
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: 7,
+                  itemCount: _controllers.length,
                   itemBuilder: (context, index) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: ABMTextField(
-                        label: 'Subject ${index + 1}',
-                        hint: 'e.g. Arabic, Fiqh...',
-                        controller: _controllers[index],
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ABMTextField(
+                              label: 'Subject ${index + 1}',
+                              hint: 'e.g. Arabic, Fiqh...',
+                              controller: _controllers[index],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Remove',
+                            onPressed: _controllers.length == 1 ? null : () => _removeRow(index),
+                            icon: Icon(LucideIcons.trash2, size: 20, color: context.colors.textSecondary),
+                          ),
+                        ],
                       ),
                     );
                   },
+                ),
+              ),
+              const Gap(8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _addRow,
+                  icon: const Icon(LucideIcons.plus, size: 16),
+                  label: const Text('Add subject'),
                 ),
               ),
               const Gap(24),

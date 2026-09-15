@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
+import 'package:abm_madrasa/core/utils/class_sort.dart';
 import 'package:abm_madrasa/features/attendance/data/attendance_repository.dart';
 import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
@@ -168,7 +169,7 @@ final attendanceClassroomsProvider = FutureProvider<List<String>>((ref) async {
   final instituteId = ref.watch(selectedInstituteProvider).id;
   final classroomsModels =
       await ref.read(classroomRepositoryProvider).getClassrooms(instituteId: instituteId);
-  final classrooms = classroomsModels.map((c) => c.name).toSet().toList()..sort();
+  final classrooms = sortClassNames(classroomsModels.map((c) => c.name).toSet());
   return classrooms;
 });
 

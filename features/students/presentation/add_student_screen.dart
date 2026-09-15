@@ -63,11 +63,11 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
   String _fullFatherWhatsapp = '';
   String _fullMotherWhatsapp = '';
 
-  String _guardianCountryCode = 'IN';
+  String _guardianCountryCode = 'SA';
   String _guardianNationalNumber = '';
-  String _fatherWhatsappCountryCode = 'IN';
+  String _fatherWhatsappCountryCode = 'SA';
   String _fatherWhatsappNationalNumber = '';
-  String _motherWhatsappCountryCode = 'IN';
+  String _motherWhatsappCountryCode = 'SA';
   String _motherWhatsappNationalNumber = '';
 
   // State
@@ -111,7 +111,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           final phone = PhoneNumber.fromCompleteNumber(completeNumber: fullPhone);
           onParsed(phone.countryISOCode, phone.number);
         } catch (_) {
-          onParsed('IN', fullPhone);
+          onParsed('SA', fullPhone);
         }
       } else {
         onParsed('IN', fullPhone);

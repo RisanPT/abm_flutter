@@ -1,6 +1,5 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
-import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/utils/institute_time.dart';
@@ -124,23 +123,9 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
             );
           }
 
-          final year = _selectedDate.year;
-          final month = _selectedDate.month;
-          final academicYear = _academicYear;
-          final instituteId = ref.watch(selectedInstituteProvider).id;
-
-          // Classrooms that have a timetable entry on the selected date
-          final scheduledClassroomsAsync = ref.watch(
-            scheduledClassroomsForDateProvider((
-              date: _selectedDate,
-              shift: _selectedShift,
-              academicYear: academicYear,
-              year: year,
-              month: month,
-              instituteId: instituteId,
-            )),
-          );
-          final scheduledClassrooms = scheduledClassroomsAsync.asData?.value ?? classrooms;
+          // Attendance is available for EVERY class (not just those with a
+          // timetable entry that day), so newly-created classes work too.
+          final scheduledClassrooms = classrooms;
 
           if (scheduledClassrooms.isNotEmpty && (_selectedClassroom == null || !scheduledClassrooms.contains(_selectedClassroom))) {
             _selectedClassroom = scheduledClassrooms.first;
