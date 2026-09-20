@@ -62,6 +62,11 @@ class _StudentProfileBody extends ConsumerWidget {
                   onPressed: () => context.push('${RouteNames.editStudent}/${student.id}', extra: student),
                 ),
                 IconButton(
+                  tooltip: student.isActive ? 'Deactivate' : 'Reactivate',
+                  icon: Icon(student.isActive ? LucideIcons.userX : LucideIcons.userCheck, color: Colors.white),
+                  onPressed: () => _confirmToggleActive(context, ref),
+                ),
+                IconButton(
                   icon: const Icon(LucideIcons.trash2, color: Colors.white),
                   onPressed: () => _confirmDelete(context, ref),
                 ),
@@ -193,6 +198,41 @@ class _StudentProfileBody extends ConsumerWidget {
     return context.isMobile
         ? Column(children: [btns[0], const Gap(12), btns[1]])
         : Row(children: [Expanded(child: btns[0]), const Gap(12), Expanded(child: btns[1])]);
+  }
+
+  Future<void> _confirmToggleActive(BuildContext context, WidgetRef ref) async {
+    final deactivating = student.isActive;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(deactivating ? 'Deactivate Student' : 'Reactivate Student'),
+        content: Text(deactivating
+            ? '${student.fullName} will be marked inactive and hidden from active lists, counts and attendance. You can reactivate anytime.'
+            : 'Reactivate ${student.fullName} and include them in active lists again?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: deactivating ? Colors.orange.shade700 : Colors.green),
+            child: Text(deactivating ? 'Deactivate' : 'Reactivate', style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(studentControllerProvider.notifier).setActive(student.id, !student.isActive);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(deactivating ? 'Student deactivated' : 'Student reactivated')),
+          );
+          context.go(RouteNames.students);
+        }
+      } catch (e) {
+        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+      }
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {

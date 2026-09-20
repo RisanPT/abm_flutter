@@ -14,29 +14,60 @@ class StudentController extends _$StudentController {
     return _fetchStudents();
   }
 
-  Future<List<StudentModel>> _fetchStudents({String? query, String? classroom, String? shift}) {
+  // Persisted filters so status + class + shift + search combine correctly.
+  String? _query;
+  String? _classroom;
+  String? _shift;
+  String _status = 'active'; // 'active' (default) | 'inactive' | 'all'
+
+  String get status => _status;
+
+  Future<List<StudentModel>> _fetchStudents() {
     final instituteId = ref.read(selectedInstituteProvider).id;
-    return ref.read(studentRepositoryProvider).getStudents(instituteId: instituteId, query: query, classroom: classroom, shift: shift);
+    return ref.read(studentRepositoryProvider).getStudents(
+          instituteId: instituteId,
+          query: _query,
+          classroom: _classroom,
+          shift: _shift,
+          status: _status,
+        );
+  }
+
+  Future<void> _apply() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(_fetchStudents);
   }
 
   Future<void> search(String query) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _fetchStudents(query: query));
+    _query = query.trim().isEmpty ? null : query.trim();
+    await _apply();
   }
 
   Future<void> filter(String? classroom, String? shift) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _fetchStudents(classroom: classroom, shift: shift));
+    _classroom = (classroom == null || classroom == 'All') ? null : classroom;
+    _shift = (shift == null || shift == 'All') ? null : shift;
+    await _apply();
   }
 
   Future<void> filterByClassroom(String? classroom) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _fetchStudents(classroom: classroom));
+    _classroom = (classroom == null || classroom == 'All') ? null : classroom;
+    await _apply();
+  }
+
+  Future<void> setStatus(String status) async {
+    _status = status;
+    await _apply();
+  }
+
+  /// Deactivate / reactivate, then refresh the current view.
+  Future<void> setActive(String id, bool active) async {
+    await ref.read(studentRepositoryProvider).setStudentActive(id, active);
+    ref.invalidate(studentDetailsProvider(id));
+    await _apply();
   }
 
   Future<void> refresh() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _fetchStudents());
+    await _apply();
   }
 
   Future<void> addStudent(StudentModel student) async {

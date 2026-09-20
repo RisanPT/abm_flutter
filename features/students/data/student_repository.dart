@@ -26,19 +26,30 @@ class StudentRepository {
     return data;
   }
 
-  Future<List<StudentModel>> getStudents({String? query, String? classroom, String? instituteId, String? shift}) async {
+  Future<List<StudentModel>> getStudents({String? query, String? classroom, String? instituteId, String? shift, String? status}) async {
     try {
       final response = await _dio.get('/students', queryParameters: {
         'search': query,
         'grade': classroom,
         'instituteId': instituteId,
         'shift': shift,
+        'status': status,
       }..removeWhere((_ , v) => v == null));
 
       final List<dynamic> data = response.data;
       return data.map((json) => StudentModel.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to fetch students: $e');
+    }
+  }
+
+  /// Deactivate / reactivate a student (soft status). Keeps the record; inactive
+  /// students are excluded from active rosters, counts and attendance.
+  Future<void> setStudentActive(String id, bool active) async {
+    try {
+      await _dio.patch('/students/$id', data: {'isActive': active});
+    } catch (e) {
+      throw Exception('Failed to update student status: $e');
     }
   }
 

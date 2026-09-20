@@ -27,6 +27,7 @@ class StudentListScreen extends ConsumerStatefulWidget {
 class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   String? selectedClass;
   String? selectedShift;
+  String selectedStatus = 'active'; // 'active' | 'inactive' | 'all'
 
   @override
   void initState() {
@@ -223,6 +224,38 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                           onSelected: (val) {
                             setState(() => selectedShift = s == 'All' ? null : s);
                             ref.read(studentControllerProvider.notifier).filter(selectedClass, selectedShift);
+                          },
+                          backgroundColor: colors.white,
+                          selectedColor: colors.primary.withValues(alpha: 0.1),
+                          checkmarkColor: colors.primary,
+                          labelStyle: TextStyle(
+                            color: isSelected ? const Color(0xFF163D32) : const Color(0xFF3B4C45),
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: isSelected ? colors.primary : colors.border),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const Gap(12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: const [('active', 'Active'), ('inactive', 'Inactive'), ('all', 'All')].map((opt) {
+                      final isSelected = selectedStatus == opt.$1;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: FilterChip(
+                          label: Text(opt.$2),
+                          selected: isSelected,
+                          onSelected: (val) {
+                            setState(() => selectedStatus = opt.$1);
+                            ref.read(studentControllerProvider.notifier).setStatus(opt.$1);
                           },
                           backgroundColor: colors.white,
                           selectedColor: colors.primary.withValues(alpha: 0.1),
