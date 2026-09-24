@@ -112,7 +112,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
           onParsed('SA', fullPhone);
         }
       } else {
-        onParsed('IN', fullPhone);
+        onParsed('SA', fullPhone);
       }
     }
 
