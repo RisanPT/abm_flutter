@@ -62,6 +62,11 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
     final user = ref.watch(authControllerProvider).value;
     final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
     final canManageTeachers = user?.role.canAccess(AppModule.teachers, allowedModules) ?? false;
+    // Teachers are date-locked to today; admins / head master may backfill.
+    final canBackfill = user?.role.canBackfillAttendance ?? false;
+    if (!canBackfill && _selectedDate != instituteToday()) {
+      _selectedDate = instituteToday();
+    }
     final classroomsAsync = ref.watch(attendanceClassroomsProvider);
 
     return Scaffold(
@@ -90,6 +95,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                   onSearchChanged: (value) => setState(() => _searchQuery = value),
                   onMarkAllPresent: () {},
                   onSelectDate: () {},
+                  dateLocked: !canBackfill,
                 ),
                 Expanded(
                   child: Center(
@@ -180,6 +186,14 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                 },
                 onSelectDate: () async {
                   final today = instituteToday();
+                  // Teachers are locked to today — they cannot view or mark any
+                  // other day. Only admins / head master may backfill.
+                  if (!canBackfill) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Attendance can be marked only for today.')),
+                    );
+                    return;
+                  }
                   // Free calendar: pick any day up to today. Days without a
                   // scheduled class just show the "No class scheduled" state,
                   // so the admin can navigate freely instead of being locked
@@ -195,6 +209,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                     setState(() => _selectedDate = DateTime.utc(picked.year, picked.month, picked.day));
                   }
                 },
+                dateLocked: !canBackfill,
               ),
               Expanded(
                 child: attendanceAsync.when(
@@ -427,6 +442,7 @@ class _AttendanceHeader extends StatelessWidget {
     required this.onSearchChanged,
     required this.onMarkAllPresent,
     required this.onSelectDate,
+    this.dateLocked = false,
   });
 
   final DateTime selectedDate;
@@ -443,6 +459,7 @@ class _AttendanceHeader extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onMarkAllPresent;
   final VoidCallback onSelectDate;
+  final bool dateLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -677,10 +694,10 @@ class _AttendanceHeader extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  const Icon(
-                                    LucideIcons.chevronDown,
+                                  Icon(
+                                    dateLocked ? LucideIcons.lock : LucideIcons.chevronDown,
                                     size: 16,
-                                    color: Color(0xFF163D32),
+                                    color: const Color(0xFF163D32),
                                   ),
                                 ],
                               ),

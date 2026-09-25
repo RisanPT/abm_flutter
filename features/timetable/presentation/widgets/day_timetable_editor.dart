@@ -264,6 +264,7 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
     final weekday = DateFormat('EEEE').format(widget.date);
     bool sameWeekday = true;
     bool publish = true;
+    bool overwrite = false;
     final go = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -276,7 +277,7 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Copy $_classroom’s timetable from this day to future class days for the rest of the term. Days that already have a timetable are kept.',
+                  'Copy $_classroom’s timetable from this day to future class days for the rest of the term. By default days that already have a timetable are kept — turn on “Update existing days” to push your changes onto them too.',
                   style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary),
                 ),
                 const Gap(4),
@@ -298,6 +299,14 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
                   value: publish,
                   onChanged: (v) => setLocal(() => publish = v),
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Update existing days'),
+                  subtitle: const Text('Off = only fill empty days'),
+                  value: overwrite,
+                  onChanged: (v) => setLocal(() => overwrite = v),
+                ),
               ],
             ),
           ),
@@ -317,11 +326,13 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
       final r = await ref.read(plannerRepositoryProvider).copyDayForward(
             date: widget.date, instituteId: widget.instituteId, academicYear: widget.academicYear,
             shift: widget.shift, classroomName: _classroom, sameWeekday: sameWeekday, publish: publish,
+            overwrite: overwrite,
           );
       if (!mounted) return;
       widget.onChanged();
+      final updatedNote = r.daysUpdated > 0 ? ' · ${r.daysUpdated} updated' : '';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Copied to ${r.daysFilled} day(s) · ${r.classesWritten} classes'),
+        content: Text('Copied to ${r.daysFilled} new day(s)$updatedNote · ${r.classesWritten} classes'),
         backgroundColor: const Color(0xFF16A34A),
       ));
     } catch (e) {

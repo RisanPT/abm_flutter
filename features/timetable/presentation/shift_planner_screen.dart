@@ -575,7 +575,7 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () async {
-                          final d = await showDatePicker(context: context, initialDate: fromDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                          final d = await showDatePicker(context: context, initialDate: fromDate, firstDate: instituteToday(), lastDate: DateTime(2100));
                           if (d != null) setLocal(() { fromDate = _utc(d); if (toDate.isBefore(fromDate)) toDate = fromDate; });
                         },
                         child: Text('From: ${DateFormat('dd MMM').format(fromDate)}'),

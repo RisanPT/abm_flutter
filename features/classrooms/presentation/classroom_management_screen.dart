@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/utils/class_sort.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -333,7 +334,7 @@ class ClassroomManagementScreen extends ConsumerWidget {
         await ref.read(classroomControllerProvider.notifier).addClassroom(nameController.text.trim(), shift: selectedShift);
       } catch (e) {
         if (context.mounted) {
-          String errMsg = e.toString();
+          String errMsg = friendlyErrorMessage(e);
           if (e is DioException) {
             final responseData = e.response?.data;
             if (responseData is Map && responseData['message'] != null) {

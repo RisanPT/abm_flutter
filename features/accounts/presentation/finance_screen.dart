@@ -1945,7 +1945,7 @@ class _LedgerCard extends ConsumerWidget {
       padding: const EdgeInsets.all(20),
       child: async.when(
         loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
-        error: (e, _) => Text('Ledger error: $e', style: typography.bodySmall),
+        error: (e, _) => Text(friendlyErrorMessage(e), style: typography.bodySmall),
         data: (ledger) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -231,6 +231,10 @@ extension RoleStringExtension on String {
   bool get canManageTimetable =>
       this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster;
   bool canEditTimetable(Set<String> allowedModules) => canManageTimetable;
+  // Attendance date scope: admins / head master may backfill past days; a plain
+  // teacher can only mark attendance for TODAY (mirrors the server date-lock).
+  bool get canBackfillAttendance =>
+      this == AppRoles.superAdmin || this == AppRoles.itAdmin || this == AppRoles.headMaster;
   bool canEditAccounts(Set<String> allowedModules) => canAccess(AppModule.accounts, allowedModules);
   bool canEditFinance(Set<String> allowedModules) => canAccess(AppModule.finance, allowedModules);
 

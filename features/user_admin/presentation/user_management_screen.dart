@@ -48,7 +48,7 @@ class UserManagementScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(error.toString(), style: TextStyle(color: colors.red))),
+        error: (error, _) => Center(child: Text(friendlyErrorMessage(error), style: TextStyle(color: colors.red))),
       ),
     );
   }

@@ -384,7 +384,7 @@ class PlannerRepository {
   /// Replicate a day's timetable forward to future class days (fills the term).
   /// Returns (daysFilled, classesWritten). By default same-weekday only, published,
   /// and skips days that already have a timetable.
-  Future<({int daysFilled, int classesWritten})> copyDayForward({
+  Future<({int daysFilled, int daysUpdated, int classesWritten})> copyDayForward({
     required DateTime date,
     required String instituteId,
     required String academicYear,
@@ -409,6 +409,7 @@ class PlannerRepository {
       final d = res.data as Map<String, dynamic>;
       return (
         daysFilled: (d['daysFilled'] as num?)?.toInt() ?? 0,
+        daysUpdated: (d['daysUpdated'] as num?)?.toInt() ?? 0,
         classesWritten: (d['classesWritten'] as num?)?.toInt() ?? 0,
       );
     } on DioException catch (e) {

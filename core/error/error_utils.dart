@@ -24,6 +24,22 @@ String friendlyErrorMessage(Object? error) {
   // Strip the wrapper(s) and pull out the meaningful tail.
   s = s.replaceFirst(RegExp(r'^Exception:\s*'), '');
 
+  // Common technical errors → plain language, so nothing raw ever reaches a user.
+  final low = s.toLowerCase();
+  if (low.contains('e11000') || low.contains('duplicate key')) {
+    return 'This record already exists.';
+  }
+  if (low.contains('socketexception') ||
+      low.contains('failed host lookup') ||
+      low.contains('connection refused') ||
+      low.contains('network is unreachable') ||
+      low.contains('connection closed')) {
+    return 'Cannot reach the server. Please check your connection.';
+  }
+  if (low.contains('timeoutexception') || low.contains('timed out')) {
+    return 'The request timed out. Please try again.';
+  }
+
   // If a DioException got stringified into the message, extract its human part
   // ("DioException [bad response]: <message>") and drop the technical prefix.
   final dioIdx = s.indexOf('DioException');

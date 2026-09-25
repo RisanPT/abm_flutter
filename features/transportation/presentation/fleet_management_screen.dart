@@ -148,7 +148,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
                 if (ctx.mounted) Navigator.pop(ctx);
               } catch (e) {
                 if (ctx.mounted) {
-                  String errMsg = e.toString();
+                  String errMsg = friendlyErrorMessage(e);
                   if (e is DioException) {
                     final responseData = e.response?.data;
                     if (responseData is Map && responseData['message'] != null) {
@@ -216,7 +216,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
                 if (ctx.mounted) Navigator.pop(ctx);
               } catch (e) {
                 if (ctx.mounted) {
-                  String errMsg = e.toString();
+                  String errMsg = friendlyErrorMessage(e);
                   if (e is DioException) {
                     final responseData = e.response?.data;
                     if (responseData is Map && responseData['message'] != null) {
@@ -284,7 +284,7 @@ class _FleetManagementScreenState extends ConsumerState<FleetManagementScreen>
                 if (ctx.mounted) Navigator.pop(ctx);
               } catch (e) {
                 if (ctx.mounted) {
-                  String errMsg = e.toString();
+                  String errMsg = friendlyErrorMessage(e);
                   if (e is DioException) {
                     final responseData = e.response?.data;
                     if (responseData is Map && responseData['message'] != null) {
@@ -379,7 +379,7 @@ class _VehiclesList extends ConsumerWidget {
                 if (ctx.mounted) Navigator.pop(ctx);
               } catch (e) {
                 if (ctx.mounted) {
-                  String errMsg = e.toString();
+                  String errMsg = friendlyErrorMessage(e);
                   if (e is DioException) {
                     final responseData = e.response?.data;
                     if (responseData is Map && responseData['message'] != null) {
@@ -437,7 +437,7 @@ class _DriversList extends ConsumerWidget {
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         if (ctx.mounted) {
-                          String errMsg = e.toString();
+                          String errMsg = friendlyErrorMessage(e);
                           if (e is DioException) {
                             final responseData = e.response?.data;
                             if (responseData is Map && responseData['message'] != null) {
@@ -508,7 +508,7 @@ class _RoutesList extends ConsumerWidget {
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         if (ctx.mounted) {
-                          String errMsg = e.toString();
+                          String errMsg = friendlyErrorMessage(e);
                           if (e is DioException) {
                             final responseData = e.response?.data;
                             if (responseData is Map && responseData['message'] != null) {
@@ -586,7 +586,7 @@ class _StudentAssignmentList extends ConsumerWidget {
                                 .removeStudent(studentId);
                           } catch (e) {
                             if (context.mounted) {
-                              String errMsg = e.toString();
+                              String errMsg = friendlyErrorMessage(e);
                               if (e is DioException) {
                                 final responseData = e.response?.data;
                                 if (responseData is Map && responseData['message'] != null) {
@@ -657,7 +657,7 @@ class _AssignDriverButton extends ConsumerWidget {
                   if (ctx.mounted) Navigator.pop(ctx);
                 } catch (e) {
                   if (ctx.mounted) {
-                    String errMsg = e.toString();
+                    String errMsg = friendlyErrorMessage(e);
                     if (e is DioException) {
                       final responseData = e.response?.data;
                       if (responseData is Map && responseData['message'] != null) {
@@ -723,7 +723,7 @@ class _AssignVehicleButton extends ConsumerWidget {
                   if (ctx.mounted) Navigator.pop(ctx);
                 } catch (e) {
                   if (ctx.mounted) {
-                    String errMsg = e.toString();
+                    String errMsg = friendlyErrorMessage(e);
                     if (e is DioException) {
                       final responseData = e.response?.data;
                       if (responseData is Map && responseData['message'] != null) {
@@ -837,7 +837,7 @@ class _AssignStudentDialog extends ConsumerWidget {
                       if (ctx.mounted) Navigator.pop(ctx);
                     } catch (e) {
                       if (ctx.mounted) {
-                        String errMsg = e.toString();
+                        String errMsg = friendlyErrorMessage(e);
                         if (e is DioException) {
                           final responseData = e.response?.data;
                           if (responseData is Map && responseData['message'] != null) {
