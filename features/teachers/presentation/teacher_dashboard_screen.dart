@@ -170,9 +170,17 @@ class _TodayHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final typography = context.typography;
+    bool isAttendancePeriod(TeacherClass c) {
+      final isSaturday = c.date.weekday == DateTime.saturday;
+      return c.shift == 'Shift-2'
+          ? (isSaturday ? (c.period == 1 || c.period == 2) : c.period == 1)
+          : c.period == 1;
+    }
+
     final total = classes.length;
-    final marked = classes.where((c) => c.alreadyMarked).length;
-    final pending = classes.where((c) => c.attendanceEnabled && !c.alreadyMarked).length;
+    final attendanceClasses = classes.where(isAttendancePeriod).toList();
+    final marked = attendanceClasses.where((c) => c.alreadyMarked).length;
+    final pending = attendanceClasses.where((c) => c.attendanceEnabled && !c.alreadyMarked).length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
@@ -265,8 +273,13 @@ class _ClassCard extends StatelessWidget {
     final typography = context.typography;
     final isMobile = context.isMobile;
 
+    final isSaturday = c.date.weekday == DateTime.saturday;
+    final isPeriodAllowed = c.shift == 'Shift-2'
+        ? (isSaturday ? (c.period == 1 || c.period == 2) : c.period == 1)
+        : c.period == 1;
+
     final marked = c.alreadyMarked;
-    final canMark = c.attendanceEnabled && !marked;
+    final canMark = isPeriodAllowed && c.attendanceEnabled && !marked;
     final accent = marked
         ? colors.green
         : canMark
@@ -328,12 +341,15 @@ class _ClassCard extends StatelessWidget {
       ],
     );
 
-    // Status pill shown for marked / locked (the CTA replaces it when actionable).
+    // Status pill: Only shown for periods where attendance is taken (1st period, or 2nd period on Shift-2 Saturdays).
+    // Options for 2nd, 3rd, or subsequent periods are removed from the system.
     Widget? statusPill;
-    if (marked) {
-      statusPill = _StatusPill(color: colors.green, icon: LucideIcons.checkCircle2, label: 'Marked');
-    } else if (!canMark) {
-      statusPill = _StatusPill(color: colors.textSecondary, icon: LucideIcons.lock, label: 'Locked');
+    if (isPeriodAllowed) {
+      if (marked) {
+        statusPill = _StatusPill(color: colors.green, icon: LucideIcons.checkCircle2, label: 'Marked');
+      } else if (!canMark) {
+        statusPill = _StatusPill(color: colors.textSecondary, icon: LucideIcons.lock, label: 'Class Teacher Only');
+      }
     }
 
     final markButton = SizedBox(

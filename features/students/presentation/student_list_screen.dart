@@ -7,6 +7,7 @@ import 'package:abm_madrasa/features/students/presentation/student_controller.da
 import 'package:abm_madrasa/features/students/presentation/widgets/student_list_widgets.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -33,7 +34,6 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
     if (widget.initialClass != null) {
       selectedClass = widget.initialClass;
       Future.microtask(() {
@@ -48,16 +48,16 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     super.dispose();
   }
 
-  // Load the next page when the user nears the bottom of the directory.
-  void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    final pos = _scrollController.position;
-    if (pos.pixels >= pos.maxScrollExtent - 400) {
-      ref.read(studentControllerProvider.notifier).loadMore();
+  // Jump to a page and scroll back to the top of the grid.
+  void _goToPage(int page) {
+    ref.read(studentControllerProvider.notifier).goToPage(page);
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(0,
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     }
   }
 
-  // Export the FULL directory (not just the loaded pages).
+  // Export the FULL directory (not just the current page).
   Future<void> _handleExportPdf() async {
     try {
       final students = await ref.read(allStudentsProvider.future);
@@ -165,6 +165,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           _buildStudentContent(context, studentsAsync),
         ],
       ),
+      bottomNavigationBar: _buildPaginationFooter(context, studentsAsync),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(RouteNames.addStudent),
         backgroundColor: colors.primary,
@@ -213,7 +214,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           final shiftOptions = ['All', 'Shift-1', 'Shift-2'];
           
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
+            padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -248,7 +249,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     }).toList(),
                   ),
                 ),
-                const Gap(12),
+                const Gap(8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -280,7 +281,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     }).toList(),
                   ),
                 ),
-                const Gap(12),
+                const Gap(8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -383,11 +384,11 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               sliver: SliverGrid(
-                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 400,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: context.width > 600 ? 2.5 : 1.8,
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 420,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  mainAxisExtent: 80,
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) => StudentCard(student: students[index]),
@@ -395,14 +396,8 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 ),
               ),
             ),
-            SliverToBoxAdapter(
-              child: _PagingFooter(
-                loading: s.loadingMore,
-                hasMore: s.hasMore,
-                shown: students.length,
-                total: s.total,
-              ),
-            ),
+            // Space so the last row clears the sticky footer + FAB.
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
           ],
         );
       },
@@ -410,47 +405,43 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       error: (err, _) => SliverFillRemaining(child: Center(child: Text(friendlyErrorMessage(err)))),
     );
   }
-}
 
-/// Footer under the directory grid: a spinner while a page is loading, and a
-/// subtle "showing all" line once every student has been fetched.
-class _PagingFooter extends StatelessWidget {
-  const _PagingFooter({
-    required this.loading,
-    required this.hasMore,
-    required this.shown,
-    required this.total,
-  });
-
-  final bool loading;
-  final bool hasMore;
-  final int shown;
-  final int total;
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(24, 20, 24, 96),
-        child: Center(
-          child: SizedBox(
-            height: 26,
-            width: 26,
-            child: CircularProgressIndicator(strokeWidth: 2.6),
-          ),
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 96),
-      child: Center(
-        child: Text(
-          hasMore ? 'Showing $shown of $total' : 'All $total students loaded',
-          style: context.typography.bodySmall.copyWith(
-            color: context.colors.textSecondary,
+  /// Pagination pinned at the bottom of the screen — always visible, so you can
+  /// change page without scrolling to the end of the list.
+  Widget _buildPaginationFooter(BuildContext context, AsyncValue<StudentListState> studentsAsync) {
+    final s = studentsAsync.value;
+    if (s == null || s.items.isEmpty || s.totalPages <= 1) return const SizedBox.shrink();
+    final colors = context.colors;
+    return Material(
+      elevation: 8,
+      color: colors.background,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  child: AbmPaginationBar(
+                    page: s.page,
+                    totalPages: s.totalPages,
+                    total: s.total,
+                    loading: s.pageLoading,
+                    onPage: _goToPage,
+                  ),
+                ),
+              ),
+              const Gap(4),
+              Text('${s.total} students · 25 per page',
+                  style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+            ],
           ),
         ),
       ),
     );
   }
 }
+

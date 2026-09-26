@@ -15,19 +15,32 @@ class NotificationItem {
     required this.read,
     this.eventId,
     this.audienceRole = 'all',
+    this.recipientType = 'broadcast',
     this.grade = '',
     this.postedByName = '',
+    this.postedByRole = '',
+    this.teacherId,
+    this.teacherName = '',
+    this.studentId,
+    this.studentName = '',
     this.imageUrl = '',
+    this.readCount = 0,
     this.createdAt,
   });
 
-  final String id, title, body, type, priority, link, audienceRole, grade, postedByName, imageUrl;
+  final String id, title, body, type, priority, link, audienceRole, recipientType, grade, postedByName, postedByRole, imageUrl;
   final String? eventId;
+  final String? teacherId;
+  final String teacherName;
+  final String? studentId;
+  final String studentName;
   final bool read;
+  final int readCount;
   final DateTime? createdAt;
 
   bool get isImportant => priority == 'Important';
   bool get hasImage => imageUrl.isNotEmpty;
+  bool get isDirectMessage => type == 'DirectMessage' || recipientType == 'teacher' || recipientType == 'student';
 
   factory NotificationItem.fromJson(Map<String, dynamic> j) => NotificationItem(
         id: (j['_id'] ?? j['id'] ?? '').toString(),
@@ -38,10 +51,17 @@ class NotificationItem {
         link: (j['link'] ?? '').toString(),
         eventId: j['eventId']?.toString(),
         audienceRole: (j['audienceRole'] ?? 'all').toString(),
+        recipientType: (j['recipientType'] ?? 'broadcast').toString(),
         grade: (j['grade'] ?? '').toString(),
         postedByName: (j['postedByName'] ?? '').toString(),
+        postedByRole: (j['postedByRole'] ?? '').toString(),
+        teacherId: j['teacherId']?.toString(),
+        teacherName: (j['teacherName'] ?? '').toString(),
+        studentId: j['studentId']?.toString(),
+        studentName: (j['studentName'] ?? '').toString(),
         imageUrl: (j['imageUrl'] ?? '').toString(),
         read: (j['read'] ?? false) as bool,
+        readCount: (j['readCount'] ?? 0) is int ? (j['readCount'] as int) : 0,
         createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
       );
 }
@@ -102,6 +122,23 @@ class NotificationRepository {
       'audienceRole': audienceRole,
       'grade': grade,
       if (link != null && link.isNotEmpty) 'link': link,
+    });
+  }
+
+  /// Head Master / Leadership sends a 1-to-1 direct message to a specific teacher or student.
+  Future<void> sendDirect({
+    required String recipientType, // 'teacher' | 'student'
+    required String recipientId,
+    required String title,
+    String body = '',
+    String priority = 'Normal',
+  }) async {
+    await _dio.post('/notifications/direct', data: {
+      'recipientType': recipientType,
+      'recipientId': recipientId,
+      'title': title,
+      'body': body,
+      'priority': priority,
     });
   }
 

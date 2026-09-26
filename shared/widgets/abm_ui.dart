@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// ABM mobile design kit — the green + gold visual language shared across the
 /// app. Colours come from the theme (primary = green, secondary/tertiary = gold)
@@ -378,6 +379,265 @@ class AbmBottomNav extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Foundation components (redesign kit) ────────────────────────────────────
+
+/// A small circular initials avatar (tinted). Handy as an [AbmListRow] leading.
+Widget abmInitialsAvatar(BuildContext context, String text, {Color? tint, double radius = 18}) {
+  final c = tint ?? context.colors.primary;
+  final letter = text.trim().isEmpty ? '?' : text.trim()[0].toUpperCase();
+  return CircleAvatar(
+    radius: radius,
+    backgroundColor: c.withValues(alpha: 0.14),
+    child: Text(letter, style: context.typography.bodyMediumSemiBold.copyWith(color: c)),
+  );
+}
+
+/// A coloured status pill (green = good, amber = caution, red = bad, grey = idle).
+class AbmStatusPill extends StatelessWidget {
+  const AbmStatusPill({super.key, required this.label, required this.color, this.icon});
+
+  final String label;
+  final Color color;
+  final IconData? icon;
+
+  /// Maps a free-text status to the right semantic colour + label.
+  factory AbmStatusPill.status(BuildContext context, String status, {IconData? icon}) {
+    final s = status.trim().toLowerCase();
+    final colors = context.colors;
+    Color c;
+    if (['present', 'paid', 'active', 'completed', 'approved', 'done'].contains(s)) {
+      c = colors.green;
+    } else if (['late', 'partial', 'partially paid', 'pending', 'due soon'].contains(s)) {
+      c = colors.warning;
+    } else if (['absent', 'due', 'overdue', 'unpaid', 'failed', 'rejected'].contains(s)) {
+      c = colors.red;
+    } else if (['inactive', 'cancelled', 'canceled', 'waived', 'holiday'].contains(s)) {
+      c = colors.textSecondary;
+    } else {
+      c = colors.primary;
+    }
+    final label = status.isEmpty ? '—' : status[0].toUpperCase() + status.substring(1);
+    return AbmStatusPill(label: label, color: c, icon: icon);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[Icon(icon, size: 13, color: color), const Gap(4)],
+          Text(label, style: context.typography.bodySmallSemiBold.copyWith(color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+/// A scannable list row: leading widget + title/subtitle + optional trailing.
+/// Prefer this over chunky cards for dense lists (students, dues, activity…).
+class AbmListRow extends StatelessWidget {
+  const AbmListRow({
+    super.key,
+    required this.leading,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
+
+  final Widget leading;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final t = context.typography;
+    final row = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          leading,
+          const Gap(12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: t.bodyMediumSemiBold.copyWith(color: colors.textPrimary),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (subtitle != null && subtitle!.isNotEmpty) ...[
+                  const Gap(2),
+                  Text(subtitle!, style: t.bodySmall.copyWith(color: colors.textSecondary),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const Gap(10), trailing!],
+        ],
+      ),
+    );
+    if (onTap == null) return row;
+    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(14), child: row);
+  }
+}
+
+/// A friendly empty state: icon + title + message + optional call to action.
+class AbmEmptyState extends StatelessWidget {
+  const AbmEmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: colors.textSecondary.withValues(alpha: 0.5)),
+            const Gap(14),
+            Text(title, textAlign: TextAlign.center,
+                style: context.typography.bodyLargeSemiBold.copyWith(color: colors.textPrimary)),
+            if (message != null && message!.isNotEmpty) ...[
+              const Gap(6),
+              Text(message!, textAlign: TextAlign.center,
+                  style: context.typography.bodyMedium.copyWith(color: colors.textSecondary)),
+            ],
+            if (actionLabel != null && onAction != null) ...[
+              const Gap(16),
+              ElevatedButton.icon(
+                onPressed: onAction,
+                icon: const Icon(LucideIcons.plus, size: 16),
+                label: Text(actionLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A consistent error view with an optional retry.
+class AbmErrorView extends StatelessWidget {
+  const AbmErrorView({super.key, required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.alertCircle, size: 44, color: colors.red.withValues(alpha: 0.8)),
+            const Gap(12),
+            Text(message, textAlign: TextAlign.center,
+                style: context.typography.bodyMedium.copyWith(color: colors.textSecondary)),
+            if (onRetry != null) ...[
+              const Gap(16),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(LucideIcons.refreshCw, size: 16),
+                label: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A page-based pagination control: ‹‹ ‹  Page X of Y  › ››  + a result count.
+/// [page] is 1-based. Buttons disable at the bounds and while [loading].
+class AbmPaginationBar extends StatelessWidget {
+  const AbmPaginationBar({
+    super.key,
+    required this.page,
+    required this.totalPages,
+    required this.total,
+    required this.onPage,
+    this.loading = false,
+  });
+
+  final int page;
+  final int totalPages;
+  final int total;
+  final ValueChanged<int> onPage;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final t = context.typography;
+    final canPrev = page > 1 && !loading;
+    final canNext = page < totalPages && !loading;
+
+    Widget btn(IconData icon, bool enabled, int target, String tip) => IconButton(
+          icon: Icon(icon, size: 20),
+          tooltip: tip,
+          color: colors.primary,
+          disabledColor: colors.textSecondary.withValues(alpha: 0.35),
+          onPressed: enabled ? () => onPage(target) : null,
+          visualDensity: VisualDensity.compact,
+        );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          btn(LucideIcons.chevronsLeft, canPrev, 1, 'First page'),
+          btn(LucideIcons.chevronLeft, canPrev, page - 1, 'Previous'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: loading
+                ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : Text('Page $page of ${totalPages < 1 ? 1 : totalPages}',
+                    style: t.bodyMediumSemiBold.copyWith(color: colors.textPrimary)),
+          ),
+          btn(LucideIcons.chevronRight, canNext, page + 1, 'Next'),
+          btn(LucideIcons.chevronsRight, canNext, totalPages, 'Last page'),
+        ],
       ),
     );
   }

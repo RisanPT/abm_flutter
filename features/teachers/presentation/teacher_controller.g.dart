@@ -9,20 +9,20 @@ part of 'teacher_controller.dart';
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
 /// Server-paginated teacher directory, keyed by the (already-debounced) search
-/// query. Changing the query builds a fresh instance (page 1); `loadMore()`
-/// appends the next page onto the same instance.
+/// query. Changing the query builds a fresh instance (page 1); `goToPage()`
+/// replaces the visible page.
 
 @ProviderFor(TeacherDirectory)
 final teacherDirectoryProvider = TeacherDirectoryFamily._();
 
 /// Server-paginated teacher directory, keyed by the (already-debounced) search
-/// query. Changing the query builds a fresh instance (page 1); `loadMore()`
-/// appends the next page onto the same instance.
+/// query. Changing the query builds a fresh instance (page 1); `goToPage()`
+/// replaces the visible page.
 final class TeacherDirectoryProvider
     extends $AsyncNotifierProvider<TeacherDirectory, TeacherListState> {
   /// Server-paginated teacher directory, keyed by the (already-debounced) search
-  /// query. Changing the query builds a fresh instance (page 1); `loadMore()`
-  /// appends the next page onto the same instance.
+  /// query. Changing the query builds a fresh instance (page 1); `goToPage()`
+  /// replaces the visible page.
   TeacherDirectoryProvider._({
     required TeacherDirectoryFamily super.from,
     required String super.argument,
@@ -59,11 +59,11 @@ final class TeacherDirectoryProvider
   }
 }
 
-String _$teacherDirectoryHash() => r'b08e6f451999cdcb72bb5ef2bf57008af005a6a5';
+String _$teacherDirectoryHash() => r'8e8706dbfd0f6f999db507f5397e675c09b4bc7f';
 
 /// Server-paginated teacher directory, keyed by the (already-debounced) search
-/// query. Changing the query builds a fresh instance (page 1); `loadMore()`
-/// appends the next page onto the same instance.
+/// query. Changing the query builds a fresh instance (page 1); `goToPage()`
+/// replaces the visible page.
 
 final class TeacherDirectoryFamily extends $Family
     with
@@ -84,8 +84,8 @@ final class TeacherDirectoryFamily extends $Family
       );
 
   /// Server-paginated teacher directory, keyed by the (already-debounced) search
-  /// query. Changing the query builds a fresh instance (page 1); `loadMore()`
-  /// appends the next page onto the same instance.
+  /// query. Changing the query builds a fresh instance (page 1); `goToPage()`
+  /// replaces the visible page.
 
   TeacherDirectoryProvider call(String query) =>
       TeacherDirectoryProvider._(argument: query, from: this);
@@ -95,8 +95,8 @@ final class TeacherDirectoryFamily extends $Family
 }
 
 /// Server-paginated teacher directory, keyed by the (already-debounced) search
-/// query. Changing the query builds a fresh instance (page 1); `loadMore()`
-/// appends the next page onto the same instance.
+/// query. Changing the query builds a fresh instance (page 1); `goToPage()`
+/// replaces the visible page.
 
 abstract class _$TeacherDirectory extends $AsyncNotifier<TeacherListState> {
   late final _$args = ref.$arg as String;

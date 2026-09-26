@@ -6,14 +6,16 @@ class PagedResult<T> {
     required this.total,
     required this.page,
     required this.hasMore,
+    this.totalPages = 1,
   });
 
   final List<T> items;
   final int total;
   final int page;
   final bool hasMore;
+  final int totalPages;
 
-  /// Parse the backend's `{ data, total, page, hasMore }` envelope.
+  /// Parse the backend's `{ data, total, page, totalPages, hasMore }` envelope.
   factory PagedResult.fromJson(
     Map<String, dynamic> json,
     T Function(Map<String, dynamic>) fromItem,
@@ -25,9 +27,10 @@ class PagedResult<T> {
       items: list,
       total: (json['total'] as num?)?.toInt() ?? list.length,
       page: (json['page'] as num?)?.toInt() ?? 1,
+      totalPages: (json['totalPages'] as num?)?.toInt() ?? 1,
       hasMore: json['hasMore'] as bool? ?? false,
     );
   }
 
-  static const empty = PagedResult(items: [], total: 0, page: 1, hasMore: false);
+  static const empty = PagedResult(items: [], total: 0, page: 1, hasMore: false, totalPages: 1);
 }

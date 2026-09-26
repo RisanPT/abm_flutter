@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:abm_madrasa/features/accounts/data/finance_repository.dart';
 import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_controller.dart';
+import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -37,58 +41,64 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
   String? _selectedStudentId;
   String _classroomFilter = 'All';
   bool _processingPayment = false;
+  Timer? _searchDebounce;
+  List<AccountSummary> _pageItems = const [];
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  List<String> _getClassrooms(List<AccountSummary> summaries) {
-    final classrooms = summaries.map((s) => s.classroom).toSet().toList()..sort();
-    return ['All', ...classrooms];
+  // Debounced server-side search (resets to page 1 via a fresh provider key).
+  void _onQueryChanged(String v) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) setState(() => _query = v.trim());
+    });
   }
 
-  List<AccountSummary> _applyFilters(List<AccountSummary> summaries) {
-    return summaries.where((s) {
-      final query = _query.trim().toLowerCase();
-      final matchesQuery = query.isEmpty ||
-          s.fullName.toLowerCase().contains(query) ||
-          s.admissionNumber.toLowerCase().contains(query);
-      final matchesClass = _classroomFilter == 'All' || s.classroom == _classroomFilter;
-      return matchesQuery && matchesClass;
-    }).toList();
-  }
+  void _onClassroomChanged(String c) => setState(() => _classroomFilter = c);
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final summariesAsync = ref.watch(accountSummariesProvider);
+    final dirAsync = ref.watch(accountsDirectoryProvider(_query, _classroomFilter));
+    final classOptions = ref.watch(classroomControllerProvider).maybeWhen(
+          data: (classes) => ['All', ...classes.map((c) => c.name)],
+          orElse: () => <String>['All'],
+        );
+    void goToPage(int p) =>
+        ref.read(accountsDirectoryProvider(_query, _classroomFilter).notifier).goToPage(p);
 
     return Scaffold(
       backgroundColor: colors.background,
-      body: summariesAsync.when(
-        data: (summaries) {
-          final filtered = _applyFilters(summaries);
-          if (_selectedStudentId != null &&
-              !filtered.any((s) => s.studentId == _selectedStudentId)) {
-            _selectedStudentId = filtered.isNotEmpty ? filtered.first.studentId : null;
-          }
-          _selectedStudentId ??= filtered.isNotEmpty ? filtered.first.studentId : null;
+      body: dirAsync.when(
+        data: (dir) {
+          _pageItems = dir.items;
+          final items = dir.items;
+          // Default the selection once; keep it across pages (detail loads by id).
+          _selectedStudentId ??= items.isNotEmpty ? items.first.studentId : null;
 
           if (context.isMobile) {
             return _MobileLayout(
-              summaries: filtered,
+              summaries: items,
+              total: dir.total,
+              page: dir.page,
+              totalPages: dir.totalPages,
+              pageLoading: dir.pageLoading,
+              onPage: goToPage,
               selectedStudentId: _selectedStudentId,
               processingPayment: _processingPayment,
               onSelectStudent: (id) => setState(() => _selectedStudentId = id),
               onProcessPayment: _handlePayment,
               searchController: _searchController,
               query: _query,
-              onQueryChanged: (v) => setState(() => _query = v),
-              classrooms: _getClassrooms(summaries),
+              onQueryChanged: _onQueryChanged,
+              classrooms: classOptions,
               classroomFilter: _classroomFilter,
-              onClassroomChanged: (c) => setState(() => _classroomFilter = c),
+              onClassroomChanged: _onClassroomChanged,
             );
           }
 
@@ -97,13 +107,18 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
               SizedBox(
                 width: 380,
                 child: _Sidebar(
-                  summaries: filtered,
+                  summaries: items,
+                  total: dir.total,
+                  page: dir.page,
+                  totalPages: dir.totalPages,
+                  pageLoading: dir.pageLoading,
+                  onPage: goToPage,
                   selectedStudentId: _selectedStudentId,
-                  classrooms: _getClassrooms(summaries),
+                  classrooms: classOptions,
                   classroomFilter: _classroomFilter,
-                  onClassroomChanged: (c) => setState(() => _classroomFilter = c),
+                  onClassroomChanged: _onClassroomChanged,
                   searchController: _searchController,
-                  onQueryChanged: (v) => setState(() => _query = v),
+                  onQueryChanged: _onQueryChanged,
                   onSelectStudent: (id) => setState(() => _selectedStudentId = id),
                 ),
               ),
@@ -121,7 +136,11 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text(friendlyErrorMessage(err))),
+        error: (err, _) => AbmErrorView(
+          message: friendlyErrorMessage(err),
+          onRetry: () =>
+              ref.invalidate(accountsDirectoryProvider(_query, _classroomFilter)),
+        ),
       ),
     );
   }
@@ -135,7 +154,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
             items: items,
             monthLabel: monthLabel,
           );
-      ref.invalidate(accountSummariesProvider);
+      ref.invalidate(accountsDirectoryProvider);
       ref.invalidate(studentAccountDetailsProvider(studentId));
 
       if (mounted) {
@@ -162,8 +181,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     required String studentId,
     required ReceiptHistoryItem receipt,
   }) {
-    final summaries = ref.read(accountSummariesProvider).asData?.value ?? [];
-    final student = summaries.where((s) => s.studentId == studentId);
+    final student = _pageItems.where((s) => s.studentId == studentId);
     if (student.isEmpty) return;
 
     final s = student.first;
@@ -190,6 +208,11 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
 class _MobileLayout extends StatelessWidget {
   const _MobileLayout({
     required this.summaries,
+    required this.total,
+    required this.page,
+    required this.totalPages,
+    required this.pageLoading,
+    required this.onPage,
     required this.selectedStudentId,
     required this.processingPayment,
     required this.onSelectStudent,
@@ -203,6 +226,11 @@ class _MobileLayout extends StatelessWidget {
   });
 
   final List<AccountSummary> summaries;
+  final int total;
+  final int page;
+  final int totalPages;
+  final bool pageLoading;
+  final ValueChanged<int> onPage;
   final String? selectedStudentId;
   final bool processingPayment;
   final void Function(String id) onSelectStudent;
@@ -227,6 +255,11 @@ class _MobileLayout extends StatelessWidget {
 
     return _Sidebar(
       summaries: summaries,
+      total: total,
+      page: page,
+      totalPages: totalPages,
+      pageLoading: pageLoading,
+      onPage: onPage,
       selectedStudentId: selectedStudentId,
       classrooms: classrooms,
       classroomFilter: classroomFilter,
@@ -244,6 +277,11 @@ class _MobileLayout extends StatelessWidget {
 class _Sidebar extends StatelessWidget {
   const _Sidebar({
     required this.summaries,
+    required this.total,
+    required this.page,
+    required this.totalPages,
+    required this.pageLoading,
+    required this.onPage,
     required this.selectedStudentId,
     required this.classrooms,
     required this.classroomFilter,
@@ -255,6 +293,11 @@ class _Sidebar extends StatelessWidget {
   });
 
   final List<AccountSummary> summaries;
+  final int total;
+  final int page;
+  final int totalPages;
+  final bool pageLoading;
+  final ValueChanged<int> onPage;
   final String? selectedStudentId;
   final List<String> classrooms;
   final String classroomFilter;
@@ -268,9 +311,6 @@ class _Sidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
-
-    final pendingCount = summaries.where((s) => s.status == 'Pending').length;
-    final partialCount = summaries.where((s) => s.status == 'Partially Paid').length;
 
     return Container(
       decoration: BoxDecoration(
@@ -296,7 +336,7 @@ class _Sidebar extends StatelessWidget {
                 Text('Fee Collection', style: typography.h3.copyWith(color: Colors.white)),
                 const Gap(4),
                 Text(
-                  '${summaries.length} students • $pendingCount pending • $partialCount partial',
+                  '$total students${totalPages > 1 ? ' • page $page of $totalPages' : ''}',
                   style: typography.bodySmall.copyWith(color: Colors.white70),
                 ),
                 const Gap(14),
@@ -387,6 +427,17 @@ class _Sidebar extends StatelessWidget {
                     },
                   ),
           ),
+          if (totalPages > 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: AbmPaginationBar(
+                page: page,
+                totalPages: totalPages,
+                total: total,
+                loading: pageLoading,
+                onPage: onPage,
+              ),
+            ),
         ],
       ),
     );
@@ -940,7 +991,7 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                               : () async {
                                   try {
                                     await ref.read(accountRepositoryProvider).recalculateFees(details.summary.studentId);
-                                    ref.invalidate(accountSummariesProvider);
+                                    ref.invalidate(accountsDirectoryProvider);
                                     ref.invalidate(studentAccountDetailsProvider(details.summary.studentId));
                                   } catch (e) {
                                     if (context.mounted) {
@@ -1823,7 +1874,7 @@ class _LedgerCard extends ConsumerWidget {
 
   void _refresh(WidgetRef ref) {
     ref.invalidate(feeLedgerProvider(studentId));
-    ref.invalidate(accountSummariesProvider);
+    ref.invalidate(accountsDirectoryProvider);
     ref.invalidate(studentAccountDetailsProvider(studentId));
   }
 

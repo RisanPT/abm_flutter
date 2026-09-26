@@ -1,7 +1,10 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/notifications/presentation/bug_report.dart';
+import 'package:abm_madrasa/features/notifications/presentation/notification_bell.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -15,6 +18,11 @@ class ABMPageHeader extends StatelessWidget {
   final bool showBackButton;
   final Widget? instituteBanner;
 
+  /// When true, the header hosts the app-wide actions (report-a-bug + the
+  /// notification bell) on its right, so the shell no longer needs to float them
+  /// over the screen. Off by default until every screen adopts this header.
+  final bool globalActions;
+
   const ABMPageHeader({
     super.key,
     required this.title,
@@ -25,6 +33,7 @@ class ABMPageHeader extends StatelessWidget {
     this.height,
     this.showBackButton = true,
     this.instituteBanner,
+    this.globalActions = false,
   });
 
   @override
@@ -75,6 +84,10 @@ class ABMPageHeader extends StatelessWidget {
                         ?leading,
                       const Spacer(),
                       if (actions != null) ...actions!,
+                      if (globalActions) ...[
+                        if (actions != null && actions!.isNotEmpty) const Gap(4),
+                        const _HeaderGlobalActions(),
+                      ],
                     ],
                   ),
                   Expanded(
@@ -112,6 +125,28 @@ class ABMPageHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The app-wide header actions (report-a-bug + notification bell), rendered on a
+/// coloured header. Used by [ABMPageHeader] when `globalActions` is on.
+class _HeaderGlobalActions extends ConsumerWidget {
+  const _HeaderGlobalActions();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AbmHeaderIconButton(
+          icon: LucideIcons.bug,
+          tooltip: 'Report a bug',
+          onTap: () => showBugReportDialog(context, ref),
+        ),
+        const Gap(6),
+        const NotificationBell(),
+      ],
     );
   }
 }

@@ -91,7 +91,7 @@ class NotificationsScreen extends ConsumerWidget {
                   backgroundColor: colors.primary,
                   foregroundColor: Colors.white,
                   icon: const Icon(LucideIcons.send),
-                  label: const Text('Message Office'),
+                  label: const Text('Message Head Master'),
                   onPressed: () => _messageOffice(context, ref),
                 )
               : null),
@@ -105,10 +105,16 @@ class NotificationsScreen extends ConsumerWidget {
     final send = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Message the Office'),
+        title: const Text('Message Head Master'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const Text(
+              'This message will be delivered directly to the Head Master.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const Gap(12),
             TextField(
               controller: titleC,
               textCapitalization: TextCapitalization.sentences,
@@ -189,6 +195,8 @@ class NotificationsScreen extends ConsumerWidget {
       return (icon: LucideIcons.palmtree, color: colors.secondary);
     case 'Message':
       return (icon: LucideIcons.messageSquare, color: colors.accent);
+    case 'DirectMessage':
+      return (icon: LucideIcons.mail, color: const Color(0xFF6B46C1));
     case 'BugReport':
       return (icon: LucideIcons.bug, color: colors.red);
     case 'Announcement':
@@ -297,13 +305,17 @@ class _NotificationTile extends StatelessWidget {
                     const Gap(8),
                     Row(
                       children: [
+                        if (item.isDirectMessage) ...[
+                          _tag(context, 'Direct Message', const Color(0xFF6B46C1)),
+                          const Gap(8),
+                        ],
                         if (item.isImportant) ...[
                           _tag(context, 'Important', colors.red),
                           const Gap(8),
                         ],
                         Text(
                           [
-                            if (item.postedByName.isNotEmpty) item.postedByName,
+                            if (item.postedByName.isNotEmpty) 'From: ${item.postedByName}',
                             if (item.createdAt != null) DateFormat('dd MMM · h:mm a').format(item.createdAt!.toLocal()),
                           ].join('  ·  '),
                           style: t.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),

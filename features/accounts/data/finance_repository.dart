@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/network/paged_result.dart';
 import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,32 @@ class AccountRepository {
       return data
           .map((item) => AccountSummary.fromJson(item as Map<String, dynamic>))
           .toList();
+    } catch (e) {
+      throw Exception('Failed to fetch account summaries: $e');
+    }
+  }
+
+  /// Server-paginated fee summaries for the accounts directory. Search + class
+  /// filter run on the backend so only the current page is materialized.
+  Future<PagedResult<AccountSummary>> getStudentSummariesPage({
+    String? instituteId,
+    String? search,
+    String? classroom,
+    required int page,
+    int limit = 25,
+  }) async {
+    try {
+      final response = await _dio.get('/accounts/students', queryParameters: {
+        'instituteId': instituteId,
+        'search': search,
+        'classroom': classroom,
+        'page': page,
+        'limit': limit,
+      }..removeWhere((_, v) => v == null || v == '' || v == 'All'));
+      return PagedResult<AccountSummary>.fromJson(
+        response.data as Map<String, dynamic>,
+        AccountSummary.fromJson,
+      );
     } catch (e) {
       throw Exception('Failed to fetch account summaries: $e');
     }

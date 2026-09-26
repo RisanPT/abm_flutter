@@ -3,7 +3,11 @@ import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/utils/class_sort.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
 import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
+import 'package:abm_madrasa/features/students/data/student_repository.dart';
+import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
+import 'package:abm_madrasa/features/teachers/domain/teacher_model.dart';
+import 'package:abm_madrasa/features/teachers/presentation/teacher_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
 import 'package:abm_madrasa/shared/widgets/confirm_dialog.dart';
 import 'package:flutter/material.dart';
@@ -12,7 +16,9 @@ import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-/// Admin/staff screen to compose a broadcast notification and manage recent ones.
+enum NotificationTarget { broadcast, teacher, student }
+
+/// Admin/staff screen to compose a broadcast notification or 1-to-1 message.
 class NotificationComposeScreen extends ConsumerStatefulWidget {
   const NotificationComposeScreen({super.key});
 
@@ -24,15 +30,22 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
 
-  // FeeDue is generated (Outstanding Dues → Send reminders), never composed here.
   static const _types = ['Announcement', 'General', 'Event', 'Holiday'];
   static const _audiences = [('all', 'Everyone'), ('students', 'Students'), ('teachers', 'Teachers')];
 
+  NotificationTarget _target = NotificationTarget.broadcast;
   String _type = 'Announcement';
   String _audience = 'all';
   String _grade = ''; // '' = all grades
   bool _important = false;
   bool _sending = false;
+
+  // 1-to-1 state
+  TeacherModel? _selectedTeacher;
+  String _selectedClassForStudent = '';
+  StudentModel? _selectedStudent;
+  List<StudentModel> _studentsInClass = [];
+  bool _loadingStudents = false;
 
   @override
   void dispose() {
@@ -41,22 +54,75 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
     super.dispose();
   }
 
+  Future<void> _onClassForStudentChanged(String className) async {
+    setState(() {
+      _selectedClassForStudent = className;
+      _selectedStudent = null;
+      _studentsInClass = [];
+      _loadingStudents = className.isNotEmpty;
+    });
+
+    if (className.isEmpty) return;
+
+    try {
+      final list = await ref.read(studentRepositoryProvider).getStudents(classroom: className);
+      if (!mounted) return;
+      setState(() {
+        _studentsInClass = list;
+        _loadingStudents = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingStudents = false);
+    }
+  }
+
   Future<void> _send() async {
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A title is required.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A title or subject is required.')));
       return;
     }
+
+    if (_target == NotificationTarget.teacher && _selectedTeacher == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a teacher.')));
+      return;
+    }
+
+    if (_target == NotificationTarget.student && _selectedStudent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a student.')));
+      return;
+    }
+
     setState(() => _sending = true);
     try {
-      await ref.read(notificationRepositoryProvider).compose(
-            title: title,
-            body: _bodyCtrl.text.trim(),
-            type: _type,
-            priority: _important ? 'Important' : 'Normal',
-            audienceRole: _audience,
-            grade: _audience == 'students' ? _grade : '',
-          );
+      if (_target == NotificationTarget.teacher) {
+        await ref.read(notificationRepositoryProvider).sendDirect(
+              recipientType: 'teacher',
+              recipientId: _selectedTeacher!.id,
+              title: title,
+              body: _bodyCtrl.text.trim(),
+              priority: _important ? 'Important' : 'Normal',
+            );
+      } else if (_target == NotificationTarget.student) {
+        await ref.read(notificationRepositoryProvider).sendDirect(
+              recipientType: 'student',
+              recipientId: _selectedStudent!.id,
+              title: title,
+              body: _bodyCtrl.text.trim(),
+              priority: _important ? 'Important' : 'Normal',
+            );
+      } else {
+        await ref.read(notificationRepositoryProvider).compose(
+              title: title,
+              body: _bodyCtrl.text.trim(),
+              type: _type,
+              priority: _important ? 'Important' : 'Normal',
+              audienceRole: _audience,
+              grade: _audience == 'students' ? _grade : '',
+            );
+      }
+
       ref.invalidate(adminNotificationsProvider);
       ref.invalidate(myNotificationsProvider);
       if (!mounted) return;
@@ -65,8 +131,15 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
       setState(() {
         _important = false;
         _sending = false;
+        _selectedTeacher = null;
+        _selectedStudent = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notification sent.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_target == NotificationTarget.broadcast ? 'Notification sent.' : 'Direct message sent.'),
+          backgroundColor: const Color(0xFF2F855A),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
@@ -85,8 +158,8 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
       body: Column(
         children: [
           const ABMPageHeader(
-            title: 'Compose Notification',
-            subtitle: 'Send a notice to students and teachers.',
+            title: 'Compose & Send Messages',
+            subtitle: 'Broadcast notices or send one-to-one direct messages.',
           ),
           Expanded(
             child: ListView(
@@ -97,49 +170,94 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _label(context, 'Title'),
+                      // Target Type Selector
+                      _label(context, 'Send To'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _targetChoice(context, LucideIcons.megaphone, 'Broadcast Notice', NotificationTarget.broadcast),
+                          _targetChoice(context, LucideIcons.userCheck, 'Specific Teacher', NotificationTarget.teacher),
+                          _targetChoice(context, LucideIcons.graduationCap, 'Specific Student', NotificationTarget.student),
+                        ],
+                      ),
+                      const Gap(18),
+
+                      // If Specific Teacher
+                      if (_target == NotificationTarget.teacher) ...[
+                        _label(context, 'Select Teacher'),
+                        _teacherDropdown(context),
+                        const Gap(18),
+                      ],
+
+                      // If Specific Student
+                      if (_target == NotificationTarget.student) ...[
+                        _label(context, '1. Select Class'),
+                        _studentClassDropdown(context),
+                        const Gap(14),
+                        _label(context, '2. Select Student'),
+                        _studentDropdown(context),
+                        const Gap(18),
+                      ],
+
+                      _label(context, _target == NotificationTarget.broadcast ? 'Notice Title' : 'Subject'),
                       TextField(
                         controller: _titleCtrl,
-                        decoration: _dec(context, 'e.g. Parent meeting on Friday'),
+                        decoration: _dec(
+                          context,
+                          _target == NotificationTarget.broadcast
+                              ? 'e.g. Parent meeting on Friday'
+                              : 'e.g. Directive regarding Qur’an class attendance',
+                        ),
                         textInputAction: TextInputAction.next,
                       ),
                       const Gap(18),
-                      _label(context, 'Message'),
+
+                      _label(context, 'Message Content'),
                       TextField(
                         controller: _bodyCtrl,
-                        decoration: _dec(context, 'Write the details…'),
+                        decoration: _dec(context, 'Write your message details here…'),
                         minLines: 3,
                         maxLines: 6,
                       ),
-                      const Gap(18),
-                      _label(context, 'Type'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final ty in _types) _choice(context, ty, _type == ty, () => setState(() => _type = ty)),
-                        ],
-                      ),
-                      const Gap(18),
-                      _label(context, 'Audience'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final a in _audiences) _choice(context, a.$2, _audience == a.$1, () => setState(() => _audience = a.$1)),
-                        ],
-                      ),
-                      if (_audience == 'students') ...[
+
+                      // Broadcast options (Type & Audience)
+                      if (_target == NotificationTarget.broadcast) ...[
                         const Gap(18),
-                        _label(context, 'Class (optional)'),
-                        _gradeDropdown(context),
+                        _label(context, 'Type'),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final ty in _types) _choice(context, ty, _type == ty, () => setState(() => _type = ty)),
+                          ],
+                        ),
+                        const Gap(18),
+                        _label(context, 'Audience'),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final a in _audiences) _choice(context, a.$2, _audience == a.$1, () => setState(() => _audience = a.$1)),
+                          ],
+                        ),
+                        if (_audience == 'students') ...[
+                          const Gap(18),
+                          _label(context, 'Class (optional)'),
+                          _gradeDropdown(context),
+                        ],
                       ],
-                      const Gap(6),
+
+                      const Gap(14),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: Text('Mark as Important', style: t.bodyMediumSemiBold),
-                        subtitle: Text('Highlights the notice and shows it as an urgent circular.',
-                            style: t.bodySmall.copyWith(color: colors.textSecondary)),
+                        title: Text('Mark as Important / Urgent', style: t.bodyMediumSemiBold),
+                        subtitle: Text(
+                          _target == NotificationTarget.broadcast
+                              ? 'Highlights the notice with high priority.'
+                              : 'Delivers as an urgent direct notification to the recipient.',
+                          style: t.bodySmall.copyWith(color: colors.textSecondary),
+                        ),
                         value: _important,
                         activeThumbColor: colors.primary,
                         onChanged: (v) => setState(() => _important = v),
@@ -157,8 +275,16 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
                           icon: _sending
                               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                               : const Icon(LucideIcons.send, size: 18),
-                          label: Text(_sending ? 'Sending…' : 'Send notification',
-                              style: const TextStyle(fontWeight: FontWeight.w600)),
+                          label: Text(
+                            _sending
+                                ? 'Sending…'
+                                : (_target == NotificationTarget.broadcast
+                                    ? 'Send Broadcast Notice'
+                                    : (_target == NotificationTarget.teacher
+                                        ? 'Send Direct to Teacher'
+                                        : 'Send Direct to Student')),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
                     ],
@@ -204,6 +330,125 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
         child: child,
       );
 
+  Widget _targetChoice(BuildContext context, IconData icon, String label, NotificationTarget target) {
+    final colors = context.colors;
+    final selected = _target == target;
+    return Material(
+      color: selected ? colors.primary.withValues(alpha: 0.12) : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: selected ? colors.primary : colors.border, width: selected ? 1.5 : 1),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _target = target),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: selected ? colors.primary : colors.textSecondary),
+              const Gap(8),
+              Text(
+                label,
+                style: context.typography.bodySmall.copyWith(
+                  color: selected ? colors.primary : colors.textSecondary,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _teacherDropdown(BuildContext context) {
+    final colors = context.colors;
+    final teachersAsync = ref.watch(teacherListProvider(''));
+    return teachersAsync.when(
+      loading: () => const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator())),
+      error: (e, _) => Text('Failed to load teachers: $e', style: TextStyle(color: colors.red, fontSize: 12)),
+      data: (teachers) {
+        if (teachers.isEmpty) {
+          return Text('No teachers found.', style: TextStyle(color: colors.textSecondary, fontSize: 13));
+        }
+        return DropdownButtonFormField<TeacherModel>(
+          initialValue: _selectedTeacher,
+          decoration: _dec(context, 'Choose a teacher to message'),
+          isExpanded: true,
+          items: [
+            for (final t in teachers)
+              DropdownMenuItem(
+                value: t,
+                child: Text(
+                  '${t.fullName} (${t.employeeId})',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: (v) => setState(() => _selectedTeacher = v),
+        );
+      },
+    );
+  }
+
+  Widget _studentClassDropdown(BuildContext context) {
+    final colors = context.colors;
+    final classes = ref.watch(classroomControllerProvider);
+    return classes.maybeWhen(
+      data: (list) {
+        final names = sortClassNames(list.map((c) => c.name).toSet());
+        return DropdownButtonFormField<String>(
+          initialValue: _selectedClassForStudent.isEmpty ? null : _selectedClassForStudent,
+          decoration: _dec(context, 'Choose classroom first'),
+          items: [
+            for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
+          ],
+          onChanged: (v) {
+            if (v != null) _onClassForStudentChanged(v);
+          },
+        );
+      },
+      orElse: () => Text('Loading classes…', style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+    );
+  }
+
+  Widget _studentDropdown(BuildContext context) {
+    final colors = context.colors;
+    if (_selectedClassForStudent.isEmpty) {
+      return Text('Please select a class above first to see students.',
+          style: TextStyle(color: colors.textSecondary, fontSize: 12));
+    }
+    if (_loadingStudents) {
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+      );
+    }
+    if (_studentsInClass.isEmpty) {
+      return Text('No students found in this class.', style: TextStyle(color: colors.textSecondary, fontSize: 12));
+    }
+
+    return DropdownButtonFormField<StudentModel>(
+      key: ValueKey('students_in_$_selectedClassForStudent'),
+      initialValue: _selectedStudent,
+      decoration: _dec(context, 'Choose a student'),
+      isExpanded: true,
+      items: [
+        for (final s in _studentsInClass)
+          DropdownMenuItem(
+            value: s,
+            child: Text(
+              '${s.fullName}${s.admissionNumber.isNotEmpty ? ' (${s.admissionNumber})' : ''}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: (v) => setState(() => _selectedStudent = v),
+    );
+  }
+
   Widget _choice(BuildContext context, String label, bool selected, VoidCallback onTap) {
     final colors = context.colors;
     return Material(
@@ -248,11 +493,24 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
     final colors = context.colors;
     final t = context.typography;
     final v = notificationVisual(context, n.type);
-    final audience = n.audienceRole == 'students'
-        ? (n.grade.isEmpty ? 'Students' : n.grade)
-        : n.audienceRole == 'teachers'
-            ? 'Teachers'
-            : 'Everyone';
+    
+    String recipientLabel;
+    if (n.isDirectMessage) {
+      if (n.recipientType == 'teacher') {
+        recipientLabel = n.teacherName.isNotEmpty ? 'Ustadh ${n.teacherName}' : 'Teacher (Direct)';
+      } else if (n.recipientType == 'student') {
+        recipientLabel = n.studentName.isNotEmpty ? '${n.studentName} (Student)' : 'Student (Direct)';
+      } else {
+        recipientLabel = 'Direct Message';
+      }
+    } else {
+      recipientLabel = n.audienceRole == 'students'
+          ? (n.grade.isEmpty ? 'All Students' : n.grade)
+          : n.audienceRole == 'teachers'
+              ? 'All Teachers'
+              : 'Everyone';
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -265,12 +523,33 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(n.title, style: t.bodyMediumSemiBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(n.title, style: t.bodyMediumSemiBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                    if (n.isDirectMessage) ...[
+                      const Gap(6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6B46C1).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          '1-to-1',
+                          style: TextStyle(color: Color(0xFF6B46C1), fontSize: 9, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 const Gap(2),
                 Text(
                   [
-                    'To: $audience',
+                    'To: $recipientLabel',
                     if (n.createdAt != null) DateFormat('dd MMM').format(n.createdAt!.toLocal()),
+                    if (n.readCount > 0) 'Seen (${n.readCount})',
                   ].join('  ·  '),
                   style: t.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),
                 ),

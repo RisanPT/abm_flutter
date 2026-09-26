@@ -385,14 +385,14 @@ class DashboardScreen extends ConsumerWidget {
           value: stats.totalStudents.toString(),
           subtitle: 'Active members',
           icon: LucideIcons.users,
-          color: const Color(0xFF2E7D32),
+          color: context.colors.primary,
         ),
         StatCard(
           title: 'Attendance',
           value: '${stats.attendanceRate}%',
           subtitle: "Today's report",
           icon: LucideIcons.calendarCheck,
-          color: const Color(0xFFC0A040),
+          color: context.colors.secondary,
         ),
         if (allowedModules.contains(AppModule.finance.name) ||
             allowedModules.contains(AppModule.accounts.name))
@@ -401,7 +401,7 @@ class DashboardScreen extends ConsumerWidget {
             value: NumberFormat.compactCurrency(symbol: 'SAR ').format(stats.feeCollectedThisMonth),
             subtitle: 'This month',
             icon: LucideIcons.wallet,
-            color: Colors.blue.shade700,
+            color: context.colors.accent,
             trend: stats.feeCollectedTrend.isNotEmpty ? stats.feeCollectedTrend : null,
           ),
         StatCard(
@@ -409,7 +409,7 @@ class DashboardScreen extends ConsumerWidget {
           value: stats.upcomingEvents.toString().padLeft(2, '0'),
           subtitle: 'Scheduled updates',
           icon: LucideIcons.bell,
-          color: Colors.orange.shade700,
+          color: context.colors.warning,
         ),
       ],
     );
@@ -657,73 +657,48 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildRecentActivity(BuildContext context, List<RecentActivity> activities) {
-    if (activities.isEmpty) return const SizedBox.shrink();
-
     final colors = context.colors;
-    final typography = context.typography;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Recent Activity', style: typography.h4.copyWith(fontWeight: FontWeight.bold)),
-        const Gap(16),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: activities.length,
-          separatorBuilder: (_, index) => const Gap(12),
-          itemBuilder: (context, index) {
-            final activity = activities[index];
-            final isFee = activity.type == 'Fee';
-
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: colors.border),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: colors.background,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isFee ? LucideIcons.wallet : LucideIcons.userPlus,
-                      size: 20,
-                      color: colors.primary,
-                    ),
-                  ),
-                  const Gap(12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(activity.title,
-                            style: typography.bodyMediumSemiBold,
-                            overflow: TextOverflow.ellipsis),
-                        Text(activity.subtitle,
-                            style:
-                                typography.bodySmall.copyWith(color: colors.textSecondary),
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                  const Gap(8),
-                  Text(
-                    DateFormat('MMM d').format(activity.time.toLocal()),
-                    style: typography.caption,
-                  ),
-                ],
-              ),
-            );
-          },
+    if (activities.isEmpty) {
+      return AbmSectionCard(
+        title: 'Recent activity',
+        icon: LucideIcons.history,
+        child: const AbmEmptyState(
+          icon: LucideIcons.inbox,
+          title: 'No recent activity',
+          message: 'New enrolments and payments will appear here.',
         ),
-      ],
+      );
+    }
+
+    return AbmSectionCard(
+      title: 'Recent activity',
+      icon: LucideIcons.history,
+      child: Column(
+        children: [
+          for (var i = 0; i < activities.length; i++) ...[
+            if (i > 0) const Gap(10),
+            Builder(builder: (context) {
+              final a = activities[i];
+              final isFee = a.type == 'Fee';
+              return AbmListRow(
+                leading: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: colors.primary.withValues(alpha: 0.12),
+                  child: Icon(isFee ? LucideIcons.wallet : LucideIcons.userPlus,
+                      size: 18, color: colors.primary),
+                ),
+                title: a.title,
+                subtitle: a.subtitle,
+                trailing: Text(
+                  DateFormat('MMM d').format(a.time.toLocal()),
+                  style: context.typography.caption,
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
     );
   }
 }

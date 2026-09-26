@@ -18,6 +18,15 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:abm_madrasa/core/utils/web_download.dart';
 
 class AttendanceMarkScreen extends ConsumerStatefulWidget {
   const AttendanceMarkScreen({super.key});
@@ -69,6 +78,344 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _exportAttendanceSheetPdf(List<AttendanceModel> records) async {
+    if (records.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No attendance records to export.')),
+      );
+      return;
+    }
+
+    final isStudent = _selectedType == 'Student';
+    final dateStr = DateFormat('EEE, dd MMM yyyy').format(_selectedDate);
+    final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    final targetName = isStudent ? (_selectedClassroom ?? 'Classroom') : 'Teachers';
+    final presentCount = records.where((r) => r.status == AttendanceStatus.present).length;
+    final absentCount = records.where((r) => r.status == AttendanceStatus.absent).length;
+    final lateCount = records.where((r) => r.status == AttendanceStatus.late).length;
+
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : const Rect.fromLTWH(0, 0, 100, 100);
+
+    final pdf = pw.Document();
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        build: (ctx) => [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Attendance Sheet — $targetName',
+                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    isStudent
+                        ? 'Date: $dateStr  |  Shift: $_selectedShift'
+                        : 'Date: $dateStr',
+                    style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+                  ),
+                ],
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400),
+                  borderRadius: pw.BorderRadius.circular(6),
+                ),
+                child: pw.Text(
+                  'Total: ${records.length}  |  P: $presentCount  |  A: $absentCount  |  L: $lateCount',
+                  style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 14),
+          pw.TableHelper.fromTextArray(
+            headers: isStudent
+                ? ['#', 'Roll / Adm No', 'Student Name', 'Status', 'Remarks / Signature']
+                : ['#', 'Emp ID', 'Teacher Name', 'Status', 'Remarks / Signature'],
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+            data: List.generate(records.length, (i) {
+              final r = records[i];
+              final id = isStudent ? (r.admissionNumber ?? '') : (r.employeeId ?? '');
+              final name = isStudent ? (r.studentName ?? '') : (r.teacherName ?? '');
+              final statusStr = r.status.name[0].toUpperCase() + r.status.name.substring(1);
+              return [
+                '${i + 1}',
+                id,
+                name,
+                statusStr,
+                r.remarks ?? '',
+              ];
+            }),
+          ),
+        ],
+      ),
+    );
+
+    try {
+      final bytes = await pdf.save();
+      final fname = 'attendance_${targetName}_$dateKey.pdf';
+      if (kIsWeb) {
+        await Printing.layoutPdf(onLayout: (_) => bytes, name: fname);
+      } else {
+        await Printing.sharePdf(bytes: bytes, filename: fname, bounds: origin);
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    }
+  }
+
+  Future<void> _exportAttendanceSheetExcel(List<AttendanceModel> records) async {
+    if (records.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No attendance records to export.')),
+      );
+      return;
+    }
+
+    final isStudent = _selectedType == 'Student';
+    final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    final targetName = isStudent ? (_selectedClassroom ?? 'Class') : 'Teachers';
+    final fname = 'attendance_${targetName}_$dateKey.xlsx';
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : const Rect.fromLTWH(0, 0, 100, 100);
+
+    final excel = Excel.createExcel();
+    final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
+
+    if (isStudent) {
+      sheet.appendRow([
+        TextCellValue('#'),
+        TextCellValue('Admission No'),
+        TextCellValue('Student Name'),
+        TextCellValue('Classroom'),
+        TextCellValue('Shift'),
+        TextCellValue('Date'),
+        TextCellValue('Status'),
+        TextCellValue('Remarks'),
+      ]);
+      for (int i = 0; i < records.length; i++) {
+        final r = records[i];
+        final statusStr = r.status.name[0].toUpperCase() + r.status.name.substring(1);
+        sheet.appendRow([
+          IntCellValue(i + 1),
+          TextCellValue(r.admissionNumber ?? ''),
+          TextCellValue(r.studentName ?? ''),
+          TextCellValue(_selectedClassroom ?? ''),
+          TextCellValue(_selectedShift),
+          TextCellValue(dateKey),
+          TextCellValue(statusStr),
+          TextCellValue(r.remarks ?? ''),
+        ]);
+      }
+    } else {
+      sheet.appendRow([
+        TextCellValue('#'),
+        TextCellValue('Employee ID'),
+        TextCellValue('Teacher Name'),
+        TextCellValue('Date'),
+        TextCellValue('Status'),
+        TextCellValue('Remarks'),
+      ]);
+      for (int i = 0; i < records.length; i++) {
+        final r = records[i];
+        final statusStr = r.status.name[0].toUpperCase() + r.status.name.substring(1);
+        sheet.appendRow([
+          IntCellValue(i + 1),
+          TextCellValue(r.employeeId ?? ''),
+          TextCellValue(r.teacherName ?? ''),
+          TextCellValue(dateKey),
+          TextCellValue(statusStr),
+          TextCellValue(r.remarks ?? ''),
+        ]);
+      }
+    }
+
+    final bytes = excel.encode();
+    if (bytes == null) return;
+
+    if (kIsWeb) {
+      triggerBrowserDownload(bytes, fname, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Downloaded $fname')));
+      return;
+    }
+
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fname');
+      await file.writeAsBytes(bytes, flush: true);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', name: fname)],
+        text: 'Attendance sheet — $targetName ($dateKey)',
+        sharePositionOrigin: origin,
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    }
+  }
+
+  void _showDownloadOptions(BuildContext context, List<AttendanceModel> records) {
+    final colors = context.colors;
+    final typography = context.typography;
+    final isStudent = _selectedType == 'Student';
+    final targetName = isStudent ? (_selectedClassroom ?? 'Classroom') : 'Teachers';
+    final dateStr = DateFormat('EEE, dd MMM yyyy').format(_selectedDate);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: colors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Gap(16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(LucideIcons.downloadCloud, color: colors.primary, size: 22),
+                  ),
+                  const Gap(12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Download Attendance Sheet', style: typography.h4),
+                        Text(
+                          '$targetName  •  $dateStr',
+                          style: typography.caption.copyWith(color: colors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Gap(20),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _exportAttendanceSheetPdf(records);
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(LucideIcons.fileText, color: Colors.red, size: 22),
+                        ),
+                        const Gap(14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Printable PDF Roster', style: typography.bodyMediumSemiBold),
+                              const Gap(2),
+                              Text('Ready to print or save for offline attendance marking',
+                                  style: typography.caption.copyWith(color: colors.textSecondary)),
+                            ],
+                          ),
+                        ),
+                        const Icon(LucideIcons.chevronRight, size: 18, color: Colors.grey),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const Gap(12),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _exportAttendanceSheetExcel(records);
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(LucideIcons.table, color: Colors.green, size: 22),
+                        ),
+                        const Gap(14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Excel Spreadsheet (.xlsx)', style: typography.bodyMediumSemiBold),
+                              const Gap(2),
+                              Text('Formatted spreadsheet with all current attendance statuses',
+                                  style: typography.caption.copyWith(color: colors.textSecondary)),
+                            ],
+                          ),
+                        ),
+                        const Icon(LucideIcons.chevronRight, size: 18, color: Colors.grey),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Chooses an accurate empty-state icon + message: distinguishes "no class
@@ -256,6 +603,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                   }
                 },
                 dateLocked: !canBackfill,
+                onDownload: () => _showDownloadOptions(context, attendanceAsync.value ?? const []),
               ),
               Expanded(
                 child: attendanceAsync.when(
@@ -287,23 +635,26 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                         Expanded(
                           child: filteredRecords.isEmpty
                               ? Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        empty.icon,
-                                        size: 48,
-                                        color: colors.textSecondary.withValues(alpha: 0.5),
-                                      ),
-                                      const Gap(16),
-                                      Text(
-                                        empty.message,
-                                        style: context.typography.bodyMedium.copyWith(
-                                          color: colors.textSecondary,
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          empty.icon,
+                                          size: 42,
+                                          color: colors.textSecondary.withValues(alpha: 0.5),
                                         ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
+                                        const Gap(12),
+                                        Text(
+                                          empty.message,
+                                          style: context.typography.bodyMedium.copyWith(
+                                            color: colors.textSecondary,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 )
                               : ListView.builder(
@@ -339,6 +690,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                           ),
                           child: context.isMobile
                               ? Column(
+                                  mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(
@@ -367,13 +719,36 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                       ],
                                     ),
                                     const Gap(12),
-                                    ABMButton(
-                                      text: 'Save Records',
-                                      isLoading: _saving,
-                                      onPressed: () => _saveRecords(
-                                        markedBy: user?.username ?? 'Admin',
-                                        classroomName: _selectedType == 'Student' ? effectiveClassroom : null,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () => _showDownloadOptions(context, filteredRecords),
+                                            icon: const Icon(LucideIcons.download, size: 16),
+                                            label: const Text('Download'),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: context.colors.primary,
+                                              side: BorderSide(color: context.colors.primary.withValues(alpha: 0.35)),
+                                              padding: const EdgeInsets.symmetric(vertical: 13),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const Gap(10),
+                                        Expanded(
+                                          flex: 2,
+                                          child: ABMButton(
+                                            text: 'Save Records',
+                                            isLoading: _saving,
+                                            onPressed: () => _saveRecords(
+                                              markedBy: user?.username ?? 'Admin',
+                                              classroomName: _selectedType == 'Student' ? effectiveClassroom : null,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 )
@@ -401,8 +776,22 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                       ),
                                     ),
                                     const Spacer(),
+                                    OutlinedButton.icon(
+                                      onPressed: () => _showDownloadOptions(context, filteredRecords),
+                                      icon: const Icon(LucideIcons.download, size: 16),
+                                      label: const Text('Download Sheet'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: context.colors.primary,
+                                        side: BorderSide(color: context.colors.primary.withValues(alpha: 0.35)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                    ),
+                                    const Gap(12),
                                     SizedBox(
-                                      width: 190,
+                                      width: 170,
                                       child: ABMButton(
                                         text: 'Save Records',
                                         isLoading: _saving,
@@ -449,6 +838,7 @@ class _AttendanceHeader extends StatelessWidget {
     required this.onMarkAllPresent,
     required this.onSelectDate,
     this.dateLocked = false,
+    this.onDownload,
   });
 
   final DateTime selectedDate;
@@ -466,14 +856,15 @@ class _AttendanceHeader extends StatelessWidget {
   final VoidCallback onMarkAllPresent;
   final VoidCallback onSelectDate;
   final bool dateLocked;
+  final VoidCallback? onDownload;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
     final isMobile = context.isMobile;
-    final filterCardPadding = isMobile ? 10.0 : 16.0;
-    final sectionGap = isMobile ? 10.0 : 18.0;
+    final filterCardPadding = isMobile ? 10.0 : 12.0;
+    final sectionGap = isMobile ? 8.0 : 12.0;
     final canManageTeachers = user?.role.canAccess(AppModule.teachers, allowedModules) ?? false;
 
     return Container(
@@ -520,12 +911,23 @@ class _AttendanceHeader extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
+                    if (onDownload != null)
+                      IconButton(
+                        onPressed: onDownload,
+                        icon: const Icon(LucideIcons.download, color: Colors.white),
+                        tooltip: 'Download Attendance Sheet',
+                      ),
                     IconButton(
-                      onPressed: () => context.push(RouteNames.studentAttendanceReport),
+                      onPressed: () => context.push(
+                        selectedType == 'Teacher'
+                            ? RouteNames.teacherAttendanceReport
+                            : RouteNames.studentAttendanceReport,
+                      ),
                       icon: const Icon(LucideIcons.barChart2, color: Colors.white70),
-                      tooltip: 'View Monthly Reports',
+                      tooltip: 'View Reports',
                     ),
-                    if (user != null)
+                    if (!isMobile) const SizedBox(width: 76),
+                    if (user != null && isMobile)
                       Text(
                         user!.role.label,
                         style: typography.bodySmall.copyWith(
@@ -725,6 +1127,45 @@ class _AttendanceHeader extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
+                    if (onDownload != null) ...[
+                      InkWell(
+                        onTap: onDownload,
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isMobile ? 10 : 14,
+                            vertical: isMobile ? 7 : 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                LucideIcons.download,
+                                size: 15,
+                                color: Colors.white,
+                              ),
+                              if (!isMobile) ...[
+                                const Gap(6),
+                                Text(
+                                  'Download',
+                                  style: typography.bodyMediumSemiBold.copyWith(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const Gap(10),
+                    ],
                     InkWell(
                       onTap: onMarkAllPresent,
                       borderRadius: BorderRadius.circular(999),

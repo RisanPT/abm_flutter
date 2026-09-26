@@ -11,6 +11,7 @@ import 'package:abm_madrasa/features/teachers/domain/teacher_model.dart';
 import 'package:abm_madrasa/features/teachers/presentation/teacher_controller.dart';
 import 'package:abm_madrasa/features/timetable/presentation/timetable_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
+import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -97,8 +98,8 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
             }
 
             final statsSource = allTeachers ?? teachers;
-            void loadMore() =>
-                ref.read(teacherDirectoryProvider(_query).notifier).loadMore();
+            void goToPage(int p) =>
+                ref.read(teacherDirectoryProvider(_query).notifier).goToPage(p);
 
             if (context.isMobile) {
               return Column(
@@ -122,9 +123,10 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                             teachers: teachers,
                             totalCount: dir.total,
                             isSearching: _query.isNotEmpty,
-                            hasMore: dir.hasMore,
-                            loadingMore: dir.loadingMore,
-                            onLoadMore: loadMore,
+                            page: dir.page,
+                            totalPages: dir.totalPages,
+                            pageLoading: dir.pageLoading,
+                            onPage: goToPage,
                             selectedTeacherId: _selectedTeacherId,
                             onSelect: (teacher) =>
                                 setState(() => _selectedTeacherId = teacher.id),
@@ -168,9 +170,10 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                           teachers: teachers,
                           totalCount: dir.total,
                           isSearching: _query.isNotEmpty,
-                          hasMore: dir.hasMore,
-                          loadingMore: dir.loadingMore,
-                          onLoadMore: loadMore,
+                          page: dir.page,
+                          totalPages: dir.totalPages,
+                          pageLoading: dir.pageLoading,
+                          onPage: goToPage,
                           selectedTeacherId: _selectedTeacherId,
                           onSelect: (teacher) =>
                               setState(() => _selectedTeacherId = teacher.id),
@@ -537,9 +540,10 @@ class _TeacherDirectory extends StatelessWidget {
     required this.teachers,
     required this.totalCount,
     required this.isSearching,
-    required this.hasMore,
-    required this.loadingMore,
-    required this.onLoadMore,
+    required this.page,
+    required this.totalPages,
+    required this.pageLoading,
+    required this.onPage,
     required this.selectedTeacherId,
     required this.onSelect,
     required this.onEdit,
@@ -549,9 +553,10 @@ class _TeacherDirectory extends StatelessWidget {
   final List<TeacherModel> teachers;
   final int totalCount;
   final bool isSearching;
-  final bool hasMore;
-  final bool loadingMore;
-  final VoidCallback onLoadMore;
+  final int page;
+  final int totalPages;
+  final bool pageLoading;
+  final ValueChanged<int> onPage;
   final String? selectedTeacherId;
   final ValueChanged<TeacherModel> onSelect;
   final ValueChanged<TeacherModel> onEdit;
@@ -606,45 +611,33 @@ class _TeacherDirectory extends StatelessWidget {
                       ),
                     ),
                   )
-                : NotificationListener<ScrollNotification>(
-                    onNotification: (n) {
-                      if (hasMore &&
-                          !loadingMore &&
-                          n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
-                        onLoadMore();
-                      }
-                      return false;
+                : ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: teachers.length,
+                    separatorBuilder: (_, index) => const Gap(10),
+                    itemBuilder: (context, index) {
+                      final teacher = teachers[index];
+                      final selected = teacher.id == selectedTeacherId;
+                      return _TeacherTile(
+                        teacher: teacher,
+                        selected: selected,
+                        onSelect: () => onSelect(teacher),
+                        onEdit: () => onEdit(teacher),
+                        onDelete: () => onDelete(teacher),
+                      );
                     },
-                    child: ListView.separated(
-                      padding: EdgeInsets.zero,
-                      itemCount: teachers.length + (hasMore ? 1 : 0),
-                      separatorBuilder: (_, index) => const Gap(10),
-                      itemBuilder: (context, index) {
-                        if (index >= teachers.length) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: Center(
-                              child: SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2.4),
-                              ),
-                            ),
-                          );
-                        }
-                        final teacher = teachers[index];
-                        final selected = teacher.id == selectedTeacherId;
-                        return _TeacherTile(
-                          teacher: teacher,
-                          selected: selected,
-                          onSelect: () => onSelect(teacher),
-                          onEdit: () => onEdit(teacher),
-                          onDelete: () => onDelete(teacher),
-                        );
-                      },
-                    ),
                   ),
           ),
+          if (totalPages > 1) ...[
+            const Gap(10),
+            AbmPaginationBar(
+              page: page,
+              totalPages: totalPages,
+              total: totalCount,
+              loading: pageLoading,
+              onPage: onPage,
+            ),
+          ],
         ],
       ),
     );

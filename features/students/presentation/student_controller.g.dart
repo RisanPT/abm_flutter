@@ -33,7 +33,7 @@ final class StudentControllerProvider
   StudentController create() => StudentController();
 }
 
-String _$studentControllerHash() => r'd7d3a6a0ef960c29fe9044cdd54d9929aa4e4499';
+String _$studentControllerHash() => r'c99c51270cc401e017256f337665d1d609af0990';
 
 abstract class _$StudentController extends $AsyncNotifier<StudentListState> {
   FutureOr<StudentListState> build();

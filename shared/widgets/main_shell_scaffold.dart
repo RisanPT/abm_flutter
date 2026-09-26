@@ -329,19 +329,13 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                 },
               ),
             ),
-          // Floating actions (top-right): a bug-report button + notification bell.
-          // One consistent entry point for every staff/admin role, on mobile and
-          // desktop, so reporting an issue is always a single tap away.
+          // Floating actions (top-right): report-a-bug + notification bell, grouped
+          // into one clean pill so they read as a single control instead of two
+          // separate floating buttons.
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             right: 12,
-            child: Row(
-              children: [
-                _ShellBugButton(),
-                const SizedBox(width: 10),
-                _ShellNotificationBell(),
-              ],
-            ),
+            child: const _ShellActions(),
           ),
         ],
       ),
@@ -460,84 +454,86 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
   }
 }
 
-/// The shell's floating notification bell — a white rounded button matching the
-/// floating menu/back button, with an unread badge, opening the shared inbox.
-/// A floating "Report a Bug" button that sits beside the notification bell on
-/// every shell screen — the same one-tap entry point for all staff/admin roles.
-class _ShellBugButton extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
-    return Material(
-      color: Colors.transparent,
-      child: Tooltip(
-        message: 'Report a bug',
-        child: InkWell(
-          onTap: () => showBugReportDialog(context, ref),
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: colors.white.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4)),
-              ],
-            ),
-            child: Icon(LucideIcons.bug, color: colors.primary, size: 22),
-          ),
-        ),
-      ),
-    );
-  }
-}
+/// The shell's floating actions — report-a-bug + notification bell — grouped in
+/// one white pill (with a hairline divider) so they read as a single control.
+/// Same one-tap entry point for all staff/admin roles, on mobile and desktop.
+class _ShellActions extends ConsumerWidget {
+  const _ShellActions();
 
-class _ShellNotificationBell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final count = ref.watch(unreadCountProvider);
+
+    Widget iconButton({
+      required IconData icon,
+      required String tooltip,
+      required VoidCallback onTap,
+      Widget? badge,
+    }) {
+      return Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: colors.primary, size: 21),
+                if (badge != null) Positioned(right: -6, top: -5, child: badge),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final unreadBadge = count > 0
+        ? Container(
+            padding: const EdgeInsets.all(2),
+            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+            decoration: BoxDecoration(
+              color: colors.red,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: Colors.white, width: 1.4),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              count > 9 ? '9+' : '$count',
+              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700, height: 1),
+            ),
+          )
+        : null;
+
     return Material(
       color: Colors.transparent,
-      child: Tooltip(
-        message: 'Notifications',
-        child: InkWell(
-        onTap: () => context.push(RouteNames.notifications),
-        borderRadius: BorderRadius.circular(14),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: colors.white.withValues(alpha: 0.95),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4)),
-                ],
-              ),
-              child: Icon(LucideIcons.bell, color: colors.primary, size: 22),
-            ),
-            if (count > 0)
-              Positioned(
-                right: 4,
-                top: 4,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-                  decoration: BoxDecoration(color: colors.red, borderRadius: BorderRadius.circular(9), border: Border.all(color: Colors.white, width: 1.4)),
-                  alignment: Alignment.center,
-                  child: Text(
-                    count > 9 ? '9+' : '$count',
-                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700, height: 1),
-                  ),
-                ),
-              ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 4)),
           ],
         ),
-      ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            iconButton(
+              icon: LucideIcons.lifeBuoy,
+              tooltip: 'Report a bug',
+              onTap: () => showBugReportDialog(context, ref),
+            ),
+            Container(width: 1, height: 22, color: colors.border),
+            iconButton(
+              icon: LucideIcons.bell,
+              tooltip: 'Notifications',
+              onTap: () => context.push(RouteNames.notifications),
+              badge: unreadBadge,
+            ),
+          ],
+        ),
       ),
     );
   }
