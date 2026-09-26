@@ -192,9 +192,9 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
     }
   }
 
-  Future<String?> _askReason(DateTime date) {
+  Future<String?> _askReason(DateTime date) async {
     final controller = TextEditingController();
-    return showDialog<String>(
+    final result = await showDialog<String>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: Text('Mark ${DateFormat('dd MMM').format(date)} as Holiday'),
@@ -212,6 +212,8 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
         ],
       ),
     );
+    controller.dispose();
+    return result;
   }
 
   Future<DateTime?> _pickTargetDate(DateTime source) async {
@@ -928,7 +930,7 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text('${otherShift == 'Shift-1' ? 'S1' : 'S2'}·${other.classCount}',
-                      style: typography.bodySmall.copyWith(fontSize: 8, color: plannerStatusStyle(other.displayStatus).color)),
+                      style: typography.bodySmall.copyWith(fontSize: 11, color: plannerStatusStyle(other.displayStatus).color)),
                 ),
             ],
           ),
@@ -948,7 +950,7 @@ class _ShiftPlannerScreenState extends ConsumerState<ShiftPlannerScreen> {
                   Text(active.displayStatus, style: typography.bodySmallSemiBold.copyWith(color: style.color, fontSize: 11)),
                   if (active.classCount > 0)
                     Text('${active.classCount} class${active.classCount == 1 ? '' : 'es'}',
-                        style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 10)),
+                        style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11)),
                 ],
               ),
             )

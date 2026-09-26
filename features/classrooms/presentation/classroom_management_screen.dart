@@ -57,7 +57,7 @@ class ClassroomManagementScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final classroomsAsync = ref.watch(classroomControllerProvider);
-    final studentsAsync = ref.watch(studentControllerProvider);
+    final studentsAsync = ref.watch(allStudentsProvider);
     
     final user = ref.watch(authControllerProvider).value;
     final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
@@ -138,6 +138,7 @@ class ClassroomManagementScreen extends ConsumerWidget {
             OutlinedButton.icon(
               onPressed: () {
                 ref.invalidate(classroomControllerProvider);
+                ref.invalidate(allStudentsProvider);
                 ref.invalidate(studentControllerProvider);
               },
               icon: const Icon(LucideIcons.refreshCw, size: 16),
@@ -234,7 +235,8 @@ class ClassroomManagementScreen extends ConsumerWidget {
     if (ok == true && newName.isNotEmpty && newName != classroom.name) {
       try {
         await ref.read(classroomControllerProvider.notifier).renameClassroom(classroom.id, newName);
-        ref.invalidate(studentControllerProvider); // enrolled students were re-pointed
+        ref.invalidate(allStudentsProvider); // enrolled students were re-pointed
+        ref.invalidate(studentControllerProvider);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Class renamed.')));
         }
@@ -244,6 +246,7 @@ class ClassroomManagementScreen extends ConsumerWidget {
         }
       }
     }
+    ctrl.dispose();
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref, ClassroomModel classroom, int count) async {
@@ -348,5 +351,6 @@ class ClassroomManagementScreen extends ConsumerWidget {
         }
       }
     }
+    nameController.dispose();
   }
 }

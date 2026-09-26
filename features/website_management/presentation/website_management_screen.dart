@@ -38,7 +38,7 @@ class _WebsiteManagementScreenState extends ConsumerState<WebsiteManagementScree
           return Form(
             key: _formKey,
             child: DefaultTabController(
-              length: 6,
+              length: 5,
               child: Column(
                 children: [
                   const TabBar(
@@ -46,7 +46,6 @@ class _WebsiteManagementScreenState extends ConsumerState<WebsiteManagementScree
                     tabs: [
                       Tab(text: 'General (Hero & About)'),
                       Tab(text: 'Committees'),
-                      Tab(text: 'Education & Study'),
                       Tab(text: 'Events'),
                       Tab(text: 'News'),
                       Tab(text: 'Media Gallery'),
@@ -57,7 +56,6 @@ class _WebsiteManagementScreenState extends ConsumerState<WebsiteManagementScree
                       children: [
                         _buildGeneralTab(),
                         _buildCommitteesTab(),
-                        _buildEducationTab(),
                         _buildEventsTab(),
                         _buildNewsTab(),
                         _buildMediaTab(),
@@ -83,17 +81,22 @@ class _WebsiteManagementScreenState extends ConsumerState<WebsiteManagementScree
     );
   }
 
-  void _saveContent() {
-    if (_formKey.currentState!.validate()) {
-      ref.read(websiteControllerProvider.notifier).updateContent(
-        content: _currentContent,
-        images: _selectedImages.isNotEmpty ? _selectedImages : null,
-      ).then((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Website content updated successfully!')),
-        );
-        _selectedImages.clear();
-      });
+  Future<void> _saveContent() async {
+    if (!_formKey.currentState!.validate()) return;
+    try {
+      await ref.read(websiteControllerProvider.notifier).updateContent(
+            content: _currentContent,
+            images: _selectedImages.isNotEmpty ? _selectedImages : null,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Website content updated successfully!')),
+      );
+      _selectedImages.clear();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+      }
     }
   }
 
@@ -101,6 +104,7 @@ class _WebsiteManagementScreenState extends ConsumerState<WebsiteManagementScree
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
+      if (!mounted) return;
       setState(() {
         _selectedImages.removeWhere((entry) => entry.key == fieldName);
         _selectedImages.add(MapEntry(fieldName, File(pickedFile.path)));
@@ -276,11 +280,6 @@ class _WebsiteManagementScreenState extends ConsumerState<WebsiteManagementScree
           ),
       ],
     );
-  }
-
-  Widget _buildEducationTab() {
-    // Similar implementation for education and study programs...
-    return const Center(child: Text('Education & Study Programs Config (Similar to Committees)'));
   }
 
   Widget _buildEventsTab() {

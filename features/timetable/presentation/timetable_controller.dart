@@ -16,7 +16,7 @@ String deriveAcademicYear(int year, int month) {
 
 /// Timetable data for a specific shift + month.
 /// Arguments: (shift, year, month, academicYear)
-final timetableDataProvider = FutureProvider.family<
+final timetableDataProvider = FutureProvider.autoDispose.family<
     TimetableData,
     ({String shift, int year, int month, String academicYear})>((ref, args) {
   final instituteId = ref.watch(selectedInstituteProvider).id;
@@ -31,7 +31,7 @@ final timetableDataProvider = FutureProvider.family<
 
 /// List of dates that have at least one timetable entry scheduled for this month.
 /// Used by TimetableScreen to show only actual scheduled dates (not full calendar).
-final scheduledDatesProvider = FutureProvider.family<
+final scheduledDatesProvider = FutureProvider.autoDispose.family<
     List<DateTime>,
     ({String shift, int year, int month, String academicYear})>((ref, args) {
   final instituteId = ref.watch(selectedInstituteProvider).id;

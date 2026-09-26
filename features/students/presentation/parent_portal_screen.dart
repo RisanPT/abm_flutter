@@ -333,14 +333,24 @@ class _StudentCard extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text('Active', style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w700, fontSize: 12)),
-          ),
+          Builder(builder: (_) {
+            // Reflect the student's REAL status, defaulting to active only when
+            // the field is genuinely absent — never show a deactivated student
+            // as "Active" to their parent.
+            final isActive = student['isActive'] != false;
+            final badgeColor = isActive ? colors.green : colors.textSecondary;
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                isActive ? 'Active' : 'Inactive',
+                style: typography.bodySmallSemiBold.copyWith(color: badgeColor),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -395,7 +405,8 @@ class _AttendanceCard extends StatelessWidget {
             ...records.take(5).map((r) {
               final date = r['date'] as String?;
               final status = r['status'] as String? ?? '';
-              final color = status == 'Present' ? Colors.green : status == 'Absent' ? Colors.red : Colors.orange;
+              final s = status.toLowerCase();
+              final color = s == 'present' ? Colors.green : s == 'absent' ? Colors.red : Colors.orange;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(

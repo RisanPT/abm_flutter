@@ -26,15 +26,6 @@ Future<List<RouteModel>> transportRoutes(Ref ref) {
   return ref.watch(transportRepositoryProvider).getRoutes(institute.id);
 }
 
-// Family provider for route-specific assignments
-final transportAssignmentsByRouteProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String?>((ref, routeId) {
-  final institute = ref.watch(selectedInstituteProvider);
-  return ref
-      .watch(transportRepositoryProvider)
-      .getAssignments(instituteId: institute.id, routeId: routeId);
-});
-
 // All assignments (no route filter)
 final transportAssignmentsProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) {

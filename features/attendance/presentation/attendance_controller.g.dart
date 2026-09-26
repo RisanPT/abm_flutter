@@ -59,7 +59,7 @@ final class AttendanceControllerProvider
 }
 
 String _$attendanceControllerHash() =>
-    r'95897584d9ab6c7938125162badb7a32d0590420';
+    r'5a6ffcf362037ba98071caf4a73d6c72759c2e16';
 
 final class AttendanceControllerFamily extends $Family
     with
@@ -159,44 +159,3 @@ abstract class _$AttendanceController
     );
   }
 }
-
-@ProviderFor(attendanceSummary)
-final attendanceSummaryProvider = AttendanceSummaryProvider._();
-
-final class AttendanceSummaryProvider
-    extends
-        $FunctionalProvider<
-          AsyncValue<Map<String, Map<String, int>>>,
-          Map<String, Map<String, int>>,
-          FutureOr<Map<String, Map<String, int>>>
-        >
-    with
-        $FutureModifier<Map<String, Map<String, int>>>,
-        $FutureProvider<Map<String, Map<String, int>>> {
-  AttendanceSummaryProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'attendanceSummaryProvider',
-        isAutoDispose: true,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
-
-  @override
-  String debugGetCreateSourceHash() => _$attendanceSummaryHash();
-
-  @$internal
-  @override
-  $FutureProviderElement<Map<String, Map<String, int>>> $createElement(
-    $ProviderPointer pointer,
-  ) => $FutureProviderElement(pointer);
-
-  @override
-  FutureOr<Map<String, Map<String, int>>> create(Ref ref) {
-    return attendanceSummary(ref);
-  }
-}
-
-String _$attendanceSummaryHash() => r'290d62a80e955416a52196c0b4acecee1ed25363';

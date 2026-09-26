@@ -1,6 +1,7 @@
 
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
@@ -228,7 +229,7 @@ class _IncomeEntryScreenState extends ConsumerState<IncomeEntryScreen> {
                           children: [
                             Text('Total Income', style: typography.bodyMedium.copyWith(color: Colors.white70)),
                             const Gap(4),
-                            Text('SAR ${total.toStringAsFixed(2)}',
+                            Text(sar(total),
                                 style: typography.h2.copyWith(color: Colors.white)),
                             Text(DateFormat('MMMM yyyy').format(_selectedMonth),
                                 style: typography.bodySmall.copyWith(color: Colors.white60)),
@@ -385,7 +386,7 @@ class _IncomeCard extends StatelessWidget {
               ],
             ),
           ),
-          Text('+SAR ${entry.amount.toStringAsFixed(0)}',
+          Text('+${sar(entry.amount)}',
               style: typography.bodyLargeSemiBold.copyWith(color: Colors.green.shade700)),
         ],
       ),
@@ -438,10 +439,17 @@ class _AddIncomeDialogState extends ConsumerState<_AddIncomeDialog> {
   }
 
   Future<void> _submit() async {
+    final messenger = ScaffoldMessenger.of(context);
     final amount = double.tryParse(_amountController.text);
-    if (amount == null || amount <= 0) return;
+    if (amount == null || amount <= 0) {
+      messenger.showSnackBar(const SnackBar(content: Text('Enter a valid amount greater than 0.')));
+      return;
+    }
     final category = _categoryController.text.trim();
-    if (category.isEmpty) return;
+    if (category.isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('Please choose a category.')));
+      return;
+    }
 
     final institute = ref.read(selectedInstituteProvider);
     setState(() => _isSaving = true);
@@ -474,7 +482,7 @@ class _AddIncomeDialogState extends ConsumerState<_AddIncomeDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<String>(
-              value: _categoryController.text.isNotEmpty && _incomeCategories.contains(_categoryController.text)
+              initialValue: _categoryController.text.isNotEmpty && _incomeCategories.contains(_categoryController.text)
                   ? _categoryController.text
                   : _incomeCategories.first,
               decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),

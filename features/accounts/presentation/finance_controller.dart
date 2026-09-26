@@ -9,6 +9,6 @@ final accountSummariesProvider = FutureProvider<List<AccountSummary>>((ref) {
 });
 
 final studentAccountDetailsProvider =
-    FutureProvider.family<StudentAccountDetails, String>((ref, studentId) {
+    FutureProvider.autoDispose.family<StudentAccountDetails, String>((ref, studentId) {
   return ref.read(accountRepositoryProvider).getStudentAccountDetails(studentId);
 });

@@ -13,7 +13,7 @@ part of 'student_controller.dart';
 final studentControllerProvider = StudentControllerProvider._();
 
 final class StudentControllerProvider
-    extends $AsyncNotifierProvider<StudentController, List<StudentModel>> {
+    extends $AsyncNotifierProvider<StudentController, StudentListState> {
   StudentControllerProvider._()
     : super(
         from: null,
@@ -33,20 +33,20 @@ final class StudentControllerProvider
   StudentController create() => StudentController();
 }
 
-String _$studentControllerHash() => r'8e342f4e28b07bf9f0d638950ecaf65c894fbf91';
+String _$studentControllerHash() => r'd7d3a6a0ef960c29fe9044cdd54d9929aa4e4499';
 
-abstract class _$StudentController extends $AsyncNotifier<List<StudentModel>> {
-  FutureOr<List<StudentModel>> build();
+abstract class _$StudentController extends $AsyncNotifier<StudentListState> {
+  FutureOr<StudentListState> build();
   @$mustCallSuper
   @override
   void runBuild() {
     final ref =
-        this.ref as $Ref<AsyncValue<List<StudentModel>>, List<StudentModel>>;
+        this.ref as $Ref<AsyncValue<StudentListState>, StudentListState>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<AsyncValue<List<StudentModel>>, List<StudentModel>>,
-              AsyncValue<List<StudentModel>>,
+              AnyNotifier<AsyncValue<StudentListState>, StudentListState>,
+              AsyncValue<StudentListState>,
               Object?,
               Object?
             >;

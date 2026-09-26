@@ -21,10 +21,12 @@ abstract class AttendanceModel with _$AttendanceModel {
     String? admissionNumber, // The student's roll number or admission ID
     String? teacherId,
     String? teacherName, // Populated from teacherId object if available
+    String? employeeId, // Friendly teacher employee number (e.g. "0013")
     required DateTime date,
     @Default(AttendanceStatus.absent) AttendanceStatus status,
     @Default('Admin') String markedBy,
     String? remarks,
+    DateTime? createdAt, // When the record was first marked (check-in time)
   }) = _AttendanceModel;
 
   factory AttendanceModel.fromJson(Map<String, dynamic> json) => 
@@ -44,6 +46,7 @@ abstract class AttendanceModel with _$AttendanceModel {
       final teacherMap = modifiedJson['teacherId'] as Map<String, dynamic>;
       modifiedJson['teacherId'] = teacherMap['_id'] ?? '';
       modifiedJson['teacherName'] = teacherMap['fullName'] ?? teacherMap['name'] ?? '';
+      modifiedJson['employeeId'] = teacherMap['employeeId']?.toString() ?? modifiedJson['employeeId'];
     }
     
     return modifiedJson;

@@ -45,8 +45,9 @@ class InstituteList extends _$InstituteList {
     return ref.watch(instituteRepositoryProvider).getInstitutes();
   }
 
+  // Mutations keep the current list visible (no full-screen spinner) — guard sets
+  // the new data (or error) when the refetch completes.
   Future<void> addInstitute(Map<String, dynamic> data) async {
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       await ref.read(instituteRepositoryProvider).createInstitute(data);
       return ref.read(instituteRepositoryProvider).getInstitutes();
@@ -54,7 +55,6 @@ class InstituteList extends _$InstituteList {
   }
 
   Future<void> updateInstitute(String id, Map<String, dynamic> data) async {
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       await ref.read(instituteRepositoryProvider).updateInstitute(id, data);
       return ref.read(instituteRepositoryProvider).getInstitutes();
@@ -62,7 +62,6 @@ class InstituteList extends _$InstituteList {
   }
 
   Future<void> deleteInstitute(String id) async {
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       await ref.read(instituteRepositoryProvider).deleteInstitute(id);
       return ref.read(instituteRepositoryProvider).getInstitutes();
@@ -70,7 +69,9 @@ class InstituteList extends _$InstituteList {
   }
 }
 
-@riverpod
+// App-global: the manually-picked institute must survive navigation, so this is
+// kept alive rather than autoDispose (which could silently revert the selection).
+@Riverpod(keepAlive: true)
 class SelectedInstitute extends _$SelectedInstitute {
   Institute? _manualSelection;
 

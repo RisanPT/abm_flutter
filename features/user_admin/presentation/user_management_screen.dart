@@ -282,12 +282,14 @@ class _UserDialogState extends ConsumerState<_UserDialog> {
         ],
       ),
     );
+    controller.dispose();
 
     if (name != null && name.isNotEmpty) {
       setState(() => _isLoading = true);
       try {
         await ref.read(adminServiceProvider).createRole(name);
         ref.invalidate(rolesProvider);
+        if (!mounted) return;
         setState(() {
           _selectedRole = name;
         });

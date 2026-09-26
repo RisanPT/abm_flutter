@@ -61,7 +61,7 @@ class InstituteManagementScreen extends ConsumerWidget {
     );
   }
 
-  void _showInstituteDialog(BuildContext context, WidgetRef ref, {Institute? institute}) {
+  Future<void> _showInstituteDialog(BuildContext context, WidgetRef ref, {Institute? institute}) async {
     final nameController = TextEditingController(text: institute?.name);
     final locationController = TextEditingController(text: institute?.location);
     final addressController = TextEditingController(text: institute?.address);
@@ -69,7 +69,7 @@ class InstituteManagementScreen extends ConsumerWidget {
     final emailController = TextEditingController(text: institute?.email);
     String selectedIcon = institute?.iconName ?? 'school';
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
@@ -142,6 +142,11 @@ class InstituteManagementScreen extends ConsumerWidget {
         ),
       ),
     );
+    nameController.dispose();
+    locationController.dispose();
+    addressController.dispose();
+    contactController.dispose();
+    emailController.dispose();
   }
 
   Widget _iconOption(IconData icon, String value, String current, Function(String) onSelect) {

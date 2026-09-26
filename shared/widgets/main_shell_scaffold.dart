@@ -7,6 +7,7 @@ import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
+import 'package:abm_madrasa/features/notifications/presentation/bug_report.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -298,7 +299,9 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                   final canPop = context.canPop();
                   return Material(
                     color: Colors.transparent,
-                    child: InkWell(
+                    child: Tooltip(
+                      message: canPop ? 'Back' : 'Menu',
+                      child: InkWell(
                       onTap: () => canPop ? context.pop() : _scaffoldKey.currentState?.openDrawer(),
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
@@ -321,16 +324,24 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                         ),
                       ),
                     ),
+                    ),
                   );
                 },
               ),
             ),
-          // Floating notification bell (top-right) — one entry point that works
-          // for every staff/admin role on mobile and desktop.
+          // Floating actions (top-right): a bug-report button + notification bell.
+          // One consistent entry point for every staff/admin role, on mobile and
+          // desktop, so reporting an issue is always a single tap away.
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             right: 12,
-            child: _ShellNotificationBell(),
+            child: Row(
+              children: [
+                _ShellBugButton(),
+                const SizedBox(width: 10),
+                _ShellNotificationBell(),
+              ],
+            ),
           ),
         ],
       ),
@@ -451,6 +462,37 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
 
 /// The shell's floating notification bell — a white rounded button matching the
 /// floating menu/back button, with an unread badge, opening the shared inbox.
+/// A floating "Report a Bug" button that sits beside the notification bell on
+/// every shell screen — the same one-tap entry point for all staff/admin roles.
+class _ShellBugButton extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    return Material(
+      color: Colors.transparent,
+      child: Tooltip(
+        message: 'Report a bug',
+        child: InkWell(
+          onTap: () => showBugReportDialog(context, ref),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: colors.white.withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Icon(LucideIcons.bug, color: colors.primary, size: 22),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ShellNotificationBell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -458,7 +500,9 @@ class _ShellNotificationBell extends ConsumerWidget {
     final count = ref.watch(unreadCountProvider);
     return Material(
       color: Colors.transparent,
-      child: InkWell(
+      child: Tooltip(
+        message: 'Notifications',
+        child: InkWell(
         onTap: () => context.push(RouteNames.notifications),
         borderRadius: BorderRadius.circular(14),
         child: Stack(
@@ -493,6 +537,7 @@ class _ShellNotificationBell extends ConsumerWidget {
               ),
           ],
         ),
+      ),
       ),
     );
   }

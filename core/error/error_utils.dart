@@ -33,11 +33,15 @@ String friendlyErrorMessage(Object? error) {
       low.contains('failed host lookup') ||
       low.contains('connection refused') ||
       low.contains('network is unreachable') ||
-      low.contains('connection closed')) {
-    return 'Cannot reach the server. Please check your connection.';
+      low.contains('connection closed') ||
+      low.contains('connection error') ||
+      low.contains('network error') ||
+      low.contains('check your internet') ||
+      low.contains('reach the server')) {
+    return 'No internet connection. Please check your connection and try again.';
   }
-  if (low.contains('timeoutexception') || low.contains('timed out')) {
-    return 'The request timed out. Please try again.';
+  if (low.contains('timeoutexception') || low.contains('timed out') || low.contains('connection timed out')) {
+    return 'The request timed out. Please check your connection and try again.';
   }
 
   // If a DioException got stringified into the message, extract its human part

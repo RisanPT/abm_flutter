@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/utils/class_sort.dart';
 import 'package:abm_madrasa/features/attendance/data/attendance_repository.dart';
@@ -31,7 +33,7 @@ class AttendanceController extends _$AttendanceController {
       // exactly the teachers who actually have a class that day. This enforces
       // the redesign rule that attendance is gated by the published timetable —
       // rather than showing every shift teacher regardless of whether they teach.
-      final timetableData = await ref.read(
+      final timetableData = await ref.watch(
         timetableDataProvider((shift: shift, year: year, month: month, academicYear: academicYear)).future,
       );
 
@@ -48,8 +50,13 @@ class AttendanceController extends _$AttendanceController {
 
       // Resolve current teacher names (the schedule carries a snapshot; the
       // teacher record is the source of truth for the display name).
-      final allTeachers = await ref.read(teacherRepositoryProvider).getTeachers();
+      // Independent fetches run in parallel (teacher list + existing attendance).
+      final (allTeachers, existingAttendance) = await (
+        ref.read(teacherRepositoryProvider).getTeachers(instituteId: instituteId),
+        ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId, type: 'Teacher'),
+      ).wait;
       final nameById = {for (final t in allTeachers) t.id: t.fullName};
+      final empById = {for (final t in allTeachers) t.id: t.employeeId};
 
       // Distinct teachers who teach on this date, sorted by name.
       final seen = <String>{};
@@ -60,28 +67,29 @@ class AttendanceController extends _$AttendanceController {
       }
       scheduledTeachers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-      final existingAttendance = await ref
-          .read(attendanceRepositoryProvider)
-          .getAttendanceForDate(date, instituteId, type: 'Teacher');
-
       return scheduledTeachers.map((teacher) {
         final existing = existingAttendance.where((a) => a.teacherId == teacher.id).firstOrNull;
-        return existing ??
-            AttendanceModel(
-              teacherId: teacher.id,
-              teacherName: teacher.name,
-              date: date,
-              status: AttendanceStatus.present,
-            );
+        if (existing != null) {
+          // Persisted row (has _id). Ensure the friendly employeeId is present.
+          return existing.copyWith(employeeId: empById[teacher.id] ?? existing.employeeId);
+        }
+        // Placeholder for a teacher with no record yet (id == null → "Not marked").
+        return AttendanceModel(
+          teacherId: teacher.id,
+          teacherName: teacher.name,
+          employeeId: empById[teacher.id],
+          date: date,
+          status: AttendanceStatus.present,
+        );
       }).toList();
     } else {
       // ── Student Attendance ──────────────────────────────────────────────
       // Only load students if a timetable entry exists for this classroom on this date.
       if (classroom == null || classroom.isEmpty) return [];
 
-      // Fetch scheduled classrooms for today
+      // Fetch scheduled classrooms for today (watch so a timetable edit refreshes).
       final scheduledClassrooms = await ref
-          .read(scheduledClassroomsForDateProvider(
+          .watch(scheduledClassroomsForDateProvider(
             (date: date, shift: shift, academicYear: academicYear, year: year, month: month, instituteId: instituteId),
           ).future);
 
@@ -90,14 +98,12 @@ class AttendanceController extends _$AttendanceController {
         return [];
       }
 
-      final allStudents = await ref
-          .read(studentRepositoryProvider)
-          .getStudents(classroom: classroom);
+      // Independent fetches run in parallel (students + existing attendance).
+      final (allStudents, existingAttendance) = await (
+        ref.read(studentRepositoryProvider).getStudents(classroom: classroom, instituteId: instituteId),
+        ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId, type: 'Student'),
+      ).wait;
       final students = allStudents.where((s) => s.shift == shift).toList();
-
-      final existingAttendance = await ref
-          .read(attendanceRepositoryProvider)
-          .getAttendanceForDate(date, instituteId, type: 'Student');
 
       return students.map((student) {
         final existing =
@@ -157,7 +163,6 @@ class AttendanceController extends _$AttendanceController {
             type: type,
             classroomName: classroomName,
           );
-      ref.invalidate(attendanceSummaryProvider);
       return records;
     });
   }
@@ -176,7 +181,7 @@ final attendanceClassroomsProvider = FutureProvider<List<String>>((ref) async {
 // ─── Scheduled classrooms for a specific date ─────────────────────────────────
 /// Returns classrooms that have at least one timetable entry on the given date.
 /// Attendance is only available for classrooms in this list.
-final scheduledClassroomsForDateProvider = FutureProvider.family<
+final scheduledClassroomsForDateProvider = FutureProvider.autoDispose.family<
     List<String>,
     ({DateTime date, String shift, String academicYear, int year, int month, String instituteId})>((ref, args) async {
   // Fetch all timetable data for this shift + month
@@ -187,7 +192,7 @@ final scheduledClassroomsForDateProvider = FutureProvider.family<
     academicYear: args.academicYear,
   );
 
-  final timetableData = await ref.read(timetableDataProvider(timetableArgs).future);
+  final timetableData = await ref.watch(timetableDataProvider(timetableArgs).future);
 
   // Filter entries to only those on the requested date
   final targetDate = DateTime(args.date.year, args.date.month, args.date.day);
@@ -203,28 +208,3 @@ final scheduledClassroomsForDateProvider = FutureProvider.family<
 
   return classroomsOnDate;
 });
-
-// ─── Attendance summary ───────────────────────────────────────────────────────
-@riverpod
-Future<Map<String, Map<String, int>>> attendanceSummary(Ref ref) async {
-  final date = DateTime.now();
-  final instituteId = ref.watch(selectedInstituteProvider).id;
-  final attendance =
-      await ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId);
-  final students = await ref.read(studentRepositoryProvider).getStudents();
-
-  final Map<String, Map<String, int>> summary = {};
-
-  for (final student in students) {
-    final classroom = student.classroom;
-    summary.putIfAbsent(classroom, () => {'present': 0, 'total': 0});
-    summary[classroom]!['total'] = summary[classroom]!['total']! + 1;
-
-    final record = attendance.where((a) => a.studentId == student.id).firstOrNull;
-    if (record != null && record.status == AttendanceStatus.present) {
-      summary[classroom]!['present'] = summary[classroom]!['present']! + 1;
-    }
-  }
-
-  return summary;
-}

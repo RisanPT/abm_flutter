@@ -234,22 +234,33 @@ class _LoginCard extends ConsumerWidget {
             prefixIcon: Icons.lock_outline_rounded,
             isPassword: true,
           ),
-          const Gap(16),
-          Row(
-            children: [
-              Icon(Icons.check_box, color: const Color(0xFF0F4A3A), size: 18),
-              const Gap(8),
-              Text('Remember me', style: typography.bodyMedium),
-              const Spacer(),
-              Text(
-                'Forgot Password?',
-                style: typography.bodyMediumSemiBold.copyWith(
-                  color: const Color(0xFF0F4A3A),
+          const Gap(8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Forgot Password?'),
+                  content: const Text(
+                    'For your security, passwords can only be reset by an administrator. '
+                    'Please contact your madrasa office or IT admin to have your password reset.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('OK'),
+                    ),
+                  ],
                 ),
               ),
-            ],
+              child: Text(
+                'Forgot Password?',
+                style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
+              ),
+            ),
           ),
-          const Gap(28),
+          const Gap(20),
           authState.isLoading
               ? const Center(child: CircularProgressIndicator())
               : ABMButton(

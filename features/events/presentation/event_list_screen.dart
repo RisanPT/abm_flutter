@@ -1,6 +1,8 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
+import 'package:abm_madrasa/shared/widgets/confirm_dialog.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:abm_madrasa/features/events/domain/event_model.dart';
 import 'package:abm_madrasa/features/events/presentation/event_controller.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -129,7 +131,23 @@ class _EventCard extends ConsumerWidget {
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                        onPressed: () => ref.read(eventControllerProvider.notifier).deleteEvent(event.id!),
+                        tooltip: 'Delete event',
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final ok = await confirmActionDialog(
+                            context,
+                            title: 'Delete Event',
+                            message: 'Delete "${event.title}"? This cannot be undone.',
+                            icon: LucideIcons.trash2,
+                          );
+                          if (!ok) return;
+                          try {
+                            await ref.read(eventControllerProvider.notifier).deleteEvent(event.id!);
+                            messenger.showSnackBar(const SnackBar(content: Text('Event deleted.')));
+                          } catch (e) {
+                            messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+                          }
+                        },
                       ),
                     ],
                   ),
@@ -237,6 +255,9 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
   late DateTime _date;
   final List<XFile> _images = [];
   final List<Uint8List> _imagesBytes = [];
+  // Local working copy of the event's existing images, so removing one and then
+  // cancelling doesn't permanently mutate the underlying event model.
+  final List<String> _existingImageUrls = [];
   bool _isUploading = false;
   bool _notify = true; // notify students & teachers on create
   EventStatus _status = EventStatus.upcoming;
@@ -249,6 +270,7 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
     _locController = TextEditingController(text: widget.event?.location);
     _date = widget.event?.date ?? DateTime.now();
     _status = widget.event?.status ?? EventStatus.upcoming;
+    _existingImageUrls.addAll(widget.event?.imageUrls ?? const []);
   }
 
   @override
@@ -303,7 +325,7 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
       final nav = Navigator.of(context, rootNavigator: true);
 
       try {
-        List<String> finalImageUrls = widget.event?.imageUrls != null ? List<String>.from(widget.event!.imageUrls!) : [];
+        List<String> finalImageUrls = List<String>.from(_existingImageUrls);
 
         if (_images.isNotEmpty) {
           final List<String> newUrls = [];
@@ -360,9 +382,9 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
   }
 
   void _removeExistingImage(int index) {
-    if (widget.event?.imageUrls != null) {
+    if (index >= 0 && index < _existingImageUrls.length) {
       setState(() {
-        widget.event!.imageUrls!.removeAt(index);
+        _existingImageUrls.removeAt(index);
       });
     }
   }
@@ -519,7 +541,7 @@ class _AddEventDialogState extends ConsumerState<_AddEventDialog> {
                         const Gap(16),
                         _ImageManager(
                           imagesBytes: _imagesBytes,
-                          imageUrls: widget.event?.imageUrls ?? [],
+                          imageUrls: _existingImageUrls,
                           onPick: _pickImages,
                           onRemoveNew: _removeImage,
                           onRemoveExisting: _removeExistingImage,

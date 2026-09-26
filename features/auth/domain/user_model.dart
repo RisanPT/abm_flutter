@@ -7,6 +7,7 @@ class AppRoles {
   static const superAdmin = 'Super Admin';
   static const itAdmin = 'IT Admin';
   static const headMaster = 'Head Master';
+  static const principal = 'Principal';
   static const teacher = 'Teacher';
   static const treasurer = 'Treasurer';
   static const staff = 'Staff';

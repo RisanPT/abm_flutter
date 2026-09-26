@@ -9,7 +9,7 @@ import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-const _green = Color(0xFF0F4A3A);
+const _green = Color(0xFF1B3D2F); // brand primary
 const _gold = Color(0xFFD6B64C);
 const _present = Color(0xFF2F855A);
 const _late = Color(0xFFDD6B20);

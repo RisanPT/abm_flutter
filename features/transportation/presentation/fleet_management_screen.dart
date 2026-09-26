@@ -326,7 +326,9 @@ class _VehiclesList extends ConsumerWidget {
     final vehiclesAsync = ref.watch(transportVehiclesProvider);
     final driversAsync = ref.watch(transportDriversProvider);
     return vehiclesAsync.when(
-      data: (vehicles) => ListView.builder(
+      data: (vehicles) => vehicles.isEmpty
+          ? _fleetEmpty(context, LucideIcons.bus, 'No vehicles yet', 'Tap + to add your first vehicle.')
+          : ListView.builder(
         padding: const EdgeInsets.all(20),
         itemCount: vehicles.length,
         itemBuilder: (context, index) {
@@ -407,7 +409,9 @@ class _DriversList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final driversAsync = ref.watch(transportDriversProvider);
     return driversAsync.when(
-      data: (drivers) => ListView.builder(
+      data: (drivers) => drivers.isEmpty
+          ? _fleetEmpty(context, LucideIcons.userCog, 'No drivers yet', 'Tap + to add a driver.')
+          : ListView.builder(
         padding: const EdgeInsets.all(20),
         itemCount: drivers.length,
         itemBuilder: (context, index) {
@@ -472,7 +476,9 @@ class _RoutesList extends ConsumerWidget {
     final routesAsync = ref.watch(transportRoutesProvider);
     final vehiclesAsync = ref.watch(transportVehiclesProvider);
     return routesAsync.when(
-      data: (routes) => ListView.builder(
+      data: (routes) => routes.isEmpty
+          ? _fleetEmpty(context, LucideIcons.mapPin, 'No routes yet', 'Tap + to create a route.')
+          : ListView.builder(
         padding: const EdgeInsets.all(20),
         itemCount: routes.length,
         itemBuilder: (context, index) {
@@ -959,4 +965,24 @@ class _TransportCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Shared friendly empty state for the fleet tabs (vehicles / drivers / routes).
+Widget _fleetEmpty(BuildContext context, IconData icon, String title, String subtitle) {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 48, color: context.colors.textSecondary.withValues(alpha: 0.4)),
+          const Gap(14),
+          Text(title, style: context.typography.bodyLargeSemiBold.copyWith(color: context.colors.textPrimary)),
+          const Gap(6),
+          Text(subtitle, textAlign: TextAlign.center,
+              style: context.typography.bodyMedium.copyWith(color: context.colors.textSecondary)),
+        ],
+      ),
+    ),
+  );
 }

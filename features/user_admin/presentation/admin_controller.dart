@@ -31,7 +31,6 @@ class AdminController extends AsyncNotifier<List<AdminUser>> {
     String? instituteId,
     num? monthlySalary,
   }) async {
-    state = const AsyncValue.loading();
     try {
       await _adminService.createUser(
         username: username,
@@ -56,7 +55,6 @@ class AdminController extends AsyncNotifier<List<AdminUser>> {
     String? instituteId,
     num? monthlySalary,
   }) async {
-    state = const AsyncValue.loading();
     try {
       await _adminService.updateUser(
         id: id,
@@ -75,7 +73,6 @@ class AdminController extends AsyncNotifier<List<AdminUser>> {
   }
 
   Future<void> deleteUser(String id) async {
-    state = const AsyncValue.loading();
     try {
       await _adminService.deleteUser(id);
       final users = await _fetchUsers();

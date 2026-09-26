@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/network/paged_result.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/features/students/domain/bulk_import_result.dart';
 import 'dart:convert';
@@ -38,6 +39,37 @@ class StudentRepository {
 
       final List<dynamic> data = response.data;
       return data.map((json) => StudentModel.fromJson(json)).toList();
+    } catch (e) {
+      throw Exception('Failed to fetch students: $e');
+    }
+  }
+
+  /// Server-paginated students for the directory's infinite scroll. Passing
+  /// `page` switches the backend into its paginated envelope response.
+  Future<PagedResult<StudentModel>> getStudentsPage({
+    String? query,
+    String? classroom,
+    String? instituteId,
+    String? shift,
+    String? status,
+    required int page,
+    int limit = 30,
+  }) async {
+    try {
+      final response = await _dio.get('/students', queryParameters: {
+        'search': query,
+        'grade': classroom,
+        'instituteId': instituteId,
+        'shift': shift,
+        'status': status,
+        'page': page,
+        'limit': limit,
+      }..removeWhere((_, v) => v == null));
+
+      return PagedResult<StudentModel>.fromJson(
+        response.data as Map<String, dynamic>,
+        StudentModel.fromJson,
+      );
     } catch (e) {
       throw Exception('Failed to fetch students: $e');
     }

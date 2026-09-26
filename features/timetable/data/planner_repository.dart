@@ -205,7 +205,7 @@ class PlannerRepository {
           'academicYear': academicYear,
           'shift': shift,
           'reason': reason,
-          if (reschedule != null) 'reschedule': reschedule,
+          'reschedule': ?reschedule,
           if (targetDate != null) 'targetDate': _dateKey(targetDate),
         },
       );
@@ -273,6 +273,20 @@ class PlannerRepository {
     }
   }
 
+  /// Auto-absent cut-off times per shift + weekday. Each entry: {shift, weekday(0-6), time 'HH:mm'}.
+  Future<List<Map<String, dynamic>>> getAttendanceCutoffs(String instituteId) async {
+    final res = await _dio.get('/institutes/$instituteId/attendance-cutoffs');
+    return ((res.data as List?) ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<void> setAttendanceCutoffs(String instituteId, List<Map<String, dynamic>> cutoffs) async {
+    try {
+      await _dio.put('/institutes/$instituteId/attendance-cutoffs', data: {'cutoffs': cutoffs});
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map ? (e.response?.data['message'] ?? 'Failed') : 'Failed to save cut-off times');
+    }
+  }
+
   /// Teacher leave: move one teacher's classes in a date range to a substitute.
   Future<ReassignResult> reassignTeacher({
     required String fromTeacherId,
@@ -312,7 +326,7 @@ class PlannerRepository {
       'instituteId': instituteId,
       'academicYear': academicYear,
       'shift': shift,
-      if (classroom != null) 'classroom': classroom,
+      'classroom': ?classroom,
     });
     return DayTimetable.fromJson(res.data as Map<String, dynamic>);
   }
@@ -354,7 +368,7 @@ class PlannerRepository {
       'instituteId': instituteId,
       'academicYear': academicYear,
       'shift': shift,
-      if (classroomName != null) 'classroomName': classroomName,
+      'classroomName': ?classroomName,
     });
   }
 
@@ -400,7 +414,7 @@ class PlannerRepository {
         'instituteId': instituteId,
         'academicYear': academicYear,
         'shift': shift,
-        if (classroomName != null) 'classroomName': classroomName,
+        'classroomName': ?classroomName,
         'sameWeekday': sameWeekday,
         'publish': publish,
         'overwrite': overwrite,
@@ -434,7 +448,7 @@ class PlannerRepository {
         'instituteId': instituteId,
         'academicYear': academicYear,
         'shift': shift,
-        if (classroomName != null) 'classroomName': classroomName,
+        'classroomName': ?classroomName,
         'sameWeekday': sameWeekday,
         'includeThisDay': includeThisDay,
         if (endDate != null) 'endDate': _dateKey(endDate),
@@ -481,8 +495,8 @@ class PlannerRepository {
     final res = await _dio.get('/teacher/schedule', queryParameters: {
       'instituteId': instituteId,
       'scope': scope,
-      if (teacherId != null) 'teacherId': teacherId,
-      if (shift != null) 'shift': shift,
+      'teacherId': ?teacherId,
+      'shift': ?shift,
     });
     final list = (res.data['classes'] as List<dynamic>? ?? []);
     return list.map((c) => TeacherClass.fromJson(c as Map<String, dynamic>)).toList();
@@ -520,7 +534,7 @@ class PlannerRepository {
     await _dio.post('/attendance/bulk', data: {
       'scheduledClassId': scheduledClassId,
       'type': type,
-      if (markedBy != null) 'markedBy': markedBy,
+      'markedBy': ?markedBy,
       'records': records,
     });
   }
@@ -534,10 +548,10 @@ class PlannerRepository {
   }) async {
     final res = await _dio.get('/student/schedule', queryParameters: {
       'instituteId': instituteId,
-      if (studentId != null) 'studentId': studentId,
-      if (classroom != null) 'classroom': classroom,
+      'studentId': ?studentId,
+      'classroom': ?classroom,
       if (date != null) 'date': _dateKey(date),
-      if (shift != null) 'shift': shift,
+      'shift': ?shift,
     });
     final list = (res.data['periods'] as List<dynamic>? ?? []);
     return list.map((c) => StudentPeriod.fromJson(c as Map<String, dynamic>)).toList();

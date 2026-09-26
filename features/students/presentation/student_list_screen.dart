@@ -28,15 +28,45 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   String? selectedClass;
   String? selectedShift;
   String selectedStatus = 'active'; // 'active' | 'inactive' | 'all'
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     if (widget.initialClass != null) {
       selectedClass = widget.initialClass;
       Future.microtask(() {
         ref.read(studentControllerProvider.notifier).filter(selectedClass, selectedShift);
       });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // Load the next page when the user nears the bottom of the directory.
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 400) {
+      ref.read(studentControllerProvider.notifier).loadMore();
+    }
+  }
+
+  // Export the FULL directory (not just the loaded pages).
+  Future<void> _handleExportPdf() async {
+    try {
+      final students = await ref.read(allStudentsProvider.future);
+      await _exportStudentsPdf(students);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+      }
     }
   }
 
@@ -75,17 +105,26 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           SliverToBoxAdapter(
             child: ABMPageHeader(
               title: 'Student Directory',
-              subtitle: 'Manage all enrolled students',
+              subtitle: studentsAsync.maybeWhen(
+                data: (s) => selectedStatus == 'active'
+                    ? '${s.total} active students'
+                    : selectedStatus == 'inactive'
+                        ? '${s.total} inactive students'
+                        : '${s.total} students',
+                orElse: () => 'Manage all enrolled students',
+              ),
               showBackButton: false,
               actions: [
                 Container(
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
                   child: IconButton(
                     icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 20),
+                    tooltip: 'Refresh',
                     onPressed: () => ref.read(studentControllerProvider.notifier).refresh(),
                   ),
                 ),
@@ -108,14 +147,14 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                   ),
                 ),
                 const Gap(8),
-                studentsAsync.whenData((students) => Container(
+                Container(
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
                   child: IconButton(
                     icon: const Icon(LucideIcons.download, color: Colors.white, size: 20),
-                    onPressed: () => _exportStudentsPdf(students),
-                    tooltip: 'Export PDF',
+                    onPressed: _handleExportPdf,
+                    tooltip: 'Export PDF (all)',
                   ),
-                )).value ?? const SizedBox.shrink(),
+                ),
               ],
               bottomChild: StudentSearchField(
                 onChanged: (val) => ref.read(studentControllerProvider.notifier).search(val),
@@ -283,28 +322,135 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     );
   }
 
-  Widget _buildStudentContent(BuildContext context, AsyncValue<List<StudentModel>> studentsAsync) {
+  Widget _buildStudentContent(BuildContext context, AsyncValue<StudentListState> studentsAsync) {
     return studentsAsync.when(
-      data: (students) {
-        if (students.isEmpty) return const SliverFillRemaining(child: Center(child: Text('No students found.')));
-        return SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          sliver: SliverGrid(
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 400,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: context.width > 600 ? 2.5 : 1.8,
+      data: (s) {
+        final students = s.items;
+        if (students.isEmpty) {
+          final filtering = selectedClass != null || selectedShift != null || selectedStatus != 'active';
+          return SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(filtering ? LucideIcons.filterX : LucideIcons.users,
+                        size: 48, color: context.colors.textSecondary),
+                    const Gap(12),
+                    Text(
+                      filtering ? 'No students match these filters' : 'No students yet',
+                      style: context.typography.bodyLargeSemiBold.copyWith(color: context.colors.textPrimary),
+                    ),
+                    const Gap(6),
+                    Text(
+                      filtering
+                          ? 'Try clearing the class, shift or status filters.'
+                          : 'Tap "Add Student" to enroll your first student.',
+                      textAlign: TextAlign.center,
+                      style: context.typography.bodyMedium.copyWith(color: context.colors.textSecondary),
+                    ),
+                    const Gap(16),
+                    if (filtering)
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            selectedClass = null;
+                            selectedShift = null;
+                            selectedStatus = 'active';
+                          });
+                          ref.read(studentControllerProvider.notifier).filter(null, null);
+                          ref.read(studentControllerProvider.notifier).setStatus('active');
+                        },
+                        icon: const Icon(LucideIcons.x, size: 16),
+                        label: const Text('Clear filters'),
+                      )
+                    else
+                      ElevatedButton.icon(
+                        onPressed: () => context.push(RouteNames.addStudent),
+                        icon: const Icon(LucideIcons.plus, size: 16),
+                        label: const Text('Add Student'),
+                      ),
+                  ],
+                ),
+              ),
             ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => StudentCard(student: students[index]),
-              childCount: students.length,
+          );
+        }
+        return SliverMainAxisGroup(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 400,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: context.width > 600 ? 2.5 : 1.8,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => StudentCard(student: students[index]),
+                  childCount: students.length,
+                ),
+              ),
             ),
-          ),
+            SliverToBoxAdapter(
+              child: _PagingFooter(
+                loading: s.loadingMore,
+                hasMore: s.hasMore,
+                shown: students.length,
+                total: s.total,
+              ),
+            ),
+          ],
         );
       },
       loading: () => const SliverFillRemaining(child: Center(child: CircularProgressIndicator())),
       error: (err, _) => SliverFillRemaining(child: Center(child: Text(friendlyErrorMessage(err)))),
+    );
+  }
+}
+
+/// Footer under the directory grid: a spinner while a page is loading, and a
+/// subtle "showing all" line once every student has been fetched.
+class _PagingFooter extends StatelessWidget {
+  const _PagingFooter({
+    required this.loading,
+    required this.hasMore,
+    required this.shown,
+    required this.total,
+  });
+
+  final bool loading;
+  final bool hasMore;
+  final int shown;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(24, 20, 24, 96),
+        child: Center(
+          child: SizedBox(
+            height: 26,
+            width: 26,
+            child: CircularProgressIndicator(strokeWidth: 2.6),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 96),
+      child: Center(
+        child: Text(
+          hasMore ? 'Showing $shown of $total' : 'All $total students loaded',
+          style: context.typography.bodySmall.copyWith(
+            color: context.colors.textSecondary,
+          ),
+        ),
+      ),
     );
   }
 }

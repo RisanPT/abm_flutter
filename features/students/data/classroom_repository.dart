@@ -15,7 +15,7 @@ class ClassroomRepository {
       final response = await _dio.get(
         '/classrooms',
         queryParameters: {
-          if (instituteId != null) 'instituteId': instituteId,
+          'instituteId': ?instituteId,
         },
       );
       final List<dynamic> data = response.data;
@@ -60,9 +60,9 @@ class ClassroomRepository {
   Future<ClassroomModel> updateClassroom(String id, {String? name, String? description, String? shift}) async {
     try {
       final response = await _dio.patch('/classrooms/$id', data: {
-        if (name != null) 'name': name,
-        if (description != null) 'description': description,
-        if (shift != null) 'shift': shift,
+        'name': ?name,
+        'description': ?description,
+        'shift': ?shift,
       });
       return ClassroomModel.fromJson(response.data);
     } catch (e) {

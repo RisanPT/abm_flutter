@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/router/route_names.dart';
+import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -20,6 +21,7 @@ class NotificationsScreen extends ConsumerWidget {
   static const _manageRoles = {
     AppRoles.itAdmin,
     AppRoles.headMaster,
+    AppRoles.principal,
     AppRoles.superAdmin,
     AppRoles.staff,
   };
@@ -84,8 +86,73 @@ class NotificationsScreen extends ConsumerWidget {
               label: const Text('Compose'),
               onPressed: () => context.push(RouteNames.notificationsCompose),
             )
-          : null,
+          : (role == AppRoles.teacher
+              ? FloatingActionButton.extended(
+                  backgroundColor: colors.primary,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(LucideIcons.send),
+                  label: const Text('Message Office'),
+                  onPressed: () => _messageOffice(context, ref),
+                )
+              : null),
     );
+  }
+
+  /// Teacher → Head Master / office admin message.
+  Future<void> _messageOffice(BuildContext context, WidgetRef ref) async {
+    final titleC = TextEditingController();
+    final bodyC = TextEditingController();
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Message the Office'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleC,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Subject'),
+            ),
+            const Gap(10),
+            TextField(
+              controller: bodyC,
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Message'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send')),
+        ],
+      ),
+    );
+    if (send == true) {
+      final title = titleC.text.trim();
+      if (title.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a subject.')));
+        }
+      } else {
+        try {
+          await ref.read(notificationRepositoryProvider).messageAdmin(title: title, body: bodyC.text.trim());
+          ref.invalidate(myNotificationsProvider);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Message sent to the office'), backgroundColor: Color(0xFF2F855A)),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+          }
+        }
+      }
+    }
+    titleC.dispose();
+    bodyC.dispose();
   }
 
   Future<void> _markRead(WidgetRef ref, NotificationItem item) async {
@@ -120,6 +187,10 @@ class NotificationsScreen extends ConsumerWidget {
       return (icon: LucideIcons.wallet, color: colors.red);
     case 'Holiday':
       return (icon: LucideIcons.palmtree, color: colors.secondary);
+    case 'Message':
+      return (icon: LucideIcons.messageSquare, color: colors.accent);
+    case 'BugReport':
+      return (icon: LucideIcons.bug, color: colors.red);
     case 'Announcement':
     case 'General':
     default:
@@ -191,6 +262,38 @@ class _NotificationTile extends StatelessWidget {
                         style: t.bodySmall.copyWith(color: colors.textSecondary),
                       ),
                     ],
+                    if (item.hasImage) ...[
+                      const Gap(8),
+                      GestureDetector(
+                        onTap: () => _showFullImage(context, item.imageUrl),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            item.imageUrl,
+                            height: 130,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (c, child, progress) => progress == null
+                                ? child
+                                : Container(
+                                    height: 130,
+                                    alignment: Alignment.center,
+                                    color: colors.background,
+                                    child: const SizedBox(
+                                      height: 22, width: 22,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                  ),
+                            errorBuilder: (c, e, s) => Container(
+                              height: 130,
+                              alignment: Alignment.center,
+                              color: colors.background,
+                              child: Icon(LucideIcons.imageOff, color: colors.textSecondary),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const Gap(8),
                     Row(
                       children: [
@@ -222,4 +325,39 @@ class _NotificationTile extends StatelessWidget {
         decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
         child: Text(label, style: context.typography.bodySmall.copyWith(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
       );
+}
+
+/// Full-screen, pinch-to-zoom viewer for a notification's attached image
+/// (e.g. a bug-report screenshot).
+void _showFullImage(BuildContext context, String url) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black87,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(12),
+      child: Stack(
+        children: [
+          InteractiveViewer(
+            maxScale: 5,
+            child: Center(
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (c, e, s) => const Icon(LucideIcons.imageOff, color: Colors.white, size: 48),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: IconButton(
+              icon: const Icon(LucideIcons.x, color: Colors.white),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

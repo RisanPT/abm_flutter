@@ -322,6 +322,7 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                                   const Gap(10),
                                   IconButton(
                                     icon: const Icon(LucideIcons.trash2, color: Colors.red),
+                                    tooltip: 'Remove subject',
                                     onPressed: () => _removeSubjectRow(index),
                                   ),
                                 ],

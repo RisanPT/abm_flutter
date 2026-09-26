@@ -5,6 +5,7 @@ import 'package:abm_madrasa/features/notifications/data/notification_repository.
 import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
+import 'package:abm_madrasa/shared/widgets/confirm_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -278,10 +279,24 @@ class _NotificationComposeScreenState extends ConsumerState<NotificationComposeS
           ),
           IconButton(
             icon: Icon(LucideIcons.trash2, size: 18, color: colors.red),
+            tooltip: 'Delete notification',
             onPressed: () async {
-              await ref.read(notificationRepositoryProvider).delete(n.id);
-              ref.invalidate(adminNotificationsProvider);
-              ref.invalidate(myNotificationsProvider);
+              final messenger = ScaffoldMessenger.of(context);
+              final ok = await confirmActionDialog(
+                context,
+                title: 'Delete Notification',
+                message: 'Delete "${n.title}"? This cannot be undone.',
+                icon: LucideIcons.trash2,
+              );
+              if (!ok) return;
+              try {
+                await ref.read(notificationRepositoryProvider).delete(n.id);
+                ref.invalidate(adminNotificationsProvider);
+                ref.invalidate(myNotificationsProvider);
+                messenger.showSnackBar(const SnackBar(content: Text('Notification deleted.')));
+              } catch (e) {
+                messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+              }
             },
           ),
         ],

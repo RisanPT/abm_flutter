@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
@@ -227,7 +228,7 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
             final cards = [
               _SummaryCard(
                 title: 'Total Outstanding',
-                value: 'SAR ${data.totalOutstanding.toStringAsFixed(0)}',
+                value: sar(data.totalOutstanding),
                 icon: LucideIcons.alertCircle,
                 color: Colors.red,
                 gradient: true,
@@ -240,7 +241,7 @@ class _OutstandingDuesScreenState extends ConsumerState<OutstandingDuesScreen> {
               ),
               _SummaryCard(
                 title: 'Total Collected',
-                value: 'SAR ${data.totalCollected.toStringAsFixed(0)}',
+                value: sar(data.totalCollected),
                 icon: LucideIcons.checkCircle,
                 color: Colors.green,
               ),
@@ -537,7 +538,7 @@ class _DueCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('SAR ${student.balance.toStringAsFixed(0)}',
+                Text(sar(student.balance),
                     style: typography.bodyLargeSemiBold.copyWith(color: statusColor)),
                 const Gap(4),
                 Container(

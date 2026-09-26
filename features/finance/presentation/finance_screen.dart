@@ -1,6 +1,7 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/finance/data/finance_repository.dart';
@@ -20,6 +21,27 @@ import 'package:printing/printing.dart';
 
 final _categoriesProvider = FutureProvider<List<FinanceCategory>>((ref) async {
   return ref.watch(madrassaFinanceRepositoryProvider).getCategories();
+});
+
+// P&L report keyed by month ('yyyy-MM') — watched (not fetched in build) so the
+// screen doesn't re-hit the server on every rebuild.
+final _pnlProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, String>((ref, month) {
+  return ref.watch(madrassaFinanceRepositoryProvider).getPnlReport(month: month);
+});
+
+class _ExpensesQuery {
+  const _ExpensesQuery(this.month, this.category);
+  final String month;
+  final String? category;
+  @override
+  bool operator ==(Object other) =>
+      other is _ExpensesQuery && month == other.month && category == other.category;
+  @override
+  int get hashCode => Object.hash(month, category);
+}
+
+final _expensesProvider = FutureProvider.autoDispose.family<List<MadrassaExpense>, _ExpensesQuery>((ref, q) {
+  return ref.watch(madrassaFinanceRepositoryProvider).getExpenses(category: q.category, month: q.month);
 });
 
 // Two summary cards side-by-side on wide screens, stacked full-width on phones.
@@ -132,18 +154,11 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   Widget _buildIncomeBody(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
-    return FutureBuilder<Map<String, dynamic>>(
-      future: ref.read(madrassaFinanceRepositoryProvider).getPnlReport(
-            month: DateFormat('yyyy-MM').format(_selectedMonth),
-          ),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text(friendlyErrorMessage(snapshot.error)));
-        }
-        final data = snapshot.data ?? const {};
+    final async = ref.watch(_pnlProvider(DateFormat('yyyy-MM').format(_selectedMonth)));
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
+      data: (data) {
         final totalIncome = (data['totalIncomes'] as num?)?.toDouble() ?? 0;
         final totalExpense = (data['totalExpenses'] as num?)?.toDouble() ?? 0;
         final net = (data['netBalance'] as num?)?.toDouble() ?? (totalIncome - totalExpense);
@@ -199,22 +214,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final user = ref.watch(authControllerProvider).asData?.value;
     final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
     final canEdit = user?.role.canEditFinance(allowedModules) ?? false;
-    final Future<List<MadrassaExpense>> expensesFuture =
-        ref.read(madrassaFinanceRepositoryProvider).getExpenses(
-              category: _selectedCategory,
-              month: DateFormat('yyyy-MM').format(_selectedMonth),
-            );
-    return FutureBuilder<List<MadrassaExpense>>(
-      future: expensesFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text(friendlyErrorMessage(snapshot.error)));
-        }
-
-        final expenses = snapshot.data ?? [];
+    final async = ref.watch(_expensesProvider(
+        _ExpensesQuery(DateFormat('yyyy-MM').format(_selectedMonth), _selectedCategory)));
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
+      data: (expenses) {
         final total = expenses.fold<double>(0, (sum, e) => sum + e.amount);
 
         return Padding(
@@ -273,7 +278,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text('SAR ${total.toStringAsFixed(0)}', style: typography.h2.copyWith(color: Colors.white)),
+            child: Text(sar(total), style: typography.h2.copyWith(color: Colors.white)),
           ),
           const Gap(4),
           Text(DateFormat('MMMM yyyy').format(_selectedMonth),
@@ -334,7 +339,11 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       context: context,
       builder: (context) => _AddExpenseDialog(
         currentMonth: _selectedMonth,
-        onSuccess: () => setState(() {}),
+        onSuccess: () {
+          ref.invalidate(_expensesProvider);
+          ref.invalidate(_pnlProvider);
+          if (mounted) setState(() {});
+        },
       ),
     );
   }
@@ -399,7 +408,7 @@ class _ExpenseCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'SAR ${expense.amount.toStringAsFixed(0)}',
+                sar(expense.amount),
                 style: typography.bodyLargeSemiBold.copyWith(color: Colors.red.shade700),
               ),
               Text(
@@ -934,7 +943,7 @@ class _IncomeStatCard extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text('SAR ${value.toStringAsFixed(0)}', style: typography.h2.copyWith(color: Colors.white)),
+            child: Text(sar(value), style: typography.h2.copyWith(color: Colors.white)),
           ),
           const Gap(4),
           Text(subtitle, style: typography.bodySmall.copyWith(color: Colors.white60), maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -1001,8 +1010,8 @@ class _IncomeCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('+ SAR ${amount.toStringAsFixed(0)}',
-                  style: typography.bodyMediumSemiBold.copyWith(color: const Color(0xFF16A34A))),
+              Text('+ ${sar(amount)}',
+                  style: typography.bodyMediumSemiBold.copyWith(color: context.colors.green)),
               if (paidOn != null)
                 Text(DateFormat('dd MMM').format(paidOn),
                     style: typography.bodySmall.copyWith(color: colors.textSecondary)),

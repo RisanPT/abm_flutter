@@ -1,10 +1,12 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 // ─── Available Grades ───────────────────────────────────────────────────────────
@@ -59,6 +61,7 @@ class _OnlineAdmissionScreenState extends ConsumerState<OnlineAdmissionScreen> {
       final dio = ref.read(dioProvider);
       final response = await dio.get('/students/siblings-count/$familyId');
       final count = (response.data['count'] as int?) ?? 0;
+      if (!mounted) return;
       setState(() {
         _siblingCount = count;
         _showConcessionHint = count >= 2;
@@ -106,6 +109,7 @@ class _OnlineAdmissionScreenState extends ConsumerState<OnlineAdmissionScreen> {
       });
 
       final id = response.data['studentId'] as String? ?? '';
+      if (!mounted) return;
       setState(() => _submittedStudentId = id);
     } catch (e) {
       if (mounted) {
@@ -444,7 +448,7 @@ class _SuccessScreen extends StatelessWidget {
                 ),
                 const Gap(28),
                 ElevatedButton.icon(
-                  onPressed: () => Navigator.pushReplacementNamed(context, '/parent-portal'),
+                  onPressed: () => context.go(RouteNames.parentPortal),
                   icon: const Icon(LucideIcons.search),
                   label: const Text('Track Student Progress'),
                 ),

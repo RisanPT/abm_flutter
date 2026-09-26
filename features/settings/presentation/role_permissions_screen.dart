@@ -36,7 +36,7 @@ class RolePermissionsScreen extends ConsumerWidget {
             children: [
               Text('Manage Role Access', style: typography.h4.copyWith(color: colors.textPrimary)),
               const Gap(8),
-              Text('Check the boxes below to grant a role access to a specific module. Changes take effect immediately upon saving.', style: typography.body.copyWith(color: colors.textSecondary)),
+              Text('Check the boxes below to grant a role access to a specific module. Changes are saved and take effect immediately.', style: typography.body.copyWith(color: colors.textSecondary)),
               const Gap(24),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -47,8 +47,10 @@ class RolePermissionsScreen extends ConsumerWidget {
                     ...allModules.map((m) => DataColumn(label: Text(m.name, style: typography.bodySemiBold))),
                   ],
                   rows: editableRoles.map((role) {
-                    final roleModel = permissions.firstWhere((p) => p.role == role, orElse: () => throw Exception('Role not found'));
-                    final currentPerms = roleModel.permissions.toSet();
+                    // A role with no saved record yet simply starts with no access
+                    // — never throw during build (that red-screens the page).
+                    final match = permissions.where((p) => p.role == role);
+                    final currentPerms = match.isEmpty ? <String>{} : match.first.permissions.toSet();
 
                     return DataRow(
                       cells: [
@@ -59,7 +61,7 @@ class RolePermissionsScreen extends ConsumerWidget {
                             Checkbox(
                               value: hasAccess,
                               activeColor: colors.primary,
-                              onChanged: (bool? value) {
+                              onChanged: (bool? value) async {
                                 if (value == null) return;
                                 final newPerms = Set<String>.from(currentPerms);
                                 if (value) {
@@ -67,7 +69,18 @@ class RolePermissionsScreen extends ConsumerWidget {
                                 } else {
                                   newPerms.remove(m.name);
                                 }
-                                ref.read(permissionControllerProvider.notifier).updatePermissions(role, newPerms.toList());
+                                final messenger = ScaffoldMessenger.of(context);
+                                try {
+                                  await ref
+                                      .read(permissionControllerProvider.notifier)
+                                      .updatePermissions(role, newPerms.toList());
+                                  messenger.showSnackBar(SnackBar(
+                                    content: Text('Updated $role access.'),
+                                    duration: const Duration(milliseconds: 900),
+                                  ));
+                                } catch (e) {
+                                  messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+                                }
                               },
                             ),
                           );

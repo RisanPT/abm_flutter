@@ -14,8 +14,9 @@ part 'dio_client.g.dart';
 /// current production API when not provided.
 const _apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://api.anasbinmalik.org/api',
+  defaultValue: 'http://localhost:5001/api', // change from production URL
 );
+
 
 @riverpod
 FlutterSecureStorage secureStorage(Ref ref) {

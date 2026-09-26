@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/network/paged_result.dart';
 import 'package:abm_madrasa/features/teachers/domain/teacher_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +29,33 @@ class TeacherRepository {
       return data
           .map((item) => TeacherModel.fromJson(item as Map<String, dynamic>))
           .toList();
+    } catch (e) {
+      throw Exception('Failed to fetch teachers: $e');
+    }
+  }
+
+  /// Server-paginated teachers for the directory's infinite scroll. Passing
+  /// `page` switches the backend into its paginated envelope response.
+  Future<PagedResult<TeacherModel>> getTeachersPage({
+    String? query,
+    String? instituteId,
+    required int page,
+    int limit = 30,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/teachers',
+        queryParameters: {
+          'search': query,
+          'instituteId': instituteId,
+          'page': page,
+          'limit': limit,
+        }..removeWhere((key, value) => value == null || value == ''),
+      );
+      return PagedResult<TeacherModel>.fromJson(
+        response.data as Map<String, dynamic>,
+        (json) => TeacherModel.fromJson(json),
+      );
     } catch (e) {
       throw Exception('Failed to fetch teachers: $e');
     }

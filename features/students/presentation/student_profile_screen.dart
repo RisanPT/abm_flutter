@@ -13,6 +13,10 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class StudentProfileScreen extends ConsumerWidget {
   final String studentId;
@@ -191,14 +195,79 @@ class _StudentProfileBody extends ConsumerWidget {
 
   Widget _buildActions(BuildContext context) {
     final btns = [
-      ABMButton(text: 'Download ID Card', onPressed: () {}, isSecondary: true),
-      ABMButton(text: 'Message Parent', onPressed: () {}),
+      ABMButton(text: 'Download ID Card', onPressed: () => _downloadIdCard(context), isSecondary: true),
+      ABMButton(text: 'Message Parent', onPressed: () => _messageParent(context)),
     ];
 
     return context.isMobile
         ? Column(children: [btns[0], const Gap(12), btns[1]])
         : Row(children: [Expanded(child: btns[0]), const Gap(12), Expanded(child: btns[1])]);
   }
+
+  // Open WhatsApp to the parent's number on file.
+  Future<void> _messageParent(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final digits = student.guardianContact.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('No parent contact is on file for this student.')));
+      return;
+    }
+    final uri = Uri.parse('https://wa.me/$digits');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) messenger.showSnackBar(const SnackBar(content: Text('Could not open WhatsApp.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    }
+  }
+
+  // Generate and share/print a simple student ID card.
+  Future<void> _downloadIdCard(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final doc = pw.Document();
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a6.landscape,
+          build: (_) => pw.Container(
+            padding: const pw.EdgeInsets.all(16),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColor.fromInt(0xFF1B3D2F), width: 2),
+              borderRadius: pw.BorderRadius.circular(10),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Anas Bin Malik Madrasa',
+                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF1B3D2F))),
+                pw.Text('Student Identity Card', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                pw.Divider(color: PdfColor.fromInt(0xFFB8860B)),
+                pw.SizedBox(height: 6),
+                _idRow('Name', student.fullName),
+                _idRow('Student ID', student.admissionNumber),
+                _idRow('Class', student.classroom),
+                _idRow('Guardian Contact', student.guardianContact),
+              ],
+            ),
+          ),
+        ),
+      );
+      await Printing.layoutPdf(onLayout: (_) => doc.save());
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    }
+  }
+
+  static pw.Widget _idRow(String label, String value) => pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 3),
+        child: pw.Row(children: [
+          pw.SizedBox(
+            width: 100,
+            child: pw.Text('$label:', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+          ),
+          pw.Expanded(child: pw.Text(value, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold))),
+        ]),
+      );
 
   Future<void> _confirmToggleActive(BuildContext context, WidgetRef ref) async {
     final deactivating = student.isActive;

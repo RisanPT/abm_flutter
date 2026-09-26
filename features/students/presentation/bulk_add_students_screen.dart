@@ -226,6 +226,7 @@ class _BulkAddStudentsScreenState extends ConsumerState<BulkAddStudentsScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       // If the grid only has blank starter rows, replace them; else append.
       if (_rows.every((r) => r.isEmpty)) {

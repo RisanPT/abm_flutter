@@ -9,9 +9,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'dart:io';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:excel/excel.dart' hide Border;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 // ── Providers ────────────────────────────────────────────────────────────────
 
@@ -45,6 +49,34 @@ final _attendanceReportProvider = FutureProvider.autoDispose.family<Map<String, 
   },
 );
 
+// Per-teacher day-by-day rows for the drill-down.
+class _TeacherDaysParams {
+  const _TeacherDaysParams({required this.teacherId, required this.month, required this.instituteId});
+  final String teacherId;
+  final String month;
+  final String instituteId;
+  @override
+  bool operator ==(Object other) =>
+      other is _TeacherDaysParams &&
+      teacherId == other.teacherId &&
+      month == other.month &&
+      instituteId == other.instituteId;
+  @override
+  int get hashCode => Object.hash(teacherId, month, instituteId);
+}
+
+final _teacherDaysProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, _TeacherDaysParams>(
+  (ref, p) async {
+    final dio = ref.watch(dioProvider);
+    final res = await dio.get('/attendance/teacher-report/${p.teacherId}', queryParameters: {
+      'month': p.month,
+      'instituteId': p.instituteId,
+    });
+    final days = ((res.data as Map)['days'] as List?) ?? [];
+    return days.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  },
+);
+
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 class AttendanceReportScreen extends ConsumerStatefulWidget {
@@ -68,8 +100,9 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
   String get _monthLabel => DateFormat('MMM yyyy').format(_selectedDate);
 
   Future<void> _refresh() async {
+    // Bumping the key changes the provider family key → refetch of the visible
+    // month for both the tab and the export (they now share this key).
     setState(() => _refreshKey++);
-    ref.invalidate(_attendanceReportProvider);
   }
 
   Future<void> _exportAttendancePdf() async {
@@ -186,6 +219,76 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
     await Printing.layoutPdf(onLayout: (_) => pdf.save());
   }
 
+  Future<void> _exportAttendanceExcel() async {
+    final institute = ref.read(selectedInstituteProvider);
+    final isStudentTab = widget.reportType == 'student';
+    final type = isStudentTab ? 'student' : 'teacher';
+    final params = _ReportParams(month: _monthKey, instituteId: institute.id, type: type, refreshKey: _refreshKey);
+
+    final reportAsync = ref.read(_attendanceReportProvider(params));
+    if (!reportAsync.hasValue) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report data is still loading or not available.')),
+        );
+      }
+      return;
+    }
+    final data = reportAsync.value!;
+
+    final excel = Excel.createExcel();
+    final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
+    if (isStudentTab) {
+      final rows = (data['studentSummary'] as List?) ?? [];
+      sheet.appendRow(['Admission No', 'Name', 'Classroom', 'Present', 'Absent', 'Late', 'Total', 'Rate %']
+          .map((e) => TextCellValue(e)).toList());
+      for (final r0 in rows) {
+        final r = r0 as Map<String, dynamic>;
+        sheet.appendRow([
+          TextCellValue(r['admissionNumber']?.toString() ?? ''),
+          TextCellValue(r['fullName']?.toString() ?? ''),
+          TextCellValue(r['classroom']?.toString() ?? ''),
+          IntCellValue((r['present'] as int?) ?? 0),
+          IntCellValue((r['absent'] as int?) ?? 0),
+          IntCellValue((r['late'] as int?) ?? 0),
+          IntCellValue((r['total'] as int?) ?? 0),
+          IntCellValue((r['rate'] as int?) ?? 0),
+        ]);
+      }
+    } else {
+      final rows = (data['summary'] as List?) ?? [];
+      sheet.appendRow(['Employee ID', 'Name', 'Present', 'Absent', 'Late', 'Total', 'Rate %']
+          .map((e) => TextCellValue(e)).toList());
+      for (final r0 in rows) {
+        final r = r0 as Map<String, dynamic>;
+        sheet.appendRow([
+          TextCellValue(r['employeeId']?.toString() ?? ''),
+          TextCellValue(r['fullName']?.toString() ?? ''),
+          IntCellValue((r['present'] as int?) ?? 0),
+          IntCellValue((r['absent'] as int?) ?? 0),
+          IntCellValue((r['late'] as int?) ?? 0),
+          IntCellValue((r['total'] as int?) ?? 0),
+          IntCellValue((r['rate'] as int?) ?? 0),
+        ]);
+      }
+    }
+
+    final bytes = excel.encode();
+    if (bytes == null) return;
+    try {
+      final dir = await getTemporaryDirectory();
+      final fname = '${type}_attendance_$_monthKey.xlsx';
+      final file = File('${dir.path}/$fname');
+      await file.writeAsBytes(bytes, flush: true);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '${isStudentTab ? 'Student' : 'Teacher'} attendance report — $_monthLabel',
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -206,6 +309,8 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                 AbmHeaderIconButton(icon: LucideIcons.refreshCw, onTap: _refresh, tooltip: 'Refresh'),
                 const Gap(6),
                 AbmHeaderIconButton(icon: LucideIcons.download, onTap: _exportAttendancePdf, tooltip: 'Export PDF'),
+                const Gap(6),
+                AbmHeaderIconButton(icon: LucideIcons.table, onTap: _exportAttendanceExcel, tooltip: 'Export Excel'),
               ],
             ),
             bottom: Material(
@@ -235,8 +340,8 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           ),
           Expanded(
             child: isStudent
-                ? _StudentReportTab(month: _monthKey, instituteId: institute.id)
-                : _TeacherReportTab(month: _monthKey, instituteId: institute.id),
+                ? _StudentReportTab(month: _monthKey, instituteId: institute.id, refreshKey: _refreshKey)
+                : _TeacherReportTab(month: _monthKey, instituteId: institute.id, refreshKey: _refreshKey),
           ),
         ],
       ),
@@ -265,13 +370,14 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
 // ── Student Report Tab ────────────────────────────────────────────────────────
 
 class _StudentReportTab extends ConsumerWidget {
-  const _StudentReportTab({required this.month, required this.instituteId});
+  const _StudentReportTab({required this.month, required this.instituteId, this.refreshKey = 0});
   final String month;
   final String instituteId;
+  final int refreshKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final params = _ReportParams(month: month, instituteId: instituteId, type: 'student');
+    final params = _ReportParams(month: month, instituteId: instituteId, type: 'student', refreshKey: refreshKey);
     final reportAsync = ref.watch(_attendanceReportProvider(params));
     return reportAsync.when(
       data: (data) {
@@ -323,13 +429,14 @@ class _StudentReportTab extends ConsumerWidget {
 // ── Teacher Report Tab ────────────────────────────────────────────────────────
 
 class _TeacherReportTab extends ConsumerWidget {
-  const _TeacherReportTab({required this.month, required this.instituteId});
+  const _TeacherReportTab({required this.month, required this.instituteId, this.refreshKey = 0});
   final String month;
   final String instituteId;
+  final int refreshKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final params = _ReportParams(month: month, instituteId: instituteId, type: 'teacher');
+    final params = _ReportParams(month: month, instituteId: instituteId, type: 'teacher', refreshKey: refreshKey);
     final reportAsync = ref.watch(_attendanceReportProvider(params));
     return reportAsync.when(
       data: (data) {
@@ -347,8 +454,15 @@ class _TeacherReportTab extends ConsumerWidget {
           padding: const EdgeInsets.all(20),
           children: [
             Text('Teacher Attendance — $month', style: context.typography.h4),
+            const Gap(4),
+            Text('Tap a teacher to see day-by-day attendance.',
+                style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary)),
             const Gap(12),
-            ...summary.map((row) => _TeacherReportRow(row: row as Map<String, dynamic>)),
+            ...summary.map((row) => _TeacherReportRow(
+                  row: row as Map<String, dynamic>,
+                  month: month,
+                  instituteId: instituteId,
+                )),
           ],
         );
       },
@@ -543,8 +657,10 @@ class _ClassroomReportRow extends StatelessWidget {
 }
 
 class _TeacherReportRow extends StatelessWidget {
-  const _TeacherReportRow({required this.row});
+  const _TeacherReportRow({required this.row, required this.month, required this.instituteId});
   final Map<String, dynamic> row;
+  final String month;
+  final String instituteId;
 
   @override
   Widget build(BuildContext context) {
@@ -552,13 +668,32 @@ class _TeacherReportRow extends StatelessWidget {
     final typography = context.typography;
     final name = row['fullName'] as String? ?? 'Unknown';
     final employeeId = row['employeeId'] as String? ?? '';
+    final teacherId = row['teacherId'] as String? ?? '';
     final present = row['present'] as int? ?? 0;
     final absent = row['absent'] as int? ?? 0;
     final late = row['late'] as int? ?? 0;
     final total = row['total'] as int? ?? 0;
     final rate = row['rate'] as int? ?? 0;
 
-    return Container(
+    return InkWell(
+      onTap: teacherId.isEmpty
+          ? null
+          : () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: colors.background,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (_) => _TeacherDaysSheet(
+                  teacherId: teacherId,
+                  teacherName: name,
+                  month: month,
+                  instituteId: instituteId,
+                ),
+              ),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -605,6 +740,7 @@ class _TeacherReportRow extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -612,6 +748,91 @@ class _TeacherReportRow extends StatelessWidget {
     if (rate >= 85) return Colors.green;
     if (rate >= 70) return Colors.orange;
     return Colors.red;
+  }
+}
+
+// Drill-down: one teacher's day-by-day attendance for the selected month.
+class _TeacherDaysSheet extends ConsumerWidget {
+  const _TeacherDaysSheet({
+    required this.teacherId,
+    required this.teacherName,
+    required this.month,
+    required this.instituteId,
+  });
+  final String teacherId;
+  final String teacherName;
+  final String month;
+  final String instituteId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final typography = context.typography;
+    final async = ref.watch(_teacherDaysProvider(
+      _TeacherDaysParams(teacherId: teacherId, month: month, instituteId: instituteId),
+    ));
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) => Column(
+        children: [
+          const Gap(10),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: colors.border, borderRadius: BorderRadius.circular(2))),
+          const Gap(12),
+          Text(teacherName, style: typography.h4),
+          Text('Attendance — $month', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+          const Gap(12),
+          Expanded(
+            child: async.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
+              data: (days) {
+                if (days.isEmpty) {
+                  return Center(child: Text('No attendance recorded for $month.',
+                      style: typography.bodyMedium.copyWith(color: colors.textSecondary)));
+                }
+                return ListView.separated(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                  itemCount: days.length,
+                  separatorBuilder: (_, _) => Divider(height: 1, color: colors.border),
+                  itemBuilder: (_, i) {
+                    final d = days[i];
+                    final date = DateTime.tryParse(d['date']?.toString() ?? '');
+                    final status = d['status']?.toString() ?? '';
+                    final label = date != null ? DateFormat('EEE, dd MMM yyyy').format(date) : '';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(children: [
+                        Expanded(child: Text(label, style: typography.bodyMedium)),
+                        _dayStatusChip(status),
+                      ]),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dayStatusChip(String status) {
+    Color c;
+    switch (status) {
+      case 'Present': c = Colors.green; break;
+      case 'Late': c = Colors.orange; break;
+      case 'Absent': c = Colors.red; break;
+      default: c = Colors.grey;
+    }
+    final t = status.isEmpty ? '—' : status;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
+      child: Text(t, style: TextStyle(color: c, fontWeight: FontWeight.w600, fontSize: 12)),
+    );
   }
 }
 

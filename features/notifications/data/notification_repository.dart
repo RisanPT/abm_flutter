@@ -17,15 +17,17 @@ class NotificationItem {
     this.audienceRole = 'all',
     this.grade = '',
     this.postedByName = '',
+    this.imageUrl = '',
     this.createdAt,
   });
 
-  final String id, title, body, type, priority, link, audienceRole, grade, postedByName;
+  final String id, title, body, type, priority, link, audienceRole, grade, postedByName, imageUrl;
   final String? eventId;
   final bool read;
   final DateTime? createdAt;
 
   bool get isImportant => priority == 'Important';
+  bool get hasImage => imageUrl.isNotEmpty;
 
   factory NotificationItem.fromJson(Map<String, dynamic> j) => NotificationItem(
         id: (j['_id'] ?? j['id'] ?? '').toString(),
@@ -38,6 +40,7 @@ class NotificationItem {
         audienceRole: (j['audienceRole'] ?? 'all').toString(),
         grade: (j['grade'] ?? '').toString(),
         postedByName: (j['postedByName'] ?? '').toString(),
+        imageUrl: (j['imageUrl'] ?? '').toString(),
         read: (j['read'] ?? false) as bool,
         createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
       );
@@ -99,6 +102,22 @@ class NotificationRepository {
       'audienceRole': audienceRole,
       'grade': grade,
       if (link != null && link.isNotEmpty) 'link': link,
+    });
+  }
+
+  /// A teacher (or staff) sends a message to management (Head Master / office admin).
+  Future<void> messageAdmin({required String title, String body = ''}) async {
+    await _dio.post('/notifications/to-admin', data: {'title': title, 'body': body});
+  }
+
+  /// Any user (teacher / student / principal / staff) reports a bug or issue.
+  /// Delivered to the IT Admin only. An optional [screenshot] (a base64 data URI,
+  /// e.g. `data:image/jpeg;base64,...`) is uploaded and attached for context.
+  Future<void> reportBug({required String title, String body = '', String? screenshot}) async {
+    await _dio.post('/notifications/bug-report', data: {
+      'title': title,
+      'body': body,
+      if (screenshot != null && screenshot.isNotEmpty) 'screenshot': screenshot,
     });
   }
 

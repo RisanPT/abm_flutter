@@ -2,6 +2,7 @@ import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/shared/widgets/confirm_dialog.dart';
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -200,6 +201,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
     if (image != null) {
       final bytes = await image.readAsBytes();
+      if (!mounted) return;
       setState(() => _pickedImageBytes = bytes);
     }
   }
@@ -209,6 +211,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
     if (image != null) {
       final bytes = await image.readAsBytes();
+      if (!mounted) return;
       setState(() => _studentIqamaImageBytes = bytes);
     }
   }
@@ -668,6 +671,7 @@ class _AddStudentScreenState extends ConsumerState<AddStudentScreen> {
     if (result == true && nameController.text.isNotEmpty) {
       await ref.read(classroomControllerProvider.notifier).addClassroom(nameController.text.trim());
     }
+    nameController.dispose();
   }
 
   Widget _buildInstituteDropdown() {
@@ -915,14 +919,26 @@ class _StudentLoginSectionState extends ConsumerState<_StudentLoginSection> {
                       ? null
                       : () async {
                           final messenger = ScaffoldMessenger.of(context);
-                          await repo.removeLogin(widget.studentId);
-                          _password.clear();
-                          if (!mounted) return;
-                          setState(() => _status = const StudentLoginStatus(
-                              hasLogin: false, loginEnabled: false, suggestedUsername: ''));
-                          messenger.showSnackBar(const SnackBar(content: Text('Login removed')));
+                          final ok = await confirmActionDialog(
+                            context,
+                            title: 'Remove Login',
+                            message: 'Remove this student\'s login account? They will no longer be able to sign in.',
+                            confirmLabel: 'Remove',
+                            icon: LucideIcons.trash2,
+                          );
+                          if (!ok) return;
+                          try {
+                            await repo.removeLogin(widget.studentId);
+                            _password.clear();
+                            if (!mounted) return;
+                            setState(() => _status = const StudentLoginStatus(
+                                hasLogin: false, loginEnabled: false, suggestedUsername: ''));
+                            messenger.showSnackBar(const SnackBar(content: Text('Login removed')));
+                          } catch (e) {
+                            messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+                          }
                         },
-                  icon: const Icon(LucideIcons.trash2, color: Color(0xFFDC2626)),
+                  icon: Icon(LucideIcons.trash2, color: context.colors.red),
                 ),
               ],
             ],

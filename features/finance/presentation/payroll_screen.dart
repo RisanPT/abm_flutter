@@ -1,6 +1,7 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:abm_madrasa/features/finance/data/finance_repository.dart';
 import 'package:abm_madrasa/features/finance/domain/payroll_models.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +11,7 @@ import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-const _green = Color(0xFF0F4A3A);
+const _green = Color(0xFF1B3D2F); // brand primary
 const _gold = Color(0xFFD6B64C);
 const _present = Color(0xFF2F855A);
 const _absent = Color(0xFFC53030);
@@ -22,7 +23,7 @@ final _payrollProvider = FutureProvider.autoDispose
       .getSalaryPreview(month: args.month, instituteId: args.instituteId, deductionPerClass: args.deduction);
 });
 
-String _money(num v) => 'SAR ${v.toStringAsFixed(0)}';
+String _money(num v) => sar(v);
 
 class PayrollScreen extends ConsumerStatefulWidget {
   const PayrollScreen({super.key});

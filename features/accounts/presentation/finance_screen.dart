@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:abm_madrasa/features/accounts/data/finance_repository.dart';
 import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_controller.dart';
@@ -14,7 +15,7 @@ import 'package:printing/printing.dart';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-String _sar(double v) => 'SAR ${v.toStringAsFixed(0)}';
+String _sar(double v) => sar(v);
 
 // Full month-by-month ledger (arrears + current) for the selected student.
 final feeLedgerProvider = FutureProvider.family.autoDispose<FeeLedger, String>(
@@ -1011,11 +1012,13 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text('Total Due',
+                        child: Text('Balance',
                             style: typography.bodyLargeSemiBold.copyWith(color: colors.textPrimary)),
                       ),
-                      Text(_sar(details.totalDue),
-                          style: typography.h4.copyWith(color: colors.primary)),
+                      Text(_sar(details.balance),
+                          style: typography.h4.copyWith(
+                            color: details.balance > 0 ? Colors.red.shade600 : Colors.green.shade600,
+                          )),
                     ],
                   ),
                 ),
@@ -1031,21 +1034,6 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                       Text(
                         '− ${_sar(details.totalPaid)}',
                         style: typography.bodyMediumSemiBold.copyWith(color: Colors.green.shade700),
-                      ),
-                    ],
-                  ),
-                  const Gap(4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text('Balance',
-                            style: typography.bodyLargeSemiBold.copyWith(color: colors.textPrimary)),
-                      ),
-                      Text(
-                        _sar(details.balance),
-                        style: typography.h4.copyWith(
-                          color: details.balance > 0 ? Colors.red.shade600 : Colors.green.shade600,
-                        ),
                       ),
                     ],
                   ),
@@ -1524,14 +1512,6 @@ class _InvoiceDialog extends StatelessWidget {
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('Total Due', style: const pw.TextStyle(fontSize: 11)),
-                  pw.Text('SAR ${item.totalDue.toStringAsFixed(0)}', style: const pw.TextStyle(fontSize: 11)),
-                ],
-              ),
-              pw.SizedBox(height: 4),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
                   pw.Text('Total Paid', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
                   pw.Text('SAR ${item.totalPaid.toStringAsFixed(0)}',
                       style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
@@ -1683,7 +1663,6 @@ class _InvoiceContent extends StatelessWidget {
               children: [
                 ...lineItems.map((item) => _InvoiceRow(label: item.title, value: _sar(item.amount))),
                 Divider(height: 20, color: colors.border),
-                _InvoiceRow(label: 'Total Due', value: _sar(receipt.totalDue)),
                 _InvoiceRow(
                   label: 'Amount Paid',
                   value: _sar(receipt.totalPaid),
@@ -1874,6 +1853,7 @@ class _LedgerCard extends ConsumerWidget {
         ],
       ),
     );
+    ctrl.dispose();
     if (amount == null || amount <= 0) return;
     try {
       await ref.read(accountRepositoryProvider).processPayment(
@@ -1909,6 +1889,7 @@ class _LedgerCard extends ConsumerWidget {
         ],
       ),
     );
+    ctrl.dispose();
     if (amount == null || amount <= 0) return;
     try {
       await ref.read(accountRepositoryProvider)

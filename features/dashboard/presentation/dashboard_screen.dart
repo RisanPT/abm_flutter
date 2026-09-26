@@ -45,7 +45,12 @@ class DashboardScreen extends ConsumerWidget {
             child: Column(
               children: [
                 _buildHeader(context, ref, isTeacher: isTeacher),
-                Padding(
+                // Keep content centered with a comfortable max width on wide
+                // desktop/web layouts instead of stretching edge to edge.
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1100),
+                    child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,6 +76,8 @@ class DashboardScreen extends ConsumerWidget {
                         _buildRecentActivity(context, stats.recentActivities),
                       ],
                     ],
+                  ),
+                    ),
                   ),
                 ),
               ],
@@ -167,24 +174,29 @@ class DashboardScreen extends ConsumerWidget {
               ),
               if (!isTeacher) ...[
                 const Gap(24),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: colors.white.withValues(alpha: 0.1)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.search, color: colors.white.withValues(alpha: 0.5), size: 20),
-                      const Gap(12),
-                      Text(
-                        'Search student, parent, or staff...',
-                        style: typography.bodySmall.copyWith(
-                          color: colors.white.withValues(alpha: 0.5),
+                // Tapping opens the student directory, which has real search.
+                InkWell(
+                  onTap: () => context.push(RouteNames.students),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: colors.white.withValues(alpha: 0.1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.search, color: colors.white.withValues(alpha: 0.7), size: 20),
+                        const Gap(12),
+                        Text(
+                          'Search students...',
+                          style: typography.bodySmall.copyWith(
+                            color: colors.white.withValues(alpha: 0.7),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

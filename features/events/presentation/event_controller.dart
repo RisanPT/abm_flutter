@@ -32,8 +32,8 @@ class EventController extends _$EventController {
     }
   }
 
+  // Mutations keep the current list visible; guard sets the refreshed data/error.
   Future<void> addEvent(EventModel event, {bool notify = true}) async {
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       await ref.read(eventRepositoryProvider).addEvent(event, notify: notify);
       return _fetchEvents();
@@ -41,7 +41,6 @@ class EventController extends _$EventController {
   }
 
   Future<void> updateEvent(String id, EventModel event) async {
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       await ref.read(eventRepositoryProvider).updateEvent(id, event);
       return _fetchEvents();
@@ -49,7 +48,6 @@ class EventController extends _$EventController {
   }
 
   Future<void> deleteEvent(String id) async {
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       await ref.read(eventRepositoryProvider).deleteEvent(id);
       return _fetchEvents();

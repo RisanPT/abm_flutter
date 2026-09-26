@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/user_management_screen.dart';
+import 'package:abm_madrasa/features/settings/presentation/attendance_cutoff_screen.dart';
+import 'package:abm_madrasa/features/notifications/presentation/bug_report.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
 import 'package:go_router/go_router.dart';
@@ -58,6 +60,17 @@ class SettingsScreen extends ConsumerWidget {
                   subtitle: 'Configure module access per role',
                   onTap: () => context.push(RouteNames.permissions),
                 ),
+                const Gap(12),
+                _SettingsTile(
+                  icon: Icons.timer_outlined,
+                  title: 'Attendance Cut-off Times',
+                  subtitle: 'Auto-absent time per shift & weekday',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const AttendanceCutoffScreen()),
+                    );
+                  },
+                ),
                 const Gap(32),
               ],
               Text('App Settings', style: typography.h4.copyWith(color: colors.textPrimary)),
@@ -81,10 +94,41 @@ class SettingsScreen extends ConsumerWidget {
               ),
               const Gap(12),
               _SettingsTile(
+                icon: Icons.bug_report_outlined,
+                title: 'Report a Bug',
+                subtitle: 'Tell the IT team about an issue',
+                onTap: () => showBugReportDialog(context, ref),
+              ),
+              const Gap(12),
+              _SettingsTile(
                 icon: Icons.help_outline,
                 title: 'Help & Support',
                 subtitle: 'Get help or contact support',
-                onTap: () {},
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Help & Support'),
+                    content: const Text(
+                      'Need help using the app?\n\n'
+                      '• For account or password issues, contact your madrasa office.\n'
+                      '• Found a problem? Use "Report a Bug" to notify the IT team directly.\n'
+                      '• For anything else, reach out to your administrator.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          showBugReportDialog(context, ref);
+                        },
+                        child: const Text('Report a Bug'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const Gap(32),
               ElevatedButton.icon(

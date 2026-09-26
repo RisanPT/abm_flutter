@@ -3,6 +3,7 @@ import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/utils/institute_time.dart';
+import 'package:abm_madrasa/shared/widgets/confirm_dialog.dart';
 import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:abm_madrasa/features/attendance/presentation/attendance_controller.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
@@ -33,6 +34,42 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
   String _searchQuery = '';
   String _selectedType = 'Student';
   String _selectedShift = 'Shift-1';
+  bool _saving = false;
+
+  // Saves the current roster with a busy state + error handling, so a failed
+  // save surfaces a friendly message instead of failing silently, and the
+  // button can't be double-tapped mid-save.
+  Future<void> _saveRecords({required String markedBy, String? classroomName}) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final successColor = context.colors.green;
+    try {
+      await ref
+          .read(
+            attendanceControllerProvider(
+              date: _selectedDate,
+              classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
+              type: _selectedType,
+              shift: _selectedShift,
+              academicYear: _academicYear,
+            ).notifier,
+          )
+          .saveAttendance(markedBy, classroomName: classroomName);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(_selectedType == 'Teacher'
+              ? 'Teacher attendance saved successfully'
+              : 'Student attendance saved successfully'),
+          backgroundColor: successColor,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   /// Chooses an accurate empty-state icon + message: distinguishes "no class
   /// scheduled on this date" from "class is scheduled but nobody is enrolled".
@@ -171,7 +208,16 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                 onSearchChanged: (value) {
                   setState(() => _searchQuery = value);
                 },
-                onMarkAllPresent: () {
+                onMarkAllPresent: () async {
+                  final ok = await confirmActionDialog(
+                    context,
+                    title: 'Mark All Present',
+                    message: 'Set every listed person to Present? You can still adjust individuals before saving.',
+                    confirmLabel: 'Mark All',
+                    destructive: false,
+                    icon: LucideIcons.checkCheck,
+                  );
+                  if (!ok) return;
                   ref
                       .read(
                         attendanceControllerProvider(
@@ -323,31 +369,11 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                     const Gap(12),
                                     ABMButton(
                                       text: 'Save Records',
-                                      onPressed: () async {
-                                        await ref
-                                            .read(
-                                              attendanceControllerProvider(
-                                                date: _selectedDate,
-                                                classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
-                                                type: _selectedType,
-                                                shift: _selectedShift,
-                                                academicYear: _academicYear,
-                                              ).notifier,
-                                            )
-                                            .saveAttendance(user?.username ?? 'Admin', classroomName: _selectedType == 'Student' ? effectiveClassroom : null);
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                _selectedType == 'Teacher'
-                                                    ? 'Teacher attendance saved successfully'
-                                                    : 'Student attendance saved successfully',
-                                              ),
-                                              backgroundColor: Colors.green.shade700,
-                                            ),
-                                          );
-                                        }
-                                      },
+                                      isLoading: _saving,
+                                      onPressed: () => _saveRecords(
+                                        markedBy: user?.username ?? 'Admin',
+                                        classroomName: _selectedType == 'Student' ? effectiveClassroom : null,
+                                      ),
                                     ),
                                   ],
                                 )
@@ -379,31 +405,11 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                       width: 190,
                                       child: ABMButton(
                                         text: 'Save Records',
-                                        onPressed: () async {
-                                          await ref
-                                              .read(
-                                                attendanceControllerProvider(
-                                                  date: _selectedDate,
-                                                  classroom: _selectedType == 'Teacher' ? null : _selectedClassroom,
-                                                  type: _selectedType,
-                                                  shift: _selectedShift,
-                                                  academicYear: _academicYear,
-                                                ).notifier,
-                                              )
-                                              .saveAttendance(user?.username ?? 'Admin', classroomName: _selectedType == 'Student' ? effectiveClassroom : null);
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  _selectedType == 'Teacher'
-                                                      ? 'Teacher attendance saved successfully'
-                                                      : 'Student attendance saved successfully',
-                                                ),
-                                                backgroundColor: Colors.green.shade700,
-                                              ),
-                                            );
-                                          }
-                                        },
+                                        isLoading: _saving,
+                                        onPressed: () => _saveRecords(
+                                          markedBy: user?.username ?? 'Admin',
+                                          classroomName: _selectedType == 'Student' ? effectiveClassroom : null,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -877,17 +883,52 @@ class _AttendanceRow extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const Gap(3),
-                Text(
-                  (record.teacherId != null && record.teacherId!.isNotEmpty)
-                      ? 'Teacher ID: ${record.teacherId ?? 'N/A'}'
-                      : 'Adm: ${record.admissionNumber?.isNotEmpty == true ? record.admissionNumber : record.studentId ?? 'N/A'}',
-                  style: context.typography.bodySmall.copyWith(
-                    color: rowSubtleColor,
-                    fontSize: context.isMobile ? 12 : null,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                Builder(builder: (context) {
+                  final isTeacher = record.teacherId != null && record.teacherId!.isNotEmpty;
+                  if (!isTeacher) {
+                    return Text(
+                      'Adm: ${record.admissionNumber?.isNotEmpty == true ? record.admissionNumber : record.studentId ?? 'N/A'}',
+                      style: context.typography.bodySmall.copyWith(color: rowSubtleColor, fontSize: context.isMobile ? 12 : null),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  }
+                  final emp = record.employeeId?.isNotEmpty == true ? record.employeeId! : '—';
+                  // createdAt is stored UTC; show it in institute (Saudi, UTC+3) time.
+                  final ct = record.createdAt;
+                  final timeStr = ct != null ? ' · marked ${DateFormat('h:mm a').format(ct.add(const Duration(hours: 3)))}' : '';
+                  final notMarked = record.id == null || record.id!.isEmpty;
+                  return Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'ID: $emp$timeStr',
+                          style: context.typography.bodySmall.copyWith(color: rowSubtleColor, fontSize: context.isMobile ? 12 : null),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (notMarked) ...[
+                        const Gap(6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFDEEDE),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Not marked',
+                            style: context.typography.bodySmall.copyWith(
+                              color: const Color(0xFFC77B0A),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                }),
               ],
             ),
           ),
@@ -962,29 +1003,40 @@ class _StatusSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFD6B64C),
-        borderRadius: BorderRadius.circular(16),
+        color: colors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _SwitchChip(
-            color: Colors.green,
+            color: colors.green,
+            icon: LucideIcons.check,
+            label: 'P',
+            tooltip: 'Present',
             selected: status == AttendanceStatus.present,
             onTap: () => onChanged(AttendanceStatus.present),
           ),
           const Gap(6),
           _SwitchChip(
-            color: Colors.orange,
+            color: colors.warning,
+            icon: LucideIcons.clock,
+            label: 'L',
+            tooltip: 'Late',
             selected: status == AttendanceStatus.late,
             onTap: () => onChanged(AttendanceStatus.late),
           ),
           const Gap(6),
           _SwitchChip(
-            color: Colors.red,
+            color: colors.red,
+            icon: LucideIcons.x,
+            label: 'A',
+            tooltip: 'Absent',
             selected: status == AttendanceStatus.absent,
             onTap: () => onChanged(AttendanceStatus.absent),
           ),
@@ -997,26 +1049,49 @@ class _StatusSwitch extends StatelessWidget {
 class _SwitchChip extends StatelessWidget {
   const _SwitchChip({
     required this.color,
+    required this.icon,
+    required this.label,
+    required this.tooltip,
     required this.selected,
     required this.onTap,
   });
 
   final Color color;
+  final IconData icon;
+  final String label;
+  final String tooltip;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 38,
-        height: 34,
-        decoration: BoxDecoration(
-          color: selected ? color : color.withValues(alpha: 0.22),
-          borderRadius: BorderRadius.circular(12),
+    final fg = selected ? Colors.white : color;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(11),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 44,
+          constraints: const BoxConstraints(minWidth: 46),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: selected ? color : color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: selected ? color : color.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: fg),
+              const Gap(4),
+              Text(
+                label,
+                style: context.typography.bodySmallSemiBold.copyWith(color: fg),
+              ),
+            ],
+          ),
         ),
       ),
     );

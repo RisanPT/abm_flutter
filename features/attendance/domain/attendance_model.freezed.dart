@@ -18,7 +18,8 @@ mixin _$AttendanceModel {
 @JsonKey(name: '_id') String? get id; String? get studentId; String? get studentName;// Populated from studentId object if available
  String? get admissionNumber;// The student's roll number or admission ID
  String? get teacherId; String? get teacherName;// Populated from teacherId object if available
- DateTime get date; AttendanceStatus get status; String get markedBy; String? get remarks;
+ String? get employeeId;// Friendly teacher employee number (e.g. "0013")
+ DateTime get date; AttendanceStatus get status; String get markedBy; String? get remarks; DateTime? get createdAt;
 /// Create a copy of AttendanceModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -31,16 +32,16 @@ $AttendanceModelCopyWith<AttendanceModel> get copyWith => _$AttendanceModelCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AttendanceModel&&(identical(other.id, id) || other.id == id)&&(identical(other.studentId, studentId) || other.studentId == studentId)&&(identical(other.studentName, studentName) || other.studentName == studentName)&&(identical(other.admissionNumber, admissionNumber) || other.admissionNumber == admissionNumber)&&(identical(other.teacherId, teacherId) || other.teacherId == teacherId)&&(identical(other.teacherName, teacherName) || other.teacherName == teacherName)&&(identical(other.date, date) || other.date == date)&&(identical(other.status, status) || other.status == status)&&(identical(other.markedBy, markedBy) || other.markedBy == markedBy)&&(identical(other.remarks, remarks) || other.remarks == remarks));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AttendanceModel&&(identical(other.id, id) || other.id == id)&&(identical(other.studentId, studentId) || other.studentId == studentId)&&(identical(other.studentName, studentName) || other.studentName == studentName)&&(identical(other.admissionNumber, admissionNumber) || other.admissionNumber == admissionNumber)&&(identical(other.teacherId, teacherId) || other.teacherId == teacherId)&&(identical(other.teacherName, teacherName) || other.teacherName == teacherName)&&(identical(other.employeeId, employeeId) || other.employeeId == employeeId)&&(identical(other.date, date) || other.date == date)&&(identical(other.status, status) || other.status == status)&&(identical(other.markedBy, markedBy) || other.markedBy == markedBy)&&(identical(other.remarks, remarks) || other.remarks == remarks)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,studentId,studentName,admissionNumber,teacherId,teacherName,date,status,markedBy,remarks);
+int get hashCode => Object.hash(runtimeType,id,studentId,studentName,admissionNumber,teacherId,teacherName,employeeId,date,status,markedBy,remarks,createdAt);
 
 @override
 String toString() {
-  return 'AttendanceModel(id: $id, studentId: $studentId, studentName: $studentName, admissionNumber: $admissionNumber, teacherId: $teacherId, teacherName: $teacherName, date: $date, status: $status, markedBy: $markedBy, remarks: $remarks)';
+  return 'AttendanceModel(id: $id, studentId: $studentId, studentName: $studentName, admissionNumber: $admissionNumber, teacherId: $teacherId, teacherName: $teacherName, employeeId: $employeeId, date: $date, status: $status, markedBy: $markedBy, remarks: $remarks, createdAt: $createdAt)';
 }
 
 
@@ -51,7 +52,7 @@ abstract mixin class $AttendanceModelCopyWith<$Res>  {
   factory $AttendanceModelCopyWith(AttendanceModel value, $Res Function(AttendanceModel) _then) = _$AttendanceModelCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: '_id') String? id, String? studentId, String? studentName, String? admissionNumber, String? teacherId, String? teacherName, DateTime date, AttendanceStatus status, String markedBy, String? remarks
+@JsonKey(name: '_id') String? id, String? studentId, String? studentName, String? admissionNumber, String? teacherId, String? teacherName, String? employeeId, DateTime date, AttendanceStatus status, String markedBy, String? remarks, DateTime? createdAt
 });
 
 
@@ -68,7 +69,7 @@ class _$AttendanceModelCopyWithImpl<$Res>
 
 /// Create a copy of AttendanceModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = freezed,Object? studentId = freezed,Object? studentName = freezed,Object? admissionNumber = freezed,Object? teacherId = freezed,Object? teacherName = freezed,Object? date = null,Object? status = null,Object? markedBy = null,Object? remarks = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = freezed,Object? studentId = freezed,Object? studentName = freezed,Object? admissionNumber = freezed,Object? teacherId = freezed,Object? teacherName = freezed,Object? employeeId = freezed,Object? date = null,Object? status = null,Object? markedBy = null,Object? remarks = freezed,Object? createdAt = freezed,}) {
   return _then(_self.copyWith(
 id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String?,studentId: freezed == studentId ? _self.studentId : studentId // ignore: cast_nullable_to_non_nullable
@@ -76,11 +77,13 @@ as String?,studentName: freezed == studentName ? _self.studentName : studentName
 as String?,admissionNumber: freezed == admissionNumber ? _self.admissionNumber : admissionNumber // ignore: cast_nullable_to_non_nullable
 as String?,teacherId: freezed == teacherId ? _self.teacherId : teacherId // ignore: cast_nullable_to_non_nullable
 as String?,teacherName: freezed == teacherName ? _self.teacherName : teacherName // ignore: cast_nullable_to_non_nullable
+as String?,employeeId: freezed == employeeId ? _self.employeeId : employeeId // ignore: cast_nullable_to_non_nullable
 as String?,date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
 as DateTime,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as AttendanceStatus,markedBy: null == markedBy ? _self.markedBy : markedBy // ignore: cast_nullable_to_non_nullable
 as String,remarks: freezed == remarks ? _self.remarks : remarks // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,createdAt: freezed == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 
@@ -165,10 +168,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String? id,  String? studentId,  String? studentName,  String? admissionNumber,  String? teacherId,  String? teacherName,  DateTime date,  AttendanceStatus status,  String markedBy,  String? remarks)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String? id,  String? studentId,  String? studentName,  String? admissionNumber,  String? teacherId,  String? teacherName,  String? employeeId,  DateTime date,  AttendanceStatus status,  String markedBy,  String? remarks,  DateTime? createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AttendanceModel() when $default != null:
-return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber,_that.teacherId,_that.teacherName,_that.date,_that.status,_that.markedBy,_that.remarks);case _:
+return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber,_that.teacherId,_that.teacherName,_that.employeeId,_that.date,_that.status,_that.markedBy,_that.remarks,_that.createdAt);case _:
   return orElse();
 
 }
@@ -186,10 +189,10 @@ return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String? id,  String? studentId,  String? studentName,  String? admissionNumber,  String? teacherId,  String? teacherName,  DateTime date,  AttendanceStatus status,  String markedBy,  String? remarks)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: '_id')  String? id,  String? studentId,  String? studentName,  String? admissionNumber,  String? teacherId,  String? teacherName,  String? employeeId,  DateTime date,  AttendanceStatus status,  String markedBy,  String? remarks,  DateTime? createdAt)  $default,) {final _that = this;
 switch (_that) {
 case _AttendanceModel():
-return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber,_that.teacherId,_that.teacherName,_that.date,_that.status,_that.markedBy,_that.remarks);case _:
+return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber,_that.teacherId,_that.teacherName,_that.employeeId,_that.date,_that.status,_that.markedBy,_that.remarks,_that.createdAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -206,10 +209,10 @@ return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String? id,  String? studentId,  String? studentName,  String? admissionNumber,  String? teacherId,  String? teacherName,  DateTime date,  AttendanceStatus status,  String markedBy,  String? remarks)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: '_id')  String? id,  String? studentId,  String? studentName,  String? admissionNumber,  String? teacherId,  String? teacherName,  String? employeeId,  DateTime date,  AttendanceStatus status,  String markedBy,  String? remarks,  DateTime? createdAt)?  $default,) {final _that = this;
 switch (_that) {
 case _AttendanceModel() when $default != null:
-return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber,_that.teacherId,_that.teacherName,_that.date,_that.status,_that.markedBy,_that.remarks);case _:
+return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber,_that.teacherId,_that.teacherName,_that.employeeId,_that.date,_that.status,_that.markedBy,_that.remarks,_that.createdAt);case _:
   return null;
 
 }
@@ -221,7 +224,7 @@ return $default(_that.id,_that.studentId,_that.studentName,_that.admissionNumber
 @JsonSerializable()
 
 class _AttendanceModel implements AttendanceModel {
-  const _AttendanceModel({@JsonKey(name: '_id') this.id, this.studentId, this.studentName, this.admissionNumber, this.teacherId, this.teacherName, required this.date, this.status = AttendanceStatus.absent, this.markedBy = 'Admin', this.remarks});
+  const _AttendanceModel({@JsonKey(name: '_id') this.id, this.studentId, this.studentName, this.admissionNumber, this.teacherId, this.teacherName, this.employeeId, required this.date, this.status = AttendanceStatus.absent, this.markedBy = 'Admin', this.remarks, this.createdAt});
   factory _AttendanceModel.fromJson(Map<String, dynamic> json) => _$AttendanceModelFromJson(json);
 
 @override@JsonKey(name: '_id') final  String? id;
@@ -233,10 +236,13 @@ class _AttendanceModel implements AttendanceModel {
 @override final  String? teacherId;
 @override final  String? teacherName;
 // Populated from teacherId object if available
+@override final  String? employeeId;
+// Friendly teacher employee number (e.g. "0013")
 @override final  DateTime date;
 @override@JsonKey() final  AttendanceStatus status;
 @override@JsonKey() final  String markedBy;
 @override final  String? remarks;
+@override final  DateTime? createdAt;
 
 /// Create a copy of AttendanceModel
 /// with the given fields replaced by the non-null parameter values.
@@ -251,16 +257,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AttendanceModel&&(identical(other.id, id) || other.id == id)&&(identical(other.studentId, studentId) || other.studentId == studentId)&&(identical(other.studentName, studentName) || other.studentName == studentName)&&(identical(other.admissionNumber, admissionNumber) || other.admissionNumber == admissionNumber)&&(identical(other.teacherId, teacherId) || other.teacherId == teacherId)&&(identical(other.teacherName, teacherName) || other.teacherName == teacherName)&&(identical(other.date, date) || other.date == date)&&(identical(other.status, status) || other.status == status)&&(identical(other.markedBy, markedBy) || other.markedBy == markedBy)&&(identical(other.remarks, remarks) || other.remarks == remarks));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AttendanceModel&&(identical(other.id, id) || other.id == id)&&(identical(other.studentId, studentId) || other.studentId == studentId)&&(identical(other.studentName, studentName) || other.studentName == studentName)&&(identical(other.admissionNumber, admissionNumber) || other.admissionNumber == admissionNumber)&&(identical(other.teacherId, teacherId) || other.teacherId == teacherId)&&(identical(other.teacherName, teacherName) || other.teacherName == teacherName)&&(identical(other.employeeId, employeeId) || other.employeeId == employeeId)&&(identical(other.date, date) || other.date == date)&&(identical(other.status, status) || other.status == status)&&(identical(other.markedBy, markedBy) || other.markedBy == markedBy)&&(identical(other.remarks, remarks) || other.remarks == remarks)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,studentId,studentName,admissionNumber,teacherId,teacherName,date,status,markedBy,remarks);
+int get hashCode => Object.hash(runtimeType,id,studentId,studentName,admissionNumber,teacherId,teacherName,employeeId,date,status,markedBy,remarks,createdAt);
 
 @override
 String toString() {
-  return 'AttendanceModel(id: $id, studentId: $studentId, studentName: $studentName, admissionNumber: $admissionNumber, teacherId: $teacherId, teacherName: $teacherName, date: $date, status: $status, markedBy: $markedBy, remarks: $remarks)';
+  return 'AttendanceModel(id: $id, studentId: $studentId, studentName: $studentName, admissionNumber: $admissionNumber, teacherId: $teacherId, teacherName: $teacherName, employeeId: $employeeId, date: $date, status: $status, markedBy: $markedBy, remarks: $remarks, createdAt: $createdAt)';
 }
 
 
@@ -271,7 +277,7 @@ abstract mixin class _$AttendanceModelCopyWith<$Res> implements $AttendanceModel
   factory _$AttendanceModelCopyWith(_AttendanceModel value, $Res Function(_AttendanceModel) _then) = __$AttendanceModelCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: '_id') String? id, String? studentId, String? studentName, String? admissionNumber, String? teacherId, String? teacherName, DateTime date, AttendanceStatus status, String markedBy, String? remarks
+@JsonKey(name: '_id') String? id, String? studentId, String? studentName, String? admissionNumber, String? teacherId, String? teacherName, String? employeeId, DateTime date, AttendanceStatus status, String markedBy, String? remarks, DateTime? createdAt
 });
 
 
@@ -288,7 +294,7 @@ class __$AttendanceModelCopyWithImpl<$Res>
 
 /// Create a copy of AttendanceModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = freezed,Object? studentId = freezed,Object? studentName = freezed,Object? admissionNumber = freezed,Object? teacherId = freezed,Object? teacherName = freezed,Object? date = null,Object? status = null,Object? markedBy = null,Object? remarks = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = freezed,Object? studentId = freezed,Object? studentName = freezed,Object? admissionNumber = freezed,Object? teacherId = freezed,Object? teacherName = freezed,Object? employeeId = freezed,Object? date = null,Object? status = null,Object? markedBy = null,Object? remarks = freezed,Object? createdAt = freezed,}) {
   return _then(_AttendanceModel(
 id: freezed == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String?,studentId: freezed == studentId ? _self.studentId : studentId // ignore: cast_nullable_to_non_nullable
@@ -296,11 +302,13 @@ as String?,studentName: freezed == studentName ? _self.studentName : studentName
 as String?,admissionNumber: freezed == admissionNumber ? _self.admissionNumber : admissionNumber // ignore: cast_nullable_to_non_nullable
 as String?,teacherId: freezed == teacherId ? _self.teacherId : teacherId // ignore: cast_nullable_to_non_nullable
 as String?,teacherName: freezed == teacherName ? _self.teacherName : teacherName // ignore: cast_nullable_to_non_nullable
+as String?,employeeId: freezed == employeeId ? _self.employeeId : employeeId // ignore: cast_nullable_to_non_nullable
 as String?,date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
 as DateTime,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as AttendanceStatus,markedBy: null == markedBy ? _self.markedBy : markedBy // ignore: cast_nullable_to_non_nullable
 as String,remarks: freezed == remarks ? _self.remarks : remarks // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,createdAt: freezed == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 

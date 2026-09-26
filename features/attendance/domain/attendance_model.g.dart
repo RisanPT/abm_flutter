@@ -14,12 +14,16 @@ _AttendanceModel _$AttendanceModelFromJson(Map<String, dynamic> json) =>
       admissionNumber: json['admissionNumber'] as String?,
       teacherId: json['teacherId'] as String?,
       teacherName: json['teacherName'] as String?,
+      employeeId: json['employeeId'] as String?,
       date: DateTime.parse(json['date'] as String),
       status:
           $enumDecodeNullable(_$AttendanceStatusEnumMap, json['status']) ??
           AttendanceStatus.absent,
       markedBy: json['markedBy'] as String? ?? 'Admin',
       remarks: json['remarks'] as String?,
+      createdAt: json['createdAt'] == null
+          ? null
+          : DateTime.parse(json['createdAt'] as String),
     );
 
 Map<String, dynamic> _$AttendanceModelToJson(_AttendanceModel instance) =>
@@ -30,10 +34,12 @@ Map<String, dynamic> _$AttendanceModelToJson(_AttendanceModel instance) =>
       'admissionNumber': instance.admissionNumber,
       'teacherId': instance.teacherId,
       'teacherName': instance.teacherName,
+      'employeeId': instance.employeeId,
       'date': instance.date.toIso8601String(),
       'status': _$AttendanceStatusEnumMap[instance.status]!,
       'markedBy': instance.markedBy,
       'remarks': instance.remarks,
+      'createdAt': instance.createdAt?.toIso8601String(),
     };
 
 const _$AttendanceStatusEnumMap = {

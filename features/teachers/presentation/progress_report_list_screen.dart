@@ -146,7 +146,9 @@ class ProgressReportListScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          context.push(RouteNames.addProgressReport);
+          context.push(RouteNames.addProgressReport).then((_) {
+            ref.invalidate(progressReportsProvider);
+          });
         },
         backgroundColor: colors.primary,
         icon: const Icon(LucideIcons.plus, color: Colors.white),

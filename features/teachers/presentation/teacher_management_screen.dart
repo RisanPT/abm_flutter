@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 
@@ -15,7 +16,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:intl_phone_field/country_picker_dialog.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/phone_number.dart';
 import 'package:intl_phone_field/countries.dart';
@@ -36,9 +36,11 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
   final _searchController = TextEditingController();
   String _query = '';
   String? _selectedTeacherId;
+  Timer? _searchDebounce;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -73,7 +75,11 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final teachersAsync = ref.watch(teacherListProvider(_query));
+    // Paginated directory (infinite scroll) for the current search query.
+    final teachersAsync = ref.watch(teacherDirectoryProvider(_query));
+    // Unfiltered full list drives the summary stats so the "Total Teachers"
+    // count / payroll stay accurate even while the directory is filtered.
+    final allTeachers = ref.watch(teacherListProvider('')).value;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -82,12 +88,17 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
         child: teachersAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('Failed to load teachers. ${friendlyErrorMessage(error)}')),
-          data: (teachers) {
+          data: (dir) {
+            final teachers = dir.items;
             final selectedTeacher = _resolveSelectedTeacher(teachers);
 
             if (teachers.isEmpty) {
               return _TeacherEmptyState(onAdd: () => _showTeacherForm(context));
             }
+
+            final statsSource = allTeachers ?? teachers;
+            void loadMore() =>
+                ref.read(teacherDirectoryProvider(_query).notifier).loadMore();
 
             if (context.isMobile) {
               return Column(
@@ -97,16 +108,23 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                     searchController: _searchController,
                     onSearchChanged: _onSearchChanged,
                     onAddTeacher: () => _showTeacherForm(context),
-                    onExportPdf: () => _exportTeachersPdf(teachers),
+                    onExportPdf: () => _exportTeachersPdf(statsSource),
                   ),
+                  const Gap(16),
+                  _TeacherStatsBar(teachers: statsSource),
                   const Gap(16),
                   Expanded(
                     child: ListView(
                       children: [
                         SizedBox(
-                          height: 260,
+                          height: 320,
                           child: _TeacherDirectory(
                             teachers: teachers,
+                            totalCount: dir.total,
+                            isSearching: _query.isNotEmpty,
+                            hasMore: dir.hasMore,
+                            loadingMore: dir.loadingMore,
+                            onLoadMore: loadMore,
                             selectedTeacherId: _selectedTeacherId,
                             onSelect: (teacher) =>
                                 setState(() => _selectedTeacherId = teacher.id),
@@ -135,17 +153,24 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                   searchController: _searchController,
                   onSearchChanged: _onSearchChanged,
                   onAddTeacher: () => _showTeacherForm(context),
-                  onExportPdf: () => _exportTeachersPdf(teachers),
+                  onExportPdf: () => _exportTeachersPdf(statsSource),
                 ),
+                const Gap(20),
+                _TeacherStatsBar(teachers: statsSource),
                 const Gap(20),
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SizedBox(
-                        width: 340,
+                        width: 360,
                         child: _TeacherDirectory(
                           teachers: teachers,
+                          totalCount: dir.total,
+                          isSearching: _query.isNotEmpty,
+                          hasMore: dir.hasMore,
+                          loadingMore: dir.loadingMore,
+                          onLoadMore: loadMore,
                           selectedTeacherId: _selectedTeacherId,
                           onSelect: (teacher) =>
                               setState(() => _selectedTeacherId = teacher.id),
@@ -190,7 +215,10 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
   }
 
   void _onSearchChanged(String value) {
-    setState(() => _query = value.trim());
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) setState(() => _query = value.trim());
+    });
   }
 
   Future<void> _showTeacherForm(
@@ -214,8 +242,9 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
         isAdmin: isAdmin,
       ),
     );
-    ref.invalidate(teacherListProvider(_query));
     ref.invalidate(teacherListProvider(''));
+    ref.invalidate(teacherDirectoryProvider(_query));
+    ref.invalidate(teacherDirectoryProvider(''));
     ref.invalidate(timetableDataProvider);
   }
 
@@ -244,8 +273,9 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
     try {
       await ref.read(teacherRepositoryProvider).deleteTeacher(teacher.id);
       if (!context.mounted) return;
-      ref.invalidate(teacherListProvider(_query));
       ref.invalidate(teacherListProvider(''));
+      ref.invalidate(teacherDirectoryProvider(_query));
+      ref.invalidate(teacherDirectoryProvider(''));
       ref.invalidate(timetableDataProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Teacher deleted successfully')),
@@ -361,9 +391,155 @@ class _TeacherScreenHeader extends StatelessWidget {
   }
 }
 
+/// Summary strip across the top of the Teachers screen — the total teacher
+/// count plus active, payroll and subjects-covered at a glance.
+class _TeacherStatsBar extends StatelessWidget {
+  const _TeacherStatsBar({required this.teachers});
+
+  final List<TeacherModel> teachers;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = teachers.length;
+    final active = teachers.where((t) => t.isActive).length;
+    final payroll = teachers.fold<double>(0, (sum, t) => sum + t.monthlySalary);
+    final subjects = <String>{
+      for (final t in teachers) ...t.subjects.where((s) => s.trim().isNotEmpty),
+    }.length;
+
+    final cards = <Widget>[
+      _StatCard(
+        icon: LucideIcons.users,
+        value: '$total',
+        label: 'Total Teachers',
+        tint: context.colors.primary,
+      ),
+      _StatCard(
+        icon: LucideIcons.userCheck,
+        value: '$active',
+        label: 'Active',
+        tint: const Color(0xFF2F855A),
+      ),
+      _StatCard(
+        icon: LucideIcons.wallet,
+        value: 'SAR ${payroll.toStringAsFixed(0)}',
+        label: 'Monthly Payroll',
+        tint: const Color(0xFFB8912F),
+      ),
+      _StatCard(
+        icon: LucideIcons.bookOpen,
+        value: '$subjects',
+        label: 'Subjects Covered',
+        tint: const Color(0xFF2B6CB0),
+      ),
+    ];
+
+    if (context.isMobile) {
+      return Column(
+        children: [
+          Row(children: [
+            Expanded(child: cards[0]),
+            const Gap(12),
+            Expanded(child: cards[1]),
+          ]),
+          const Gap(12),
+          Row(children: [
+            Expanded(child: cards[2]),
+            const Gap(12),
+            Expanded(child: cards[3]),
+          ]),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        for (var i = 0; i < cards.length; i++) ...[
+          if (i > 0) const Gap(16),
+          Expanded(child: cards[i]),
+        ],
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.tint,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: tint, size: 22),
+          ),
+          const Gap(14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: context.typography.h3.copyWith(
+                      color: colors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const Gap(2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.typography.bodySmall.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TeacherDirectory extends StatelessWidget {
   const _TeacherDirectory({
     required this.teachers,
+    required this.totalCount,
+    required this.isSearching,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.onLoadMore,
     required this.selectedTeacherId,
     required this.onSelect,
     required this.onEdit,
@@ -371,6 +547,11 @@ class _TeacherDirectory extends StatelessWidget {
   });
 
   final List<TeacherModel> teachers;
+  final int totalCount;
+  final bool isSearching;
+  final bool hasMore;
+  final bool loadingMore;
+  final VoidCallback onLoadMore;
   final String? selectedTeacherId;
   final ValueChanged<TeacherModel> onSelect;
   final ValueChanged<TeacherModel> onEdit;
@@ -387,74 +568,235 @@ class _TeacherDirectory extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: colors.border),
       ),
-      child: ListView.separated(
-        itemCount: teachers.length,
-        separatorBuilder: (_, index) => const Gap(10),
-        itemBuilder: (context, index) {
-          final teacher = teachers[index];
-          final selected = teacher.id == selectedTeacherId;
-          return InkWell(
-            onTap: () => onSelect(teacher),
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: selected
-                    ? colors.secondary.withValues(alpha: 0.22)
-                    : colors.background,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: selected ? colors.secondary : Colors.transparent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Directory header with the live count.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 2, 6, 12),
+            child: Row(
+              children: [
+                Icon(LucideIcons.users, size: 18, color: colors.textSecondary),
+                const Gap(8),
+                Text('Directory', style: context.typography.bodyMediumSemiBold),
+                const Gap(8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    isSearching ? '${teachers.length} of $totalCount' : '$totalCount',
+                    style: context.typography.bodySmallSemiBold.copyWith(
+                      color: colors.primary,
+                    ),
+                  ),
                 ),
-              ),
-              child: Row(
+              ],
+            ),
+          ),
+          Expanded(
+            child: teachers.isEmpty
+                ? Center(
+                    child: Text(
+                      'No teachers match your search.',
+                      style: context.typography.bodyMedium.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  )
+                : NotificationListener<ScrollNotification>(
+                    onNotification: (n) {
+                      if (hasMore &&
+                          !loadingMore &&
+                          n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
+                        onLoadMore();
+                      }
+                      return false;
+                    },
+                    child: ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemCount: teachers.length + (hasMore ? 1 : 0),
+                      separatorBuilder: (_, index) => const Gap(10),
+                      itemBuilder: (context, index) {
+                        if (index >= teachers.length) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2.4),
+                              ),
+                            ),
+                          );
+                        }
+                        final teacher = teachers[index];
+                        final selected = teacher.id == selectedTeacherId;
+                        return _TeacherTile(
+                          teacher: teacher,
+                          selected: selected,
+                          onSelect: () => onSelect(teacher),
+                          onEdit: () => onEdit(teacher),
+                          onDelete: () => onDelete(teacher),
+                        );
+                      },
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeacherTile extends StatelessWidget {
+  const _TeacherTile({
+    required this.teacher,
+    required this.selected,
+    required this.onSelect,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final TeacherModel teacher;
+  final bool selected;
+  final VoidCallback onSelect;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return InkWell(
+      onTap: onSelect,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? colors.secondary.withValues(alpha: 0.22)
+              : colors.background,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? colors.secondary : colors.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            _TeacherAvatar(teacher: teacher, radius: 26),
+            const Gap(12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _TeacherAvatar(teacher: teacher, radius: 26),
-                  const Gap(12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
                           teacher.fullName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: context.typography.bodyMediumSemiBold.copyWith(
                             color: colors.textPrimary,
                           ),
                         ),
-                        const Gap(4),
-                        Text(
-                          teacher.title,
-                          style: context.typography.bodySmall.copyWith(
-                            color: colors.textSecondary,
+                      ),
+                      if (!teacher.isActive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'Inactive',
+                            style: context.typography.bodySmall.copyWith(
+                              color: colors.textSecondary,
+                              fontSize: 10,
+                            ),
                           ),
                         ),
-                        const Gap(8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            for (final item in teacher.classes.take(2))
-                              _Chip(text: item),
-                          ],
-                        ),
-                      ],
+                    ],
+                  ),
+                  const Gap(3),
+                  Text(
+                    teacher.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.typography.bodySmall.copyWith(
+                      color: colors.textSecondary,
                     ),
                   ),
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') onEdit(teacher);
-                      if (value == 'delete') onDelete(teacher);
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  const Gap(8),
+                  Row(
+                    children: [
+                      _MetaPill(
+                        icon: LucideIcons.hash,
+                        text: teacher.employeeId.isEmpty ? '—' : teacher.employeeId,
+                      ),
+                      const Gap(6),
+                      _MetaPill(
+                        icon: LucideIcons.bookOpen,
+                        text: '${teacher.classes.length} class'
+                            '${teacher.classes.length == 1 ? '' : 'es'}',
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
-          );
-        },
+            PopupMenuButton<String>(
+              icon: Icon(LucideIcons.moreVertical, size: 18, color: colors.textSecondary),
+              onSelected: (value) {
+                if (value == 'edit') onEdit();
+                if (value == 'delete') onDelete();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(value: 'delete', child: Text('Delete')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A small icon+text pill used inside a teacher list tile.
+class _MetaPill extends StatelessWidget {
+  const _MetaPill({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: colors.textSecondary),
+          const Gap(4),
+          Text(
+            text,
+            style: context.typography.bodySmall.copyWith(
+              color: colors.textSecondary,
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }

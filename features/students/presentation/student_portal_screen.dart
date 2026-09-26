@@ -4,6 +4,7 @@ import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
 import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
+import 'package:abm_madrasa/features/notifications/presentation/bug_report.dart';
 import 'package:abm_madrasa/features/students/data/student_portal_repository.dart';
 import 'package:abm_madrasa/features/students/presentation/report_card_pdf.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
@@ -192,7 +193,9 @@ class _HomeTab extends ConsumerWidget {
         showStudentIdCard(context, data.profile);
         break;
       case 'profile':
-        showProfileSheet(context, data.profile, onLogout: () => ref.read(authControllerProvider.notifier).logout());
+        showProfileSheet(context, data.profile,
+            onReportBug: () => showBugReportDialog(context, ref),
+            onLogout: () => ref.read(authControllerProvider.notifier).logout());
         break;
     }
   }
@@ -290,7 +293,9 @@ class _TopHeader extends ConsumerWidget {
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: () => showProfileSheet(context, p, onLogout: () => ref.read(authControllerProvider.notifier).logout()),
+                      onTap: () => showProfileSheet(context, p,
+                          onReportBug: () => showBugReportDialog(context, ref),
+                          onLogout: () => ref.read(authControllerProvider.notifier).logout()),
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
@@ -1254,7 +1259,7 @@ Widget _idRow(BuildContext context, String label, String value) => Padding(
 // ── Academic & personal info sheet ───────────────────────────────────────────
 void showAcademicInfoSheet(BuildContext context, PortalProfile p) => showProfileSheet(context, p);
 
-void showProfileSheet(BuildContext context, PortalProfile p, {VoidCallback? onLogout}) {
+void showProfileSheet(BuildContext context, PortalProfile p, {VoidCallback? onLogout, VoidCallback? onReportBug}) {
   String? d(DateTime? x) => x != null ? DateFormat('dd MMM yyyy').format(x) : null;
   final rows = <(String, String?)>[
     ('Class', p.grade),
@@ -1314,8 +1319,23 @@ void showProfileSheet(BuildContext context, PortalProfile p, {VoidCallback? onLo
                 ],
               ),
             ),
-          if (onLogout != null) ...[
+          if (onReportBug != null) ...[
             const Gap(18),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  onReportBug();
+                },
+                icon: const Icon(LucideIcons.bug, size: 16),
+                label: const Text('Report a Bug', style: TextStyle(fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
+              ),
+            ),
+          ],
+          if (onLogout != null) ...[
+            const Gap(12),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(

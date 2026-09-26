@@ -28,7 +28,13 @@ class AuthController extends _$AuthController {
 
   Future<void> logout() async {
     state = const AsyncValue.loading();
-    await ref.read(authRepositoryProvider).logout();
+    // Guard so a failed logout never leaves the UI stuck in loading — the user
+    // is always returned to the signed-out state.
+    try {
+      await ref.read(authRepositoryProvider).logout();
+    } catch (_) {
+      // best-effort: even if the server call fails, clear local session below.
+    }
     state = const AsyncValue.data(null);
   }
 }

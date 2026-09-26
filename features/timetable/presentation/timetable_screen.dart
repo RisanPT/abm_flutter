@@ -6,7 +6,6 @@ import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/timetable/domain/timetable_model.dart';
 import 'package:abm_madrasa/features/timetable/presentation/timetable_controller.dart';
-import 'package:abm_madrasa/features/timetable/presentation/widgets/timetable_assignment_dialog.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -394,27 +393,6 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
         ),
       ),
     );
-  }
-
-  void _showAssignmentDialog(BuildContext context, TimetableData data) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => TimetableAssignmentDialog(
-        data: data,
-        shift: _selectedShift,
-        year: _year,
-        month: _month,
-        academicYear: _academicYear,
-        initialClassName: _selectedClass == 'All Classes'
-            ? null
-            : _selectedClass,
-      ),
-    ).then((_) {
-      // Refresh timetable and scheduled dates after dialog closes
-      ref.invalidate(timetableDataProvider(_args));
-      ref.invalidate(scheduledDatesProvider(_args));
-    });
   }
 
   void _showSubjectDialog(BuildContext context, TimetableData data) {
