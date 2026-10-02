@@ -145,4 +145,26 @@ class TeacherModel {
         'qualificationAcademics': qualificationAcademics,
         'shift': shift,
       };
+
+  bool get hasShift1 => shift.any((s) {
+        final clean = s.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        return clean == 'shift1' || clean == 's1';
+      });
+
+  bool get hasShift2 => shift.any((s) {
+        final clean = s.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        return clean == 'shift2' || clean == 's2';
+      });
+
+  bool get isDualShift => (hasShift1 && hasShift2) || shift.length > 1;
+
+  String get shiftDisplayLabel {
+    if (isDualShift) return 'Shift 1 + Shift 2';
+    if (hasShift1) return 'Shift 1';
+    if (hasShift2) return 'Shift 2';
+    if (shift.isNotEmpty) {
+      return shift.map((s) => s.replaceAll('-', ' ')).join(', ');
+    }
+    return 'No Shift';
+  }
 }

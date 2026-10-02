@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
+import 'package:abm_madrasa/core/network/paged_result.dart';
 import 'package:abm_madrasa/features/finance/domain/payroll_models.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,8 @@ class MadrassaExpense {
     required this.description,
     required this.processedBy,
     this.referenceId,
+    this.teacherName,
+    this.employeeId,
   });
 
   final String id;
@@ -28,16 +31,45 @@ class MadrassaExpense {
   final String description;
   final String processedBy;
   final String? referenceId;
+  final String? teacherName;
+  final String? employeeId;
 
-  factory MadrassaExpense.fromJson(Map<String, dynamic> json) => MadrassaExpense(
-        id: json['_id'] as String,
-        category: json['category'] as String,
-        amount: (json['amount'] as num).toDouble(),
-        date: DateTime.parse(json['date'] as String),
-        description: json['description'] as String? ?? '',
-        processedBy: json['processedBy'] as String,
-        referenceId: json['referenceId'] as String?,
-      );
+  factory MadrassaExpense.fromJson(Map<String, dynamic> json) {
+    String? refId;
+    String? tName;
+    String? empId;
+
+    if (json['referenceId'] != null) {
+      if (json['referenceId'] is Map) {
+        final refMap = json['referenceId'] as Map<String, dynamic>;
+        refId = refMap['_id']?.toString();
+        tName = refMap['fullName']?.toString();
+        empId = refMap['employeeId']?.toString();
+      } else {
+        refId = json['referenceId']?.toString();
+      }
+    }
+
+    if (tName == null && (json['category'] == 'Monthly Salary' || json['category'] == 'Salary')) {
+      final desc = json['description'] as String? ?? '';
+      final match = RegExp(r'Salary for\s+([^(\n]+)').firstMatch(desc);
+      if (match != null) {
+        tName = match.group(1)?.trim();
+      }
+    }
+
+    return MadrassaExpense(
+      id: json['_id'] as String,
+      category: json['category'] as String,
+      amount: (json['amount'] as num).toDouble(),
+      date: DateTime.parse(json['date'] as String),
+      description: json['description'] as String? ?? '',
+      processedBy: json['processedBy'] as String? ?? '',
+      referenceId: refId,
+      teacherName: tName,
+      employeeId: empId,
+    );
+  }
 }
 
 class FinanceCategory {
@@ -91,6 +123,32 @@ class MadrassaFinanceRepository {
     }
   }
 
+  Future<PagedResult<MadrassaExpense>> getExpensesPage({
+    String? category,
+    String? month,
+    required int page,
+    int limit = 25,
+  }) async {
+    try {
+      final params = <String, dynamic>{
+        'page': page,
+        'limit': limit,
+      };
+      if (category != null && category.isNotEmpty) params['category'] = category;
+      if (month != null && month.isNotEmpty) params['month'] = month;
+      final response = await _dio.get(
+        '/finance',
+        queryParameters: params,
+      );
+      return PagedResult<MadrassaExpense>.fromJson(
+        response.data as Map<String, dynamic>,
+        (json) => MadrassaExpense.fromJson(json),
+      );
+    } catch (e) {
+      throw Exception('Failed to fetch expenses page: $e');
+    }
+  }
+
   Future<void> addExpense({
     required String category,
     required double amount,
@@ -111,16 +169,26 @@ class MadrassaFinanceRepository {
     }
   }
 
+  Future<void> deleteExpense(String id) async {
+    try {
+      await _dio.delete('/finance/$id');
+    } catch (e) {
+      throw Exception('Failed to delete expense: $e');
+    }
+  }
+
   Future<void> processSalary({
     required String teacherId,
     required String month,
     num deductionPerClass = 0,
+    bool autoDeduct = false,
   }) async {
     try {
       await _dio.post('/finance/process-salary', data: {
         'teacherId': teacherId,
         'month': month,
         'deductionPerClass': deductionPerClass,
+        'autoDeduct': autoDeduct,
       });
     } catch (e) {
       throw Exception('Failed to process salary: $e');
@@ -132,13 +200,20 @@ class MadrassaFinanceRepository {
     required String month,
     required String instituteId,
     num deductionPerClass = 0,
+    bool autoDeduct = false,
+    String? shift,
   }) async {
     try {
-      final response = await _dio.get('/finance/salary-preview', queryParameters: {
+      final queryParams = <String, dynamic>{
         'month': month,
         'instituteId': instituteId,
         'deductionPerClass': deductionPerClass,
-      });
+        'autoDeduct': autoDeduct,
+      };
+      if (shift != null && shift.isNotEmpty && shift != 'All') {
+        queryParams['shift'] = shift;
+      }
+      final response = await _dio.get('/finance/salary-preview', queryParameters: queryParams);
       return PayrollPreview.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
       throw Exception('Failed to load payroll: $e');

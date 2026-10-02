@@ -34,22 +34,44 @@ class _FeeStructureSetupScreenState extends ConsumerState<FeeStructureSetupScree
               title: 'Fee Structure Setup',
               subtitle: 'Define default fee templates per grade/classroom',
               actions: [
-                Container(
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: IconButton(
-                    icon: const Icon(LucideIcons.calendarClock, color: Colors.white, size: 20),
-                    onPressed: () => showDialog(
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => showDialog(
                       context: context,
                       builder: (_) => _FeeTrackingDialog(instituteId: ref.read(selectedInstituteProvider).id),
                     ),
-                    tooltip: 'Fee tracking & holiday months',
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.slidersHorizontal, color: Colors.white, size: 16),
+                          Gap(6),
+                          Text(
+                            'Fee Rules & Discounts',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 const Gap(8),
                 Container(
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                  ),
                   child: IconButton(
-                    icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 20),
+                    icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 18),
                     onPressed: () => ref.read(feeStructureControllerProvider.notifier).refresh(),
                     tooltip: 'Refresh',
                   ),
@@ -795,112 +817,473 @@ class _FeeTrackingDialogState extends ConsumerState<_FeeTrackingDialog> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return AlertDialog(
-      title: const Text('Fee Tracking & Holidays'),
-      content: _loading
-          ? const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()))
-          : SizedBox(
-              width: MediaQuery.sizeOf(context).width * 0.9 < 380 ? MediaQuery.sizeOf(context).width * 0.9 : 380,
-              child: Column(
+    final isMobile = context.isMobile;
+    final dialogWidth = isMobile ? MediaQuery.sizeOf(context).width * 0.95 : 540.0;
+    final maxDialogHeight = MediaQuery.sizeOf(context).height * 0.85;
+
+    return Dialog(
+      backgroundColor: colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      clipBehavior: Clip.antiAlias,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 24,
+        vertical: 24,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: dialogWidth,
+          maxHeight: maxDialogHeight,
+        ),
+        child: _loading
+            ? const SizedBox(
+                height: 200,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Track fee dues from', style: context.typography.bodyMediumSemiBold),
-                  const Gap(2),
-                  Text('Dues (and arrears) are only tracked from this month onward.',
-                      style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
-                  const Gap(8),
-                  OutlinedButton.icon(
-                    icon: const Icon(LucideIcons.calendar, size: 16),
-                    label: Text(_startMonth != null
-                        ? DateFormat('MMMM yyyy').format(_startMonth!)
-                        : 'Current month (default)'),
-                    onPressed: () async {
-                      final d = await _pickMonth(_startMonth ?? DateTime.now());
-                      if (d != null) setState(() => _startMonth = DateTime(d.year, d.month, 1));
-                    },
-                  ),
-                  const Gap(20),
-                  Text('Holiday periods (no recurring fee)', style: context.typography.bodyMediumSemiBold),
-                  const Gap(2),
-                  Text('Madrasa closure periods where recurring fees are waived.',
-                      style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
-                  const Gap(8),
-                  if (_vacationPeriods.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _vacationPeriods
-                          .map((vp) => Chip(
-                                label: Text('${DateFormat('MMM d, yyyy').format(vp.from)} - ${DateFormat('MMM d, yyyy').format(vp.to)}'),
-                                onDeleted: () => setState(() => _vacationPeriods.remove(vp)),
-                                deleteIcon: const Icon(Icons.close, size: 16),
-                              ))
-                          .toList(),
+                  // ── Dialog Header ──────────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 16, 16),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.05),
+                      border: Border(bottom: BorderSide(color: colors.border.withValues(alpha: 0.7))),
                     ),
-                  const Gap(6),
-                  TextButton.icon(
-                    icon: const Icon(LucideIcons.plus, size: 16),
-                    label: const Text('Add holiday period'),
-                    onPressed: () async {
-                      final range = await _pickDateRange();
-                      if (range != null) {
-                        setState(() => _vacationPeriods.add(VacationPeriod(
-                          name: 'Vacation',
-                          from: range.start,
-                          to: range.end,
-                        )));
-                      }
-                    },
-                  ),
-                  const Gap(20),
-                  Text('Automatic sibling discount', style: context.typography.bodyMediumSemiBold),
-                  const Gap(2),
-                  Text('Auto-reduce tuition for a family\'s Nth child onward. A student\'s manual discount always overrides this.',
-                      style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: _siblingEnabled,
-                    activeThumbColor: colors.primary,
-                    title: const Text('Enable sibling discount'),
-                    onChanged: (v) => setState(() => _siblingEnabled = v),
-                  ),
-                  if (_siblingEnabled)
-                    Row(
+                    child: Row(
                       children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: colors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(LucideIcons.slidersHorizontal, color: colors.primary, size: 20),
+                        ),
+                        const Gap(14),
                         Expanded(
-                          child: TextField(
-                            controller: _siblingFromChildCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'From child #', hintText: '3', isDense: true),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Fee Rules & Sibling Discount',
+                                style: context.typography.h4.copyWith(fontSize: 18),
+                              ),
+                              const Gap(2),
+                              Text(
+                                'Tracking timeline, holidays & multi-child discounts',
+                                style: context.typography.bodySmall.copyWith(color: colors.textSecondary),
+                              ),
+                            ],
                           ),
                         ),
-                        const Gap(12),
-                        Expanded(
-                          child: TextField(
-                            controller: _siblingAmountCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Discount (SAR off tuition)', hintText: 'e.g. 35', isDense: true),
+                        IconButton(
+                          icon: const Icon(LucideIcons.x, size: 20),
+                          color: colors.textSecondary,
+                          onPressed: () => Navigator.pop(context),
+                          tooltip: 'Close',
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ── Scrollable Body ─────────────────────────────────────────
+                  Flexible(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 1. Fee Dues Start Month
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: colors.background,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: colors.border.withValues(alpha: 0.6)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(LucideIcons.calendarCheck, size: 18, color: colors.primary),
+                                    const Gap(8),
+                                    Text('Track Fee Dues From', style: context.typography.bodyMediumSemiBold),
+                                  ],
+                                ),
+                                const Gap(4),
+                                Text(
+                                  'Dues and arrears are only calculated from this month onward.',
+                                  style: context.typography.bodySmall.copyWith(color: colors.textSecondary),
+                                ),
+                                const Gap(12),
+                                InkWell(
+                                  onTap: () async {
+                                    final d = await _pickMonth(_startMonth ?? DateTime.now());
+                                    if (d != null) setState(() => _startMonth = DateTime(d.year, d.month, 1));
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                    decoration: BoxDecoration(
+                                      color: colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: colors.border),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: colors.primary.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Icon(LucideIcons.calendar, size: 16, color: colors.primary),
+                                        ),
+                                        const Gap(12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                _startMonth != null
+                                                    ? DateFormat('MMMM yyyy').format(_startMonth!)
+                                                    : 'Current Month (Default)',
+                                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                              ),
+                                              Text(
+                                                _startMonth != null ? 'Custom start period' : 'Auto tracking from current month',
+                                                style: TextStyle(fontSize: 11, color: colors.textSecondary),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(LucideIcons.chevronRight, size: 16, color: colors.textSecondary),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const Gap(16),
+
+                          // 2. Madrasa Holiday Periods (Fee Waiver)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: colors.background,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: colors.border.withValues(alpha: 0.6)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(LucideIcons.calendarOff, size: 18, color: colors.primary),
+                                    const Gap(8),
+                                    Text('Madrasa Holiday Periods', style: context.typography.bodyMediumSemiBold),
+                                    const Spacer(),
+                                    if (_vacationPeriods.isNotEmpty)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: colors.primary.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          '${_vacationPeriods.length} ${_vacationPeriods.length == 1 ? 'period' : 'periods'}',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.primary),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const Gap(4),
+                                Text(
+                                  'Madrasa closure periods where recurring monthly tuition fees are automatically waived.',
+                                  style: context.typography.bodySmall.copyWith(color: colors.textSecondary),
+                                ),
+                                const Gap(12),
+                                if (_vacationPeriods.isEmpty)
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      color: colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: colors.border.withValues(alpha: 0.6)),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'No holiday periods set. Regular fees apply every month.',
+                                        style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Column(
+                                    children: _vacationPeriods.map((vp) {
+                                      final days = vp.to.difference(vp.from).inDays + 1;
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: colors.white,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: colors.border.withValues(alpha: 0.6)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(LucideIcons.calendarDays, size: 16, color: colors.primary),
+                                            const Gap(10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    '${DateFormat('MMM d, yyyy').format(vp.from)}  –  ${DateFormat('MMM d, yyyy').format(vp.to)}',
+                                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                                  ),
+                                                  Text(
+                                                    '$days days fee waived',
+                                                    style: TextStyle(fontSize: 11, color: colors.textSecondary),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(LucideIcons.trash2, size: 16, color: Colors.red),
+                                              onPressed: () => setState(() => _vacationPeriods.remove(vp)),
+                                              tooltip: 'Delete holiday period',
+                                              visualDensity: VisualDensity.compact,
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                const Gap(6),
+                                OutlinedButton.icon(
+                                  icon: const Icon(LucideIcons.plus, size: 15),
+                                  label: const Text('Add Holiday Period'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  onPressed: () async {
+                                    final range = await _pickDateRange();
+                                    if (range != null) {
+                                      setState(() => _vacationPeriods.add(VacationPeriod(
+                                        name: 'Vacation',
+                                        from: range.start,
+                                        to: range.end,
+                                      )));
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const Gap(16),
+
+                          // 3. Automatic Sibling Discount
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: _siblingEnabled ? colors.primary.withValues(alpha: 0.04) : colors.background,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: _siblingEnabled ? colors.primary.withValues(alpha: 0.35) : colors.border.withValues(alpha: 0.6),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      LucideIcons.users,
+                                      size: 18,
+                                      color: _siblingEnabled ? colors.primary : colors.textSecondary,
+                                    ),
+                                    const Gap(8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Automatic Sibling Discount', style: context.typography.bodyMediumSemiBold),
+                                          const Gap(2),
+                                          Text(
+                                            'Auto-reduce tuition for a family\'s Nth child onward. (A student\'s manual discount always overrides this).',
+                                            style: context.typography.bodySmall.copyWith(color: colors.textSecondary),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Switch.adaptive(
+                                      value: _siblingEnabled,
+                                      activeThumbColor: colors.primary,
+                                      activeTrackColor: colors.primary.withValues(alpha: 0.35),
+                                      onChanged: (v) => setState(() => _siblingEnabled = v),
+                                    ),
+                                  ],
+                                ),
+                                if (_siblingEnabled) ...[
+                                  const Gap(14),
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: colors.border.withValues(alpha: 0.5)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(LucideIcons.info, size: 14, color: colors.primary),
+                                        const Gap(8),
+                                        Expanded(
+                                          child: Text(
+                                            'Students sharing the same Parent Iqama are ordered by age. Tuition will be reduced by this amount for the designated child and all younger siblings.',
+                                            style: TextStyle(fontSize: 11, color: colors.textSecondary, height: 1.3),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Gap(14),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('From Child #', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textPrimary)),
+                                            const Gap(6),
+                                            TextField(
+                                              controller: _siblingFromChildCtrl,
+                                              keyboardType: TextInputType.number,
+                                              decoration: InputDecoration(
+                                                prefixIcon: const Icon(LucideIcons.hash, size: 16),
+                                                hintText: '3',
+                                                helperText: 'e.g. 3 (3rd child onwards)',
+                                                isDense: true,
+                                                filled: true,
+                                                fillColor: colors.white,
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+                                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const Gap(14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('Discount Amount (SAR)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textPrimary)),
+                                            const Gap(6),
+                                            TextField(
+                                              controller: _siblingAmountCtrl,
+                                              keyboardType: TextInputType.number,
+                                              decoration: InputDecoration(
+                                                prefixIcon: const Icon(LucideIcons.banknote, size: 16),
+                                                hintText: 'e.g. 35',
+                                                helperText: 'SAR off tuition monthly',
+                                                isDense: true,
+                                                filled: true,
+                                                fillColor: colors.white,
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+                                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.border)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+
+                          if (_error != null) ...[
+                            const Gap(14),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFFCA5A5)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(LucideIcons.alertCircle, size: 16, color: Color(0xFFDC2626)),
+                                  const Gap(8),
+                                  Expanded(
+                                    child: Text(
+                                      _error!,
+                                      style: context.typography.bodySmall.copyWith(color: const Color(0xFFDC2626)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // ── Dialog Footer Actions ──────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: colors.white,
+                      border: Border(top: BorderSide(color: colors.border.withValues(alpha: 0.7))),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: _saving ? null : () => Navigator.pop(context),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
+                        const Gap(10),
+                        ElevatedButton.icon(
+                          onPressed: _saving ? null : _save,
+                          icon: _saving
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(LucideIcons.check, size: 16, color: Colors.white),
+                          label: Text(
+                            _saving ? 'Saving...' : 'Save Settings',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colors.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ],
                     ),
-                  if (_error != null) ...[
-                    const Gap(8),
-                    Text(_error!, style: context.typography.bodySmall.copyWith(color: const Color(0xFFDC2626))),
-                  ],
+                  ),
                 ],
               ),
-            ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        ElevatedButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Save'),
-        ),
-      ],
+      ),
     );
   }
 }

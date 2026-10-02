@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/utils/money.dart';
@@ -11,6 +12,7 @@ import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pdf/pdf.dart';
@@ -145,7 +147,13 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     );
   }
 
-  Future<void> _handlePayment(String studentId, double amount, List<String> items, {String? monthLabel}) async {
+  Future<void> _handlePayment(
+    String studentId,
+    double amount,
+    List<String> items, {
+    String? monthLabel,
+    List<String>? monthLabels,
+  }) async {
     setState(() => _processingPayment = true);
     try {
       final receipt = await ref.read(accountRepositoryProvider).processPayment(
@@ -153,9 +161,11 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
             amount: amount,
             items: items,
             monthLabel: monthLabel,
+            monthLabels: monthLabels,
           );
       ref.invalidate(accountsDirectoryProvider);
       ref.invalidate(studentAccountDetailsProvider(studentId));
+      ref.invalidate(feeLedgerProvider(studentId));
 
       if (mounted) {
         // Auto-show invoice dialog immediately after payment
@@ -234,7 +244,7 @@ class _MobileLayout extends StatelessWidget {
   final String? selectedStudentId;
   final bool processingPayment;
   final void Function(String id) onSelectStudent;
-  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel}) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel, List<String>? monthLabels}) onProcessPayment;
   final TextEditingController searchController;
   final String query;
   final void Function(String) onQueryChanged;
@@ -333,7 +343,34 @@ class _Sidebar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Fee Collection', style: typography.h3.copyWith(color: Colors.white)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('Fee Collection', style: typography.h3.copyWith(color: Colors.white)),
+                    ),
+                    // Collect for a whole family (siblings) in one receipt.
+                    Material(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(999),
+                      child: InkWell(
+                        onTap: () => context.push(RouteNames.familyFees),
+                        borderRadius: BorderRadius.circular(999),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(LucideIcons.users, size: 15, color: Colors.white),
+                              const Gap(6),
+                              Text('Families',
+                                  style: typography.bodySmallSemiBold.copyWith(color: Colors.white)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const Gap(4),
                 Text(
                   '$total students${totalPages > 1 ? ' • page $page of $totalPages' : ''}',
@@ -599,7 +636,7 @@ class _AccountDetailsPanel extends ConsumerStatefulWidget {
 
   final String studentId;
   final bool processingPayment;
-  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel}) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel, List<String>? monthLabels}) onProcessPayment;
   final VoidCallback onBack;
 
   @override
@@ -807,7 +844,7 @@ class _FeeBreakdownCard extends ConsumerStatefulWidget {
   final StudentAccountDetails details;
   final TextEditingController amountController;
   final bool processingPayment;
-  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel}) onProcessPayment;
+  final Future<void> Function(String studentId, double amount, List<String> items, {String? monthLabel, List<String>? monthLabels}) onProcessPayment;
 
   @override
   ConsumerState<_FeeBreakdownCard> createState() => _FeeBreakdownCardState();
@@ -817,23 +854,117 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
   // Which fee items the office admin is collecting in this payment.
   late final Set<String> _selected = widget.details.lineItems.map((e) => e.title).toSet();
 
-  // The month being collected for — current by default, but the office can pick
-  // an advance (future) or backlog (past) month.
-  late String _payMonth = widget.details.monthLabel;
+  // Multi-month selection state
+  late List<String> _selectedMonths = [widget.details.monthLabel];
+  String _preset = '1'; // '1', '2', '3', '6', 'custom'
+  MultiMonthPreview? _monthPreview;
+  bool _loadingPreview = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.amountController.text = _totalCalculatedDue().toStringAsFixed(0);
+      }
+    });
+  }
 
   List<String> get _monthOptions {
     final now = DateTime.now();
-    final labels = <String>{widget.details.monthLabel};
-    for (int i = -6; i <= 3; i++) {
+    final labels = <String>{};
+    // Include past 3 months
+    for (int i = -3; i < 0; i++) {
       labels.add(DateFormat('MMMM yyyy').format(DateTime(now.year, now.month + i, 1)));
     }
-    return labels.toList()
+    // Include current month
+    labels.add(widget.details.monthLabel);
+    // Include next 11 months (up to 12 months ahead)
+    for (int i = 1; i <= 11; i++) {
+      labels.add(DateFormat('MMMM yyyy').format(DateTime(now.year, now.month + i, 1)));
+    }
+    final sorted = labels.toList()
       ..sort((a, b) => DateFormat('MMMM yyyy').parse(a).compareTo(DateFormat('MMMM yyyy').parse(b)));
+    return sorted;
   }
 
-  double _selectedTotal() => widget.details.lineItems
+  void _applyPreset(int count) {
+    try {
+      final baseDate = DateFormat('MMMM yyyy').parse(widget.details.monthLabel);
+      final months = <String>[];
+      for (int i = 0; i < count; i++) {
+        months.add(DateFormat('MMMM yyyy').format(DateTime(baseDate.year, baseDate.month + i, 1)));
+      }
+      setState(() {
+        _preset = '$count';
+        _selectedMonths = months;
+      });
+      _updateCalculations();
+    } catch (_) {}
+  }
+
+  void _toggleMonth(String month) {
+    setState(() {
+      if (_selectedMonths.contains(month)) {
+        if (_selectedMonths.length > 1) {
+          _selectedMonths.remove(month);
+        }
+      } else {
+        _selectedMonths.add(month);
+      }
+      _selectedMonths.sort((a, b) => DateFormat('MMMM yyyy').parse(a).compareTo(DateFormat('MMMM yyyy').parse(b)));
+      _preset = 'custom';
+    });
+    _updateCalculations();
+  }
+
+  double _baseUnitTotal() => widget.details.lineItems
       .where((i) => _selected.contains(i.title))
       .fold(0.0, (s, i) => s + i.amount);
+
+  double _totalCalculatedDue() {
+    if (_monthPreview != null && _monthPreview!.monthsCount == _selectedMonths.length) {
+      if (_selected.length < widget.details.lineItems.length) {
+        return _baseUnitTotal() * _selectedMonths.length;
+      }
+      return _monthPreview!.totalBalance;
+    }
+    if (_selectedMonths.length == 1 && _selectedMonths.first == widget.details.monthLabel) {
+      if (_selected.length < widget.details.lineItems.length) {
+        return _baseUnitTotal();
+      }
+      return widget.details.balance;
+    }
+    return _baseUnitTotal() * _selectedMonths.length;
+  }
+
+  void _updateCalculations() {
+    final due = _totalCalculatedDue();
+    widget.amountController.text = due.toStringAsFixed(0);
+    _fetchPreview();
+  }
+
+  Future<void> _fetchPreview() async {
+    if (_selectedMonths.isEmpty) return;
+    setState(() => _loadingPreview = true);
+    try {
+      final preview = await ref.read(accountRepositoryProvider).previewMonths(
+            studentId: widget.details.summary.studentId,
+            monthLabels: _selectedMonths,
+          );
+      if (mounted) {
+        setState(() {
+          _monthPreview = preview;
+          _loadingPreview = false;
+          if (_selected.length == widget.details.lineItems.length) {
+            widget.amountController.text = preview.totalBalance.toStringAsFixed(0);
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingPreview = false);
+    }
+  }
 
   void _toggleItem(String title) {
     setState(() {
@@ -842,8 +973,48 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
       } else {
         _selected.add(title);
       }
-      widget.amountController.text = _selectedTotal().toStringAsFixed(0);
+      widget.amountController.text = _totalCalculatedDue().toStringAsFixed(0);
     });
+  }
+
+  bool get _isFullyPaid {
+    if (_selectedMonths.length == 1 && _selectedMonths.first == widget.details.monthLabel) {
+      return widget.details.status == 'Paid';
+    }
+    if (_monthPreview != null && _monthPreview!.monthsCount == _selectedMonths.length) {
+      return _monthPreview!.totalBalance <= 0;
+    }
+    return false;
+  }
+
+  Widget _presetChip({required String label, required int count, required bool active}) {
+    final colors = context.colors;
+    return InkWell(
+      onTap: () => _applyPreset(count),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? colors.primary : colors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: active ? colors.primary : colors.primary.withValues(alpha: 0.25),
+          ),
+          boxShadow: active
+              ? [BoxShadow(color: colors.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? Colors.white : colors.primary,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -854,7 +1025,8 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
     final onProcessPayment = widget.onProcessPayment;
     final colors = context.colors;
     final typography = context.typography;
-    final isPaid = details.status == 'Paid';
+    final isPaid = _isFullyPaid;
+    final totalDue = _totalCalculatedDue();
 
     return Container(
       decoration: BoxDecoration(
@@ -891,13 +1063,17 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Fee Breakdown', style: typography.h4.copyWith(color: colors.textPrimary)),
-                      Text(details.monthLabel,
-                          style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                      Text('Fee Collection', style: typography.h4.copyWith(color: colors.textPrimary)),
+                      Text(
+                        _selectedMonths.length > 1
+                            ? '${_selectedMonths.length} Months (${_selectedMonths.first} – ${_selectedMonths.last})'
+                            : details.monthLabel,
+                        style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                      ),
                     ],
                   ),
                 ),
-                if (details.receiptNumber != null)
+                if (details.receiptNumber != null && _selectedMonths.length == 1 && details.status == 'Paid')
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -918,42 +1094,156 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
             ),
           ),
 
-          // Fee month selector — collect for the current month, or take an
-          // advance / backlog payment for another month.
+          // Duration Presets Section
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(LucideIcons.calendar, size: 16, color: colors.textSecondary),
-                const Gap(8),
-                Text('Fee month', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
-                const Gap(12),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _monthOptions.contains(_payMonth) ? _payMonth : details.monthLabel,
-                    isDense: true,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                Row(
+                  children: [
+                    Icon(LucideIcons.calendarRange, size: 16, color: colors.primary),
+                    const Gap(8),
+                    Text(
+                      'PAYMENT DURATION',
+                      style: typography.bodySmallSemiBold.copyWith(
+                        color: colors.primary,
+                        letterSpacing: 0.8,
+                        fontSize: 11,
+                      ),
                     ),
-                    items: _monthOptions.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                    onChanged: isPaid ? null : (v) => setState(() => _payMonth = v ?? details.monthLabel),
+                    const Spacer(),
+                    if (_selectedMonths.length > 1)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: colors.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_selectedMonths.length} Months Selected',
+                          style: TextStyle(
+                            color: colors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const Gap(10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _presetChip(label: '1 Month', count: 1, active: _preset == '1'),
+                    _presetChip(label: '2 Months', count: 2, active: _preset == '2'),
+                    _presetChip(label: '3 Months (Quarter)', count: 3, active: _preset == '3'),
+                    _presetChip(label: '6 Months (Half Year)', count: 6, active: _preset == '6'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Month Selection Chips
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select / Toggle Months:',
+                  style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),
+                ),
+                const Gap(8),
+                SizedBox(
+                  height: 38,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _monthOptions.length,
+                    separatorBuilder: (_, index) => const Gap(8),
+                    itemBuilder: (ctx, idx) {
+                      final m = _monthOptions[idx];
+                      final isSelected = _selectedMonths.contains(m);
+                      final isCurrent = m == details.monthLabel;
+                      final isPast = DateFormat('MMMM yyyy').parse(m).isBefore(
+                            DateFormat('MMMM yyyy').parse(details.monthLabel),
+                          );
+
+                      return ChoiceChip(
+                        selected: isSelected,
+                        onSelected: (_) => _toggleMonth(m),
+                        selectedColor: colors.primary,
+                        backgroundColor: colors.background,
+                        side: BorderSide(
+                          color: isSelected
+                              ? colors.primary
+                              : (isCurrent ? colors.primary.withValues(alpha: 0.5) : colors.border),
+                        ),
+                        avatar: isSelected
+                            ? const Icon(LucideIcons.check, size: 14, color: Colors.white)
+                            : null,
+                        label: Text(
+                          m + (isCurrent ? ' (Current)' : (isPast ? ' (Arrears)' : '')),
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : colors.textPrimary,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
             ),
           ),
-          if (_payMonth != details.monthLabel)
+
+          // Multi-month summary highlight card
+          if (_selectedMonths.length > 1)
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              child: Text(
-                'Collecting for $_payMonth (${DateFormat('MMMM yyyy').parse(_payMonth).isAfter(DateTime.now()) ? 'advance' : 'backlog'}).',
-                style: typography.bodySmall.copyWith(color: colors.primary),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.calendarCheck, size: 18, color: colors.primary),
+                    const Gap(10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Paying for ${_selectedMonths.length} Months Upfront',
+                            style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
+                          ),
+                          Text(
+                            _selectedMonths.join(' • '),
+                            style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_loadingPreview)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                  ],
+                ),
               ),
             ),
 
-          // Line items
+          // Line items breakdown
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -1015,35 +1305,80 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                   if (!isPaid)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 6),
-                      child: Text('Tick the fee items to collect',
-                          style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                      child: Text(
+                        _selectedMonths.length > 1
+                            ? 'Fee breakdown per category (multiplied for ${_selectedMonths.length} months)'
+                            : 'Tick the fee items to collect',
+                        style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                      ),
                     ),
                   ...details.lineItems.asMap().entries.map((entry) {
                     final item = entry.value;
                     final isLast = entry.key == details.lineItems.length - 1;
                     final selected = _selected.contains(item.title);
+                    final count = _selectedMonths.length;
+                    final multiAmount = item.amount * count;
+
                     return Column(
                       children: [
                         if (isPaid)
-                          _FeeLineItem(item: item)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    count > 1 ? '${item.title} ($count months)' : item.title,
+                                    style: typography.bodyMedium.copyWith(color: colors.textPrimary),
+                                  ),
+                                ),
+                                Text(
+                                  _sar(multiAmount),
+                                  style: typography.bodyMediumSemiBold.copyWith(color: colors.textPrimary),
+                                ),
+                              ],
+                            ),
+                          )
                         else
                           InkWell(
                             onTap: () => _toggleItem(item.title),
                             borderRadius: BorderRadius.circular(8),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 34,
-                                  child: Checkbox(
-                                    value: selected,
-                                    onChanged: (_) => _toggleItem(item.title),
-                                    visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    activeColor: colors.primary,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 34,
+                                    child: Checkbox(
+                                      value: selected,
+                                      onChanged: (_) => _toggleItem(item.title),
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      activeColor: colors.primary,
+                                    ),
                                   ),
-                                ),
-                                Expanded(child: _FeeLineItem(item: item)),
-                              ],
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(item.title,
+                                            style: typography.bodyMedium.copyWith(color: colors.textPrimary)),
+                                        if (count > 1)
+                                          Text(
+                                            '${_sar(item.amount)} × $count months',
+                                            style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(
+                                    _sar(multiAmount),
+                                    style: typography.bodyMediumSemiBold.copyWith(
+                                      color: selected ? colors.textPrimary : colors.textSecondary.withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         if (!isLast) Divider(height: 1, color: colors.border),
@@ -1053,7 +1388,7 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                 ],
 
                 const Gap(12),
-                // Total row
+                // Total Balance row
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
@@ -1063,32 +1398,22 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text('Balance',
-                            style: typography.bodyLargeSemiBold.copyWith(color: colors.textPrimary)),
+                        child: Text(
+                          _selectedMonths.length > 1
+                              ? 'Total Balance (${_selectedMonths.length} Months)'
+                              : 'Balance',
+                          style: typography.bodyLargeSemiBold.copyWith(color: colors.textPrimary),
+                        ),
                       ),
-                      Text(_sar(details.balance),
-                          style: typography.h4.copyWith(
-                            color: details.balance > 0 ? Colors.red.shade600 : Colors.green.shade600,
-                          )),
+                      Text(
+                        _sar(totalDue),
+                        style: typography.h4.copyWith(
+                          color: totalDue > 0 ? Colors.red.shade600 : Colors.green.shade600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-
-                if (details.totalPaid > 0) ...[
-                  const Gap(8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text('Paid',
-                            style: typography.bodyMedium.copyWith(color: colors.textSecondary)),
-                      ),
-                      Text(
-                        '− ${_sar(details.totalPaid)}',
-                        style: typography.bodyMediumSemiBold.copyWith(color: Colors.green.shade700),
-                      ),
-                    ],
-                  ),
-                ],
 
                 if (!isPaid) ...[
                   const Gap(20),
@@ -1098,13 +1423,21 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: typography.bodyLarge.copyWith(color: colors.textPrimary),
                     decoration: InputDecoration(
-                      labelText: 'Payment Amount (SAR)',
+                      labelText: _selectedMonths.length > 1
+                          ? 'Payment Amount for ${_selectedMonths.length} Months (SAR)'
+                          : 'Payment Amount (SAR)',
                       labelStyle: typography.bodyMedium.copyWith(color: colors.textSecondary),
                       prefixIcon: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 12),
                         child: Text('SAR', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF163D32))),
                       ),
                       prefixIconConstraints: const BoxConstraints(),
+                      suffixIcon: TextButton(
+                        onPressed: () {
+                          amountController.text = totalDue.toStringAsFixed(0);
+                        },
+                        child: const Text('Full', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
                       filled: true,
                       fillColor: colors.background,
                       border: OutlineInputBorder(
@@ -1152,8 +1485,12 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                                   return;
                                 }
                                 await onProcessPayment(
-                                    details.summary.studentId, amount, _selected.toList(),
-                                    monthLabel: _payMonth == details.monthLabel ? null : _payMonth);
+                                  details.summary.studentId,
+                                  amount,
+                                  _selected.toList(),
+                                  monthLabels: _selectedMonths.length > 1 ? _selectedMonths : null,
+                                  monthLabel: _selectedMonths.length == 1 ? _selectedMonths.first : null,
+                                );
                               },
                         borderRadius: BorderRadius.circular(16),
                         child: Row(
@@ -1169,7 +1506,11 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                               const Icon(LucideIcons.creditCard, color: Colors.white, size: 20),
                             const Gap(10),
                             Text(
-                              processingPayment ? 'Processing Payment...' : 'Process Payment & Generate Invoice',
+                              processingPayment
+                                  ? 'Processing Payment...'
+                                  : (_selectedMonths.length > 1
+                                      ? 'Process ${_selectedMonths.length} Months Payment & Generate Invoice'
+                                      : 'Process Payment & Generate Invoice'),
                               style: typography.bodyMediumSemiBold.copyWith(color: Colors.white),
                             ),
                           ],
@@ -1193,7 +1534,9 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                         const Gap(10),
                         Expanded(
                           child: Text(
-                            'Fee fully paid for ${details.monthLabel}',
+                            _selectedMonths.length > 1
+                                ? 'Fees fully paid for all ${_selectedMonths.length} selected months'
+                                : 'Fee fully paid for ${_selectedMonths.first}',
                             style: typography.bodyMedium.copyWith(color: Colors.green.shade700),
                           ),
                         ),
@@ -1210,40 +1553,6 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
   }
 }
 
-class _FeeLineItem extends StatelessWidget {
-  const _FeeLineItem({required this.item});
-  final AccountLineItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final typography = context.typography;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.5),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const Gap(12),
-          Expanded(
-            child: Text(item.title,
-                style: typography.bodyMedium.copyWith(color: colors.textPrimary)),
-          ),
-          Text(
-            _sar(item.amount),
-            style: typography.bodyMediumSemiBold.copyWith(color: colors.textPrimary),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Payment History Card ──────────────────────────────────────────────────────
 
@@ -1353,8 +1662,12 @@ class _HistoryRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.monthLabel,
-                    style: typography.bodyMediumSemiBold.copyWith(color: colors.textPrimary)),
+                Text(
+                  item.monthsCount != null && item.monthsCount! > 1
+                      ? '${item.monthsCount} Months: ${item.monthLabel}'
+                      : item.monthLabel,
+                  style: typography.bodyMediumSemiBold.copyWith(color: colors.textPrimary),
+                ),
                 if (item.paidOn != null)
                   Text(
                     DateFormat('dd MMM yyyy').format(item.paidOn!),
@@ -1536,7 +1849,7 @@ class _InvoiceDialog extends StatelessWidget {
               _pdfRow('Admission No.', s.admissionNumber),
               _pdfRow('Classroom', s.classroom),
               _pdfRow('Guardian', s.guardianName),
-              _pdfRow('Fee Month', item.monthLabel),
+              _pdfRow('Fee Month(s)', '${item.monthsCount != null && item.monthsCount! > 1 ? "(${item.monthsCount} Months) " : ""}${item.monthLabel}'),
               pw.SizedBox(height: 10),
               pw.Divider(),
               pw.SizedBox(height: 10),
@@ -1700,7 +2013,14 @@ class _InvoiceContent extends StatelessWidget {
                 _InvoiceRow(label: 'Admission No.', value: s.admissionNumber),
                 _InvoiceRow(label: 'Classroom', value: s.classroom),
                 _InvoiceRow(label: 'Guardian', value: s.guardianName),
-                _InvoiceRow(label: 'Fee Month', value: receipt.monthLabel),
+                _InvoiceRow(label: 'Fee Month(s)', value: receipt.monthLabel),
+                if (receipt.monthsCount != null && receipt.monthsCount! > 1)
+                  _InvoiceRow(
+                    label: 'Payment Duration',
+                    value: '${receipt.monthsCount} Months Paid Together',
+                    isBold: true,
+                    valueColor: colors.primary,
+                  ),
               ],
             ),
           ),
@@ -1952,6 +2272,109 @@ class _LedgerCard extends ConsumerWidget {
     }
   }
 
+  Future<void> _payMultipleMonthsDialog(BuildContext context, WidgetRef ref, FeeLedger ledger) async {
+    final unpaidMonths = ledger.months.where((m) => !m.waived && m.balance > 0).toList();
+    if (unpaidMonths.isEmpty) {
+      _snack(context, 'No unpaid months in ledger', ok: false);
+      return;
+    }
+
+    final selected = Set<String>.from(unpaidMonths.map((m) => m.monthLabel));
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDlgState) {
+            final selList = unpaidMonths.where((m) => selected.contains(m.monthLabel)).toList();
+            final totalBal = selList.fold(0.0, (s, m) => s + m.balance);
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Row(
+                children: [
+                  Icon(LucideIcons.calendarRange, size: 20),
+                  Gap(10),
+                  Text('Collect Multiple Months'),
+                ],
+              ),
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Select which unpaid months to collect:'),
+                    const Gap(12),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 250),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: unpaidMonths.map((m) {
+                            final isChecked = selected.contains(m.monthLabel);
+                            return CheckboxListTile(
+                              dense: true,
+                              value: isChecked,
+                              title: Text(m.monthLabel, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              subtitle: Text('Due: ${_sar(m.balance.toDouble())}'),
+                              onChanged: (val) {
+                                setDlgState(() {
+                                  if (val == true) {
+                                    selected.add(m.monthLabel);
+                                  } else {
+                                    selected.remove(m.monthLabel);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    const Divider(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('${selected.length} Months Selected', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        Text(_sar(totalBal), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                ElevatedButton(
+                  onPressed: selected.isEmpty
+                      ? null
+                      : () => Navigator.pop(ctx, {'months': selected.toList(), 'amount': totalBal}),
+                  child: Text('Collect ${_sar(totalBal)}'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) return;
+    final months = (result['months'] as List).cast<String>();
+    final amount = (result['amount'] as num).toDouble();
+    if (months.isEmpty || amount <= 0) return;
+
+    try {
+      await ref.read(accountRepositoryProvider).processPayment(
+            studentId: studentId,
+            amount: amount,
+            monthLabels: months,
+          );
+      _refresh(ref);
+      if (context.mounted) {
+        _snack(context, 'Successfully collected ${_sar(amount)} for ${months.length} months');
+      }
+    } catch (e) {
+      if (context.mounted) _snack(context, friendlyErrorMessage(e), ok: false);
+    }
+  }
+
   Future<void> _toggleWaive(BuildContext context, WidgetRef ref, LedgerMonth m) async {
     try {
       await ref.read(accountRepositoryProvider).waiveMonth(studentId, m.monthLabel, !m.waived);
@@ -1979,6 +2402,7 @@ class _LedgerCard extends ConsumerWidget {
         loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
         error: (e, _) => Text(friendlyErrorMessage(e), style: typography.bodySmall),
         data: (ledger) {
+          final unpaidMonthsCount = ledger.months.where((m) => !m.waived && m.balance > 0).length;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1987,13 +2411,25 @@ class _LedgerCard extends ConsumerWidget {
                 const Gap(10),
                 Text('Fee Ledger', style: typography.h4),
                 const Spacer(),
-                if (ledger.arrears > 0)
+                if (ledger.arrears > 0) ...[
                   ElevatedButton.icon(
                     onPressed: () => _settleArrears(context, ref, ledger.arrears),
                     icon: const Icon(LucideIcons.wallet, size: 15),
                     label: const Text('Settle Arrears'),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+                  ),
+                  const Gap(8),
+                ],
+                if (unpaidMonthsCount > 1)
+                  ElevatedButton.icon(
+                    onPressed: () => _payMultipleMonthsDialog(context, ref, ledger),
+                    icon: const Icon(LucideIcons.calendarRange, size: 15),
+                    label: const Text('Multi-Month'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colors.primary,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
               ]),
               const Gap(14),

@@ -27,13 +27,15 @@ class _ReportParams {
     required this.instituteId,
     required this.type,
     this.date,
+    this.shift,
     this.refreshKey = 0,
   });
   final String month;
   final String? date;
   final String instituteId;
   final String type;
-  final int refreshKey;   // increment to force re-fetch same month/date
+  final String? shift;
+  final int refreshKey; // increment to force re-fetch same month/date
 
   @override
   bool operator ==(Object other) =>
@@ -42,10 +44,11 @@ class _ReportParams {
       date == other.date &&
       instituteId == other.instituteId &&
       type == other.type &&
+      shift == other.shift &&
       refreshKey == other.refreshKey;
 
   @override
-  int get hashCode => Object.hash(month, date, instituteId, type, refreshKey);
+  int get hashCode => Object.hash(month, date, instituteId, type, shift, refreshKey);
 }
 
 final _attendanceReportProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, _ReportParams>(
@@ -60,6 +63,9 @@ final _attendanceReportProvider = FutureProvider.autoDispose.family<Map<String, 
       queryParams['date'] = params.date;
     } else {
       queryParams['month'] = params.month;
+    }
+    if (params.shift != null && params.shift!.isNotEmpty && params.shift != 'All') {
+      queryParams['shift'] = params.shift;
     }
     final response = await dio.get(endpoint, queryParameters: queryParams);
     return response.data as Map<String, dynamic>;
@@ -94,6 +100,33 @@ final _teacherDaysProvider = FutureProvider.autoDispose.family<List<Map<String, 
   },
 );
 
+// Per-student day-by-day attendance history drill-down.
+class _StudentDaysParams {
+  const _StudentDaysParams({required this.studentId, required this.month, required this.instituteId});
+  final String studentId;
+  final String month;
+  final String instituteId;
+  @override
+  bool operator ==(Object other) =>
+      other is _StudentDaysParams &&
+      studentId == other.studentId &&
+      month == other.month &&
+      instituteId == other.instituteId;
+  @override
+  int get hashCode => Object.hash(studentId, month, instituteId);
+}
+
+final _studentReportProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, _StudentDaysParams>(
+  (ref, p) async {
+    final dio = ref.watch(dioProvider);
+    final res = await dio.get('/attendance/student-report/${p.studentId}', queryParameters: {
+      'month': p.month,
+      'instituteId': p.instituteId,
+    });
+    return Map<String, dynamic>.from(res.data as Map);
+  },
+);
+
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 class AttendanceReportScreen extends ConsumerStatefulWidget {
@@ -112,6 +145,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
   DateTime _selectedDate = DateTime.now();
   String _viewMode = 'day'; // 'day' or 'month'
   late String _reportType = widget.reportType;
+  String _selectedShift = 'All'; // 'All', 'Shift-1', 'Shift-2'
   // A separate refresh counter so we can force-refetch with same month/day
   int _refreshKey = 0;
 
@@ -189,6 +223,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         date: isDayWise ? _dayKey : null,
         instituteId: institute.id,
         type: type,
+        shift: _selectedShift,
         refreshKey: _refreshKey,
       );
 
@@ -445,6 +480,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         date: isDayWise ? _dayKey : null,
         instituteId: institute.id,
         type: type,
+        shift: _selectedShift,
         refreshKey: _refreshKey,
       );
 
@@ -804,36 +840,6 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             bottom: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Category Switcher: Students vs Teachers
-                Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _HeaderSegmentTab(
-                        label: 'Students',
-                        isSelected: _reportType == 'student',
-                        onTap: () => setState(() {
-                          _reportType = 'student';
-                          _refreshKey++;
-                        }),
-                      ),
-                      _HeaderSegmentTab(
-                        label: 'Teachers',
-                        isSelected: _reportType == 'teacher',
-                        onTap: () => setState(() {
-                          _reportType = 'teacher';
-                          _refreshKey++;
-                        }),
-                      ),
-                    ],
-                  ),
-                ),
                 // Segmented Mode Toggle: Day-Wise vs Monthly Summary
                 Container(
                   padding: const EdgeInsets.all(3),
@@ -921,6 +927,48 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                       ),
                     ),
                   ),
+                if (!isStudent) ...[
+                  const Gap(8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _HeaderSegmentTab(
+                            label: 'All Shifts',
+                            isSelected: _selectedShift == 'All',
+                            onTap: () => setState(() {
+                              _selectedShift = 'All';
+                              _refreshKey++;
+                            }),
+                          ),
+                          _HeaderSegmentTab(
+                            label: 'Shift 1',
+                            isSelected: _selectedShift == 'Shift-1',
+                            onTap: () => setState(() {
+                              _selectedShift = 'Shift-1';
+                              _refreshKey++;
+                            }),
+                          ),
+                          _HeaderSegmentTab(
+                            label: 'Shift 2',
+                            isSelected: _selectedShift == 'Shift-2',
+                            onTap: () => setState(() {
+                              _selectedShift = 'Shift-2';
+                              _refreshKey++;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -941,6 +989,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                         date: _dayKey,
                         dateLabel: _dayLabel,
                         instituteId: institute.id,
+                        shift: _selectedShift,
                         refreshKey: _refreshKey,
                         onExportPdf: _exportAttendancePdf,
                         onExportExcel: _exportAttendanceExcel,
@@ -948,6 +997,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                     : _TeacherReportTab(
                         month: _monthKey,
                         instituteId: institute.id,
+                        shift: _selectedShift,
                         refreshKey: _refreshKey,
                         onExportPdf: _exportAttendancePdf,
                         onExportExcel: _exportAttendanceExcel,
@@ -1318,6 +1368,8 @@ class _StudentReportTabState extends ConsumerState<_StudentReportTab> {
         classroomData: classRow,
         isDayWise: widget.isDayWise,
         periodLabel: widget.isDayWise ? widget.dateLabel : widget.month,
+        month: widget.month,
+        instituteId: widget.instituteId,
         allStudentSummaries: allStudentSummaries,
       ),
     );
@@ -1696,12 +1748,16 @@ class _ClassroomStudentsSheet extends StatefulWidget {
     required this.classroomData,
     required this.isDayWise,
     required this.periodLabel,
+    required this.month,
+    required this.instituteId,
     required this.allStudentSummaries,
   });
 
   final Map<String, dynamic> classroomData;
   final bool isDayWise;
   final String periodLabel;
+  final String month;
+  final String instituteId;
   final List<Map<String, dynamic>> allStudentSummaries;
 
   @override
@@ -1712,11 +1768,29 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
   final TextEditingController _studentSearchCtrl = TextEditingController();
   String _search = '';
   String _statusFilter = 'All';
+  String _sheetSubMode = 'totals'; // 'totals' (Monthly Totals) or 'daily' (Date Breakdown)
+  String? _selectedBreakdownDate;
 
   @override
   void dispose() {
     _studentSearchCtrl.dispose();
     super.dispose();
+  }
+
+  void _openStudentHistory(Map<String, dynamic> student) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.colors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _StudentAttendanceHistorySheet(
+        student: student,
+        month: widget.month,
+        instituteId: widget.instituteId,
+      ),
+    );
   }
 
   @override
@@ -1730,16 +1804,35 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
     final absent = (widget.classroomData['absent'] as int?) ?? 0;
     final late = (widget.classroomData['late'] as int?) ?? 0;
 
+    // Enrolled children in that specific class (prioritizing backend populated enrolled students)
     List<Map<String, dynamic>> students = [];
-    if (widget.isDayWise) {
-      final raw = (widget.classroomData['students'] as List?) ?? [];
-      students = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final classStudentsRaw = (widget.classroomData['students'] as List?) ?? [];
+    if (classStudentsRaw.isNotEmpty) {
+      students = classStudentsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } else {
       students = widget.allStudentSummaries
           .where((s) => (s['classroom']?.toString() ?? '') == className)
           .toList();
     }
 
+    // Extract all distinct dates in this classroom for the month
+    final Set<String> distinctDates = {};
+    for (final s in students) {
+      final days = (s['days'] as List?) ?? [];
+      for (final d in days) {
+        if (d is Map && d['date'] != null) {
+          final dtStr = d['date'].toString();
+          final key = dtStr.length >= 10 ? dtStr.substring(0, 10) : dtStr;
+          distinctDates.add(key);
+        }
+      }
+    }
+    final sortedDates = distinctDates.toList()..sort();
+    if (_selectedBreakdownDate == null && sortedDates.isNotEmpty) {
+      _selectedBreakdownDate = sortedDates.last;
+    }
+
+    // Filter students by search and status
     final filtered = students.where((s) {
       final name = (s['fullName'] as String? ?? '').toLowerCase();
       final adm = (s['admissionNumber'] as String? ?? '').toLowerCase();
@@ -1750,9 +1843,18 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
         if (widget.isDayWise) {
           final status = s['status'] as String? ?? '';
           if (status != _statusFilter) return false;
+        } else if (_sheetSubMode == 'daily' && _selectedBreakdownDate != null) {
+          final dayRecord = (s['days'] as List?)?.firstWhere(
+            (d) => (d is Map) && (d['date']?.toString() ?? '').startsWith(_selectedBreakdownDate!),
+            orElse: () => null,
+          );
+          final status = dayRecord != null ? (dayRecord['status']?.toString() ?? 'Absent') : 'Pending';
+          if (status != _statusFilter) return false;
         } else {
           final sAbsent = (s['absent'] as int?) ?? 0;
           if (_statusFilter == 'Absent' && sAbsent == 0) return false;
+          final sPresent = (s['present'] as int?) ?? 0;
+          if (_statusFilter == 'Present' && sPresent == 0) return false;
         }
       }
       return true;
@@ -1760,8 +1862,8 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.75,
-      maxChildSize: 0.95,
+      initialChildSize: 0.82,
+      maxChildSize: 0.96,
       builder: (context, scrollController) {
         return Column(
           children: [
@@ -1793,7 +1895,14 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('$className Attendance', style: typography.h4),
-                        Text(widget.periodLabel, style: typography.caption.copyWith(color: colors.textSecondary)),
+                        Text(
+                          widget.isDayWise
+                              ? widget.periodLabel
+                              : (_sheetSubMode == 'daily' && _selectedBreakdownDate != null
+                                  ? 'Date: $_selectedBreakdownDate • ${widget.periodLabel}'
+                                  : widget.periodLabel),
+                          style: typography.caption.copyWith(color: colors.textSecondary),
+                        ),
                       ],
                     ),
                   ),
@@ -1827,7 +1936,121 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
                 ],
               ),
             ),
-            const Gap(14),
+            const Gap(12),
+
+            // Mode Toggle for Monthly mode: Monthly Totals vs Date Breakdown
+            if (!widget.isDayWise) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: colors.border.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _sheetSubMode = 'totals';
+                            _statusFilter = 'All';
+                          }),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: _sheetSubMode == 'totals' ? Colors.white : Colors.transparent,
+                              borderRadius: BorderRadius.circular(9),
+                              boxShadow: _sheetSubMode == 'totals'
+                                  ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)]
+                                  : null,
+                            ),
+                            child: Text(
+                              'Monthly Totals',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: _sheetSubMode == 'totals' ? FontWeight.w700 : FontWeight.w500,
+                                color: _sheetSubMode == 'totals' ? colors.primary : colors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _sheetSubMode = 'daily';
+                            _statusFilter = 'All';
+                          }),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: _sheetSubMode == 'daily' ? Colors.white : Colors.transparent,
+                              borderRadius: BorderRadius.circular(9),
+                              boxShadow: _sheetSubMode == 'daily'
+                                  ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)]
+                                  : null,
+                            ),
+                            child: Text(
+                              'Date Breakdown',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: _sheetSubMode == 'daily' ? FontWeight.w700 : FontWeight.w500,
+                                color: _sheetSubMode == 'daily' ? colors.primary : colors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Gap(10),
+            ],
+
+            // Date picker chips when in Date Breakdown mode
+            if (!widget.isDayWise && _sheetSubMode == 'daily') ...[
+              if (sortedDates.isNotEmpty)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: sortedDates.map((dStr) {
+                      final isSel = _selectedBreakdownDate == dStr;
+                      DateTime? dt = DateTime.tryParse(dStr);
+                      final label = dt != null ? DateFormat('d MMM (E)').format(dt) : dStr;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(label),
+                          selected: isSel,
+                          onSelected: (_) => setState(() => _selectedBreakdownDate = dStr),
+                          selectedColor: colors.primary,
+                          backgroundColor: colors.border.withValues(alpha: 0.25),
+                          labelStyle: TextStyle(
+                            color: isSel ? Colors.white : colors.textPrimary,
+                            fontSize: 11,
+                            fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'No daily records recorded for this classroom in ${widget.month}.',
+                    style: typography.caption.copyWith(color: colors.textSecondary),
+                  ),
+                ),
+              const Gap(10),
+            ],
 
             // Mini stats summary row
             Padding(
@@ -1841,7 +2064,7 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _sheetMetric('Total', students.length.toString(), colors.textPrimary),
+                    _sheetMetric('Total Enrolled', students.length.toString(), colors.textPrimary),
                     _sheetMetric('Present', present.toString(), Colors.green),
                     if (late > 0) _sheetMetric('Late', late.toString(), Colors.orange),
                     _sheetMetric('Absent', absent.toString(), Colors.red),
@@ -1886,24 +2109,32 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
             const Gap(10),
 
             // Filter Chips
-            if (widget.isDayWise)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    _chip('All (${students.length})', 'All', colors.primary),
-                    const Gap(6),
-                    _chip('Present ($present)', 'Present', Colors.green),
-                    const Gap(6),
-                    if (late > 0) ...[
-                      _chip('Late ($late)', 'Late', Colors.orange),
-                      const Gap(6),
-                    ],
-                    _chip('Absent ($absent)', 'Absent', Colors.red),
-                  ],
-                ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  _chip('All (${students.length})', 'All', colors.primary),
+                  const Gap(6),
+                  _chip('Present', 'Present', Colors.green),
+                  const Gap(6),
+                  _chip('Absent', 'Absent', Colors.red),
+                ],
               ),
-            const Gap(12),
+            ),
+            const Gap(8),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text(
+                    'Tip: Tap any student to view detailed attendance history.',
+                    style: typography.caption.copyWith(color: colors.textSecondary, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+            const Gap(6),
 
             // List of students
             Expanded(
@@ -1924,61 +2155,163 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
                         final name = s['fullName'] as String? ?? 'Unknown';
                         final adm = s['admissionNumber'] as String? ?? '';
                         final phone = s['parentContact'] as String?;
-                        final remarks = s['remarks'] as String?;
+                        final shift = s['shift'] as String?;
 
                         if (widget.isDayWise) {
                           final status = s['status'] as String? ?? 'Absent';
+                          final remarks = s['remarks'] as String?;
                           final Color statusColor = status == 'Present'
                               ? Colors.green
-                              : (status == 'Late' ? Colors.orange : Colors.red);
+                              : (status == 'Late' ? Colors.orange : (status == 'Pending' ? Colors.grey : Colors.red));
 
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: statusColor.withValues(alpha: 0.12),
-                                  child: Text(
-                                    name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 13),
+                          return InkWell(
+                            onTap: () => _openStudentHistory(s),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: statusColor.withValues(alpha: 0.12),
+                                    child: Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : 'S',
+                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
                                   ),
-                                ),
-                                const Gap(12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(name, style: typography.bodyMediumSemiBold),
-                                      const Gap(2),
-                                      Row(
-                                        children: [
-                                          Text(adm, style: typography.caption.copyWith(color: colors.textSecondary)),
-                                          if (phone != null && phone.isNotEmpty) ...[
-                                            const Gap(8),
-                                            Text('• $phone', style: typography.caption.copyWith(color: colors.textSecondary)),
+                                  const Gap(12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(child: Text(name, style: typography.bodyMediumSemiBold)),
+                                            if (shift != null && shift.isNotEmpty) ...[
+                                              const Gap(6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                decoration: BoxDecoration(
+                                                  color: colors.primary.withValues(alpha: 0.08),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  shift == 'Shift-1' ? 'Shift 1' : (shift == 'Shift-2' ? 'Shift 2' : shift),
+                                                  style: TextStyle(color: colors.primary, fontSize: 9, fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ],
                                           ],
-                                        ],
-                                      ),
-                                      if (remarks != null && remarks.isNotEmpty) ...[
+                                        ),
                                         const Gap(2),
-                                        Text('Note: $remarks', style: typography.caption.copyWith(color: Colors.orange)),
+                                        Row(
+                                          children: [
+                                            Text(adm, style: typography.caption.copyWith(color: colors.textSecondary)),
+                                            if (phone != null && phone.isNotEmpty) ...[
+                                              const Gap(8),
+                                              Text('• $phone', style: typography.caption.copyWith(color: colors.textSecondary)),
+                                            ],
+                                          ],
+                                        ),
+                                        if (remarks != null && remarks.isNotEmpty) ...[
+                                          const Gap(2),
+                                          Text('Note: $remarks', style: typography.caption.copyWith(color: Colors.orange)),
+                                        ],
                                       ],
-                                    ],
+                                    ),
                                   ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(999),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      status,
+                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
                                   ),
-                                  child: Text(
-                                    status,
-                                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                  const Gap(8),
+                                  Icon(LucideIcons.chevronRight, size: 16, color: colors.textSecondary.withValues(alpha: 0.6)),
+                                ],
+                              ),
+                            ),
+                          );
+                        } else if (_sheetSubMode == 'daily' && _selectedBreakdownDate != null) {
+                          // Date breakdown within month
+                          final dayRecord = (s['days'] as List?)?.firstWhere(
+                            (d) => (d is Map) && (d['date']?.toString() ?? '').startsWith(_selectedBreakdownDate!),
+                            orElse: () => null,
+                          );
+                          final status = dayRecord != null ? (dayRecord['status']?.toString() ?? 'Absent') : 'Pending';
+                          final remarks = dayRecord != null ? (dayRecord['remarks']?.toString()) : null;
+                          final Color statusColor = status == 'Present'
+                              ? Colors.green
+                              : (status == 'Late' ? Colors.orange : (status == 'Pending' ? Colors.grey : Colors.red));
+
+                          return InkWell(
+                            onTap: () => _openStudentHistory(s),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: statusColor.withValues(alpha: 0.12),
+                                    child: Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : 'S',
+                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const Gap(12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(child: Text(name, style: typography.bodyMediumSemiBold)),
+                                            if (shift != null && shift.isNotEmpty) ...[
+                                              const Gap(6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                decoration: BoxDecoration(
+                                                  color: colors.primary.withValues(alpha: 0.08),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  shift == 'Shift-1' ? 'Shift 1' : (shift == 'Shift-2' ? 'Shift 2' : shift),
+                                                  style: TextStyle(color: colors.primary, fontSize: 9, fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const Gap(2),
+                                        Text(adm, style: typography.caption.copyWith(color: colors.textSecondary)),
+                                        if (remarks != null && remarks.isNotEmpty) ...[
+                                          const Gap(2),
+                                          Text('Note: $remarks', style: typography.caption.copyWith(color: Colors.orange)),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      status,
+                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                  ),
+                                  const Gap(8),
+                                  Icon(LucideIcons.chevronRight, size: 16, color: colors.textSecondary.withValues(alpha: 0.6)),
+                                ],
+                              ),
                             ),
                           );
                         } else {
@@ -1988,47 +2321,71 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
                           final sTotal = (s['total'] as int?) ?? 0;
                           final sRate = (s['rate'] as int?) ?? 0;
 
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: colors.primary.withValues(alpha: 0.1),
-                                  child: Text(
-                                    name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                                    style: TextStyle(color: colors.primary, fontWeight: FontWeight.bold, fontSize: 13),
+                          return InkWell(
+                            onTap: () => _openStudentHistory(s),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: colors.primary.withValues(alpha: 0.1),
+                                    child: Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : 'S',
+                                      style: TextStyle(color: colors.primary, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
                                   ),
-                                ),
-                                const Gap(12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  const Gap(12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(child: Text(name, style: typography.bodyMediumSemiBold)),
+                                            if (shift != null && shift.isNotEmpty) ...[
+                                              const Gap(6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                decoration: BoxDecoration(
+                                                  color: colors.primary.withValues(alpha: 0.08),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  shift == 'Shift-1' ? 'Shift 1' : (shift == 'Shift-2' ? 'Shift 2' : shift),
+                                                  style: TextStyle(color: colors.primary, fontSize: 9, fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const Gap(2),
+                                        Text(adm, style: typography.caption.copyWith(color: colors.textSecondary)),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(name, style: typography.bodyMediumSemiBold),
-                                      const Gap(2),
-                                      Text(adm, style: typography.caption.copyWith(color: colors.textSecondary)),
+                                      Text(
+                                        '$sRate%',
+                                        style: TextStyle(
+                                          color: sRate >= 80 ? Colors.green : Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      Text(
+                                        'P: $sPresent • A: $sAbsent / $sTotal d',
+                                        style: typography.caption.copyWith(color: colors.textSecondary),
+                                      ),
                                     ],
                                   ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      '$sRate%',
-                                      style: TextStyle(
-                                        color: sRate >= 80 ? Colors.green : Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    Text(
-                                      'P: $sPresent • A: $sAbsent / $sTotal d',
-                                      style: typography.caption.copyWith(color: colors.textSecondary),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                  const Gap(8),
+                                  Icon(LucideIcons.chevronRight, size: 16, color: colors.textSecondary.withValues(alpha: 0.6)),
+                                ],
+                              ),
                             ),
                           );
                         }
@@ -2044,9 +2401,9 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
   Future<void> _exportClassPdf() async {
     final className = widget.classroomData['classroom'] as String? ?? 'Classroom';
     List<Map<String, dynamic>> rawList = [];
-    if (widget.isDayWise) {
-      final raw = (widget.classroomData['students'] as List?) ?? [];
-      rawList = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final classStudentsRaw = (widget.classroomData['students'] as List?) ?? [];
+    if (classStudentsRaw.isNotEmpty) {
+      rawList = classStudentsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } else {
       rawList = widget.allStudentSummaries
           .where((s) => (s['classroom']?.toString() ?? '') == className)
@@ -2075,7 +2432,7 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
           pw.SizedBox(height: 4),
           pw.Text('Date / Period: ${widget.periodLabel}', style: const pw.TextStyle(fontSize: 12)),
           pw.SizedBox(height: 6),
-          pw.Text('Present: $present | Absent: $absent | Late: $late | Attendance Rate: $rate%',
+          pw.Text('Total Enrolled: ${rawList.length} | Present: $present | Absent: $absent | Late: $late | Attendance Rate: $rate%',
               style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 14),
           pw.TableHelper.fromTextArray(
@@ -2144,25 +2501,528 @@ class _ClassroomStudentsSheetState extends State<_ClassroomStudentsSheet> {
   }
 }
 
+// ── Student Attendance History Sheet ─────────────────────────────────────────
+
+class _StudentAttendanceHistorySheet extends ConsumerStatefulWidget {
+  const _StudentAttendanceHistorySheet({
+    required this.student,
+    required this.month,
+    required this.instituteId,
+  });
+
+  final Map<String, dynamic> student;
+  final String month;
+  final String instituteId;
+
+  @override
+  ConsumerState<_StudentAttendanceHistorySheet> createState() => _StudentAttendanceHistorySheetState();
+}
+
+class _StudentAttendanceHistorySheetState extends ConsumerState<_StudentAttendanceHistorySheet> {
+  late String _activeMonth = widget.month;
+  String _historyFilter = 'All';
+
+  void _stepMonth(int delta) {
+    final parts = _activeMonth.split('-');
+    if (parts.length == 2) {
+      final y = int.tryParse(parts[0]) ?? DateTime.now().year;
+      final m = int.tryParse(parts[1]) ?? DateTime.now().month;
+      final dt = DateTime(y, m + delta);
+      setState(() => _activeMonth = DateFormat('yyyy-MM').format(dt));
+    }
+  }
+
+  Future<void> _pickMonth() async {
+    final parts = _activeMonth.split('-');
+    final y = parts.length == 2 ? int.tryParse(parts[0]) ?? DateTime.now().year : DateTime.now().year;
+    final m = parts.length == 2 ? int.tryParse(parts[1]) ?? DateTime.now().month : DateTime.now().month;
+    final picked = await CustomMonthPicker.show(
+      context: context,
+      initialDate: DateTime(y, m),
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() => _activeMonth = DateFormat('yyyy-MM').format(picked));
+    }
+  }
+
+  Future<void> _exportPdf(
+    Map<String, dynamic> studentMeta,
+    Map<String, dynamic> summary,
+    List<Map<String, dynamic>> days,
+  ) async {
+    final pdf = pw.Document();
+    final name = studentMeta['fullName']?.toString() ?? 'Student';
+    final adm = studentMeta['admissionNumber']?.toString() ?? '';
+    final grade = studentMeta['grade']?.toString() ?? '';
+    final shift = studentMeta['shift']?.toString() ?? '';
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => [
+          pw.Text('Student Attendance History Report',
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 4),
+          pw.Text('Month: $_activeMonth', style: const pw.TextStyle(fontSize: 12)),
+          pw.SizedBox(height: 10),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(10),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey300),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Name: $name', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                pw.Text('Admission No: $adm'),
+                pw.Text('Class: $grade'),
+                if (shift.isNotEmpty) pw.Text('Shift: $shift'),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Text(
+            'Present: ${summary['present'] ?? 0} | Absent: ${summary['absent'] ?? 0} | Late: ${summary['late'] ?? 0} | Attendance Rate: ${summary['rate'] ?? 0}%',
+            style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 14),
+          pw.TableHelper.fromTextArray(
+            headers: ['Date', 'Day', 'Status', 'Remarks'],
+            data: days.map((d) {
+              DateTime? dt = DateTime.tryParse(d['date']?.toString() ?? '');
+              final dateStr = dt != null ? DateFormat('dd MMM yyyy').format(dt) : (d['date']?.toString() ?? '');
+              final dayStr = dt != null ? DateFormat('EEEE').format(dt) : '';
+              return [
+                dateStr,
+                dayStr,
+                d['status']?.toString() ?? '',
+                d['remarks']?.toString() ?? '—',
+              ];
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(onLayout: (_) => pdf.save());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    final studentId = widget.student['_id']?.toString() ??
+        widget.student['id']?.toString() ??
+        widget.student['studentId']?.toString() ??
+        '';
+
+    final name = widget.student['fullName']?.toString() ?? 'Student';
+    final adm = widget.student['admissionNumber']?.toString() ?? '';
+    final grade = widget.student['grade']?.toString() ?? widget.student['classroom']?.toString() ?? '';
+    final phone = widget.student['parentContact']?.toString();
+    final shift = widget.student['shift']?.toString();
+
+    final asyncReport = ref.watch(_studentReportProvider(_StudentDaysParams(
+      studentId: studentId,
+      month: _activeMonth,
+      instituteId: widget.instituteId,
+    )));
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.82,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            const Gap(10),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: colors.border, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const Gap(12),
+
+            // Student profile header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: colors.primary.withValues(alpha: 0.12),
+                    child: Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : 'S',
+                      style: TextStyle(color: colors.primary, fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ),
+                  const Gap(12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(child: Text(name, style: typography.h4)),
+                            if (shift != null && shift.isNotEmpty) ...[
+                              const Gap(8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: colors.primary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  shift == 'Shift-1' ? 'Shift 1' : (shift == 'Shift-2' ? 'Shift 2' : shift),
+                                  style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const Gap(2),
+                        Row(
+                          children: [
+                            Text(adm, style: typography.caption.copyWith(color: colors.textSecondary)),
+                            if (grade.isNotEmpty) ...[
+                              const Gap(6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: colors.border.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(grade, style: typography.caption.copyWith(fontWeight: FontWeight.w600)),
+                              ),
+                            ],
+                            if (phone != null && phone.isNotEmpty) ...[
+                              const Gap(8),
+                              Icon(LucideIcons.phone, size: 12, color: colors.textSecondary),
+                              const Gap(4),
+                              Text(phone, style: typography.caption.copyWith(color: colors.textSecondary)),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Gap(14),
+
+            // Month navigation & PDF export
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: colors.border.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(LucideIcons.chevronLeft, size: 18),
+                          onPressed: () => _stepMonth(-1),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                        InkWell(
+                          onTap: _pickMonth,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            child: Row(
+                              children: [
+                                const Icon(LucideIcons.calendar, size: 14),
+                                const Gap(6),
+                                Text(
+                                  _activeMonth,
+                                  style: typography.bodyMediumSemiBold,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(LucideIcons.chevronRight, size: 18),
+                          onPressed: () => _stepMonth(1),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  asyncReport.maybeWhen(
+                    data: (data) {
+                      final meta = (data['student'] as Map<String, dynamic>?) ?? widget.student;
+                      final summary = (data['summary'] as Map<String, dynamic>?) ?? {};
+                      final daysRaw = (data['days'] as List?) ?? [];
+                      final days = daysRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+                      return ElevatedButton.icon(
+                        onPressed: () => _exportPdf(meta, summary, days),
+                        icon: const Icon(LucideIcons.download, size: 14),
+                        label: const Text('PDF'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      );
+                    },
+                    orElse: () => const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            ),
+            const Gap(12),
+
+            Expanded(
+              child: asyncReport.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(friendlyErrorMessage(e), textAlign: TextAlign.center),
+                  ),
+                ),
+                data: (data) {
+                  final summary = (data['summary'] as Map<String, dynamic>?) ?? {};
+                  final daysRaw = (data['days'] as List?) ?? [];
+                  final days = daysRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+                  final int present = summary['present'] as int? ?? 0;
+                  final int absent = summary['absent'] as int? ?? 0;
+                  final int late = summary['late'] as int? ?? 0;
+                  final int total = summary['total'] as int? ?? 0;
+                  final int rate = summary['rate'] as int? ?? 0;
+
+                  final filteredDays = days.where((d) {
+                    if (_historyFilter == 'All') return true;
+                    return (d['status']?.toString() ?? '') == _historyFilter;
+                  }).toList();
+
+                  return Column(
+                    children: [
+                      // Summary metric cards
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            Expanded(child: _metricBox('Days', total.toString(), colors.textPrimary, colors)),
+                            const Gap(8),
+                            Expanded(child: _metricBox('Present', present.toString(), Colors.green, colors)),
+                            const Gap(8),
+                            if (late > 0) ...[
+                              Expanded(child: _metricBox('Late', late.toString(), Colors.orange, colors)),
+                              const Gap(8),
+                            ],
+                            Expanded(child: _metricBox('Absent', absent.toString(), Colors.red, colors)),
+                            const Gap(8),
+                            Expanded(
+                              child: _metricBox(
+                                'Rate',
+                                '$rate%',
+                                rate >= 80 ? Colors.green : Colors.red,
+                                colors,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Gap(12),
+
+                      // Filter chips
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            _filterChip('All (${days.length})', 'All', colors.primary),
+                            const Gap(6),
+                            _filterChip('Present ($present)', 'Present', Colors.green),
+                            const Gap(6),
+                            _filterChip('Absent ($absent)', 'Absent', Colors.red),
+                          ],
+                        ),
+                      ),
+                      const Gap(10),
+
+                      // Chronological list of dates
+                      Expanded(
+                        child: filteredDays.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(32),
+                                  child: Text(
+                                    days.isEmpty
+                                        ? 'No attendance records found for $_activeMonth.'
+                                        : 'No records matching "$_historyFilter".',
+                                    style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                controller: scrollController,
+                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                                itemCount: filteredDays.length,
+                                separatorBuilder: (_, _) => Divider(height: 1, color: colors.border.withValues(alpha: 0.6)),
+                                itemBuilder: (_, i) {
+                                  final d = filteredDays[i];
+                                  final dt = DateTime.tryParse(d['date']?.toString() ?? '');
+                                  final status = d['status']?.toString() ?? '';
+                                  final remarks = d['remarks']?.toString();
+                                  final dateFormatted = dt != null ? DateFormat('EEEE, dd MMM yyyy').format(dt) : (d['date']?.toString() ?? '');
+
+                                  final Color c;
+                                  final IconData ic;
+                                  switch (status) {
+                                    case 'Present':
+                                      c = Colors.green;
+                                      ic = LucideIcons.checkCircle2;
+                                      break;
+                                    case 'Late':
+                                      c = Colors.orange;
+                                      ic = LucideIcons.clock;
+                                      break;
+                                    case 'Absent':
+                                    default:
+                                      c = Colors.red;
+                                      ic = LucideIcons.xCircle;
+                                      break;
+                                  }
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: c.withValues(alpha: 0.12),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(ic, color: c, size: 16),
+                                        ),
+                                        const Gap(12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(dateFormatted, style: typography.bodyMediumSemiBold),
+                                              if (remarks != null && remarks.isNotEmpty) ...[
+                                                const Gap(2),
+                                                Text('Reason: $remarks', style: typography.caption.copyWith(color: Colors.orange.shade800)),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: c.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            status,
+                                            style: TextStyle(color: c, fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _metricBox(String label, String value, Color color, dynamic colors) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: colors.border.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+          const Gap(2),
+          Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String text, String keyVal, Color color) {
+    final isSelected = _historyFilter == keyVal;
+    return GestureDetector(
+      onTap: () => setState(() => _historyFilter = keyVal),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: isSelected ? color : Colors.grey.withValues(alpha: 0.4)),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black87,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Teacher Report Tab ────────────────────────────────────────────────────────
 
 class _TeacherReportTab extends ConsumerWidget {
   const _TeacherReportTab({
     required this.month,
     required this.instituteId,
+    this.shift,
     this.refreshKey = 0,
     this.onExportPdf,
     this.onExportExcel,
   });
   final String month;
   final String instituteId;
+  final String? shift;
   final int refreshKey;
   final VoidCallback? onExportPdf;
   final VoidCallback? onExportExcel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final params = _ReportParams(month: month, instituteId: instituteId, type: 'teacher', refreshKey: refreshKey);
+    final params = _ReportParams(
+      month: month,
+      instituteId: instituteId,
+      type: 'teacher',
+      shift: shift,
+      refreshKey: refreshKey,
+    );
     final reportAsync = ref.watch(_attendanceReportProvider(params));
     return reportAsync.when(
       data: (data) {
@@ -2280,6 +3140,7 @@ class _TeacherDayReportTab extends ConsumerStatefulWidget {
     required this.date,
     required this.dateLabel,
     required this.instituteId,
+    this.shift,
     this.refreshKey = 0,
     this.onExportPdf,
     this.onExportExcel,
@@ -2288,6 +3149,7 @@ class _TeacherDayReportTab extends ConsumerStatefulWidget {
   final String date;
   final String dateLabel;
   final String instituteId;
+  final String? shift;
   final int refreshKey;
   final VoidCallback? onExportPdf;
   final VoidCallback? onExportExcel;
@@ -2298,6 +3160,13 @@ class _TeacherDayReportTab extends ConsumerStatefulWidget {
 
 class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
   String _selectedFilter = 'All';
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2310,6 +3179,7 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
       date: widget.date,
       instituteId: widget.instituteId,
       type: 'teacher',
+      shift: widget.shift,
       refreshKey: widget.refreshKey,
     );
 
@@ -2317,13 +3187,6 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
 
     return reportAsync.when(
       data: (data) {
-        final counts = (data['counts'] as Map<String, dynamic>?) ?? {};
-        final int total = counts['total'] as int? ?? 0;
-        final int present = counts['present'] as int? ?? 0;
-        final int late = counts['late'] as int? ?? 0;
-        final int absent = counts['absent'] as int? ?? 0;
-        final int onLeave = counts['onLeave'] as int? ?? 0;
-
         final rawTeachers = (data['teachers'] as List?) ?? [];
         final teachers = rawTeachers.map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
@@ -2331,121 +3194,133 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
           return _EmptyReport(message: 'No teacher records found for ${widget.dateLabel}.');
         }
 
+        // Counts are derived from the staff rows themselves, so the summary
+        // tiles + chips can never drift from the list below (the backend sends
+        // flat totals under different keys, which the old code silently missed).
+        int present = 0, late = 0, absent = 0, onLeave = 0;
+        for (final t in teachers) {
+          switch (t['status']?.toString()) {
+            case 'Present':
+              present++;
+              break;
+            case 'Late':
+              late++;
+              break;
+            case 'On Leave':
+              onLeave++;
+              break;
+            default:
+              absent++;
+          }
+        }
+        final total = teachers.length;
+
         final filtered = teachers.where((t) {
           if (_selectedFilter == 'All') return true;
           return (t['status']?.toString() ?? '') == _selectedFilter;
         }).toList();
 
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        // Pinned header (summary + chips + section row) over a single scrolling
+        // staff list — one scroll area, so the report scrolls cleanly and the
+        // counts stay in view while browsing a long roster.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Daily Summary Metrics Card
-            _DaySummaryCard(
-              dateLabel: widget.dateLabel,
-              total: total,
-              present: present,
-              late: late,
-              absent: absent,
-              onLeave: onLeave,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _DaySummaryCard(
+                dateLabel: widget.dateLabel,
+                total: total,
+                present: present,
+                late: late,
+                absent: absent,
+                onLeave: onLeave,
+              ),
             ),
-            const Gap(16),
-            // Filter Chips Bar
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+            const Gap(14),
+            // Filter chips.
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  _FilterChip(
-                    label: 'All ($total)',
-                    isSelected: _selectedFilter == 'All',
-                    color: colors.primary,
-                    onTap: () => setState(() => _selectedFilter = 'All'),
-                  ),
+                  _FilterChip(label: 'All ($total)', isSelected: _selectedFilter == 'All', color: colors.primary, onTap: () => setState(() => _selectedFilter = 'All')),
                   const Gap(8),
-                  _FilterChip(
-                    label: 'Present ($present)',
-                    isSelected: _selectedFilter == 'Present',
-                    color: Colors.green,
-                    onTap: () => setState(() => _selectedFilter = 'Present'),
-                  ),
+                  _FilterChip(label: 'Present ($present)', isSelected: _selectedFilter == 'Present', color: Colors.green, onTap: () => setState(() => _selectedFilter = 'Present')),
                   const Gap(8),
-                  _FilterChip(
-                    label: 'Late ($late)',
-                    isSelected: _selectedFilter == 'Late',
-                    color: Colors.orange,
-                    onTap: () => setState(() => _selectedFilter = 'Late'),
-                  ),
+                  _FilterChip(label: 'Late ($late)', isSelected: _selectedFilter == 'Late', color: Colors.orange, onTap: () => setState(() => _selectedFilter = 'Late')),
                   const Gap(8),
-                  _FilterChip(
-                    label: 'Absent ($absent)',
-                    isSelected: _selectedFilter == 'Absent',
-                    color: Colors.red,
-                    onTap: () => setState(() => _selectedFilter = 'Absent'),
-                  ),
+                  _FilterChip(label: 'Absent ($absent)', isSelected: _selectedFilter == 'Absent', color: Colors.red, onTap: () => setState(() => _selectedFilter = 'Absent')),
                   const Gap(8),
-                  _FilterChip(
-                    label: 'On Leave ($onLeave)',
-                    isSelected: _selectedFilter == 'On Leave',
-                    color: Colors.purple,
-                    onTap: () => setState(() => _selectedFilter = 'On Leave'),
-                  ),
+                  _FilterChip(label: 'On Leave ($onLeave)', isSelected: _selectedFilter == 'On Leave', color: Colors.purple, onTap: () => setState(() => _selectedFilter = 'On Leave')),
                 ],
               ),
             ),
-            const Gap(16),
-            Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _selectedFilter == 'All' ? 'All Staff (${filtered.length})' : '$_selectedFilter (${filtered.length})',
-                      style: typography.bodyMediumSemiBold,
+            const Gap(14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _selectedFilter == 'All' ? 'All Staff (${filtered.length})' : '$_selectedFilter (${filtered.length})',
+                          style: typography.bodyMediumSemiBold,
+                        ),
+                        Text('Tap for logs & details',
+                            style: typography.caption.copyWith(color: colors.textSecondary)),
+                      ],
                     ),
-                    Text(
-                      'Tap for logs & details',
-                      style: typography.caption.copyWith(color: colors.textSecondary),
+                  ),
+                  if (widget.onExportPdf != null) ...[
+                    _ExportQuickButton(
+                      label: 'PDF',
+                      icon: LucideIcons.fileText,
+                      color: Colors.red.shade700,
+                      tooltip: 'Download PDF Report',
+                      onTap: widget.onExportPdf!,
                     ),
+                    const Gap(6),
                   ],
-                ),
-                const Spacer(),
-                if (widget.onExportPdf != null) ...[
-                  _ExportQuickButton(
-                    label: 'PDF',
-                    icon: LucideIcons.fileText,
-                    color: Colors.red.shade700,
-                    tooltip: 'Download PDF Report',
-                    onTap: widget.onExportPdf!,
-                  ),
-                  const Gap(6),
+                  if (widget.onExportExcel != null)
+                    _ExportQuickButton(
+                      label: 'Excel',
+                      icon: LucideIcons.table,
+                      color: Colors.green.shade800,
+                      tooltip: 'Download Excel Sheet',
+                      onTap: widget.onExportExcel!,
+                    ),
                 ],
-                if (widget.onExportExcel != null) ...[
-                  _ExportQuickButton(
-                    label: 'Excel',
-                    icon: LucideIcons.table,
-                    color: Colors.green.shade800,
-                    tooltip: 'Download Excel Sheet',
-                    onTap: widget.onExportExcel!,
-                  ),
-                ],
-              ],
+              ),
             ),
             const Gap(10),
-            if (filtered.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text(
-                    'No staff members with status "$_selectedFilter"',
-                    style: typography.bodyMedium.copyWith(color: colors.textSecondary),
-                  ),
-                ),
-              )
-            else
-              ...filtered.map((t) => _DayTeacherCard(
-                    teacher: t,
-                    dateLabel: widget.dateLabel,
-                    onTap: () => _showTeacherDetailSheet(context, t, widget.dateLabel),
-                  )),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No staff members with status "$_selectedFilter"',
+                        style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+                      ),
+                    )
+                  : Scrollbar(
+                      controller: _scrollController,
+                      thumbVisibility: true,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        primary: false,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, i) => _DayTeacherCard(
+                          teacher: filtered[i],
+                          dateLabel: widget.dateLabel,
+                          onTap: () => _showTeacherDetailSheet(context, filtered[i], widget.dateLabel),
+                        ),
+                      ),
+                    ),
+            ),
           ],
         );
       },
@@ -2726,6 +3601,33 @@ class _DayTeacherCard extends StatelessWidget {
                               ),
                               child: Text(
                                 'Scheduled',
+                                style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                          if (teacher['isDualShift'] == true || ((teacher['shifts'] as List?)?.length ?? 0) > 1) ...[
+                            const Gap(6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Dual Shift',
+                                style: TextStyle(color: Color(0xFF6366F1), fontSize: 10, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ] else if (teacher['shift'] != null && teacher['shift'].toString().isNotEmpty) ...[
+                            const Gap(6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: colors.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                teacher['shift'] == 'Shift-1' ? 'Shift 1' : (teacher['shift'] == 'Shift-2' ? 'Shift 2' : teacher['shift'].toString()),
                                 style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w600),
                               ),
                             ),
@@ -3107,7 +4009,38 @@ class _TeacherReportRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: typography.bodyMediumSemiBold),
+                Row(
+                  children: [
+                    Flexible(child: Text(name, style: typography.bodyMediumSemiBold)),
+                    if (row['isDualShift'] == true || ((row['shifts'] as List?)?.length ?? 0) > 1) ...[
+                      const Gap(6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Dual Shift',
+                          style: TextStyle(color: Color(0xFF6366F1), fontSize: 10, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ] else if ((row['shifts'] as List?)?.isNotEmpty == true) ...[
+                      const Gap(6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: colors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          (row['shifts'] as List).first == 'Shift-1' ? 'Shift 1' : 'Shift 2',
+                          style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 Text(employeeId, style: typography.bodySmall.copyWith(color: colors.textSecondary)),
                 const Gap(6),
                 Row(children: [
@@ -3119,6 +4052,37 @@ class _TeacherReportRow extends StatelessWidget {
                   const Gap(6),
                   Text('/ $total days', style: typography.caption.copyWith(color: colors.textSecondary)),
                 ]),
+                if (row['shiftBreakdown'] != null && row['shiftBreakdown'] is Map) ...[
+                  () {
+                    final sb = row['shiftBreakdown'] as Map<String, dynamic>;
+                    if (sb.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: sb.entries.map((entry) {
+                          final sKey = entry.key;
+                          final sData = entry.value as Map<String, dynamic>;
+                          final sLabel = sKey == 'Shift-1' ? 'Shift 1' : (sKey == 'Shift-2' ? 'Shift 2' : sKey);
+                          final sColor = sKey == 'Shift-1' ? const Color(0xFF1D4ED8) : const Color(0xFF6D28D9);
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: sColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: sColor.withValues(alpha: 0.2)),
+                            ),
+                            child: Text(
+                              '$sLabel: P ${sData['present'] ?? 0}/${sData['total'] ?? 0} (${sData['rate'] ?? 0}%)',
+                              style: TextStyle(color: sColor, fontSize: 10, fontWeight: FontWeight.w600),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    );
+                  }(),
+                ],
               ],
             ),
           ),
@@ -3196,11 +4160,26 @@ class _TeacherDaysSheet extends ConsumerWidget {
                     final d = days[i];
                     final date = DateTime.tryParse(d['date']?.toString() ?? '');
                     final status = d['status']?.toString() ?? '';
+                    final shift = d['shift']?.toString();
                     final label = date != null ? DateFormat('EEE, dd MMM yyyy').format(date) : '';
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Row(children: [
-                        Expanded(child: Text(label, style: typography.bodyMedium)),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(label, style: typography.bodyMedium),
+                              if (shift != null && shift.isNotEmpty) ...[
+                                const Gap(2),
+                                Text(
+                                  shift == 'Shift-1' ? 'Shift 1' : (shift == 'Shift-2' ? 'Shift 2' : shift),
+                                  style: typography.caption.copyWith(color: colors.primary, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                         _dayStatusChip(status),
                       ]),
                     );

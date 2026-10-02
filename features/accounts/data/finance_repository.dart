@@ -69,6 +69,7 @@ class AccountRepository {
     required double amount,
     List<String>? items,
     String? monthLabel, // pay a specific month
+    List<String>? monthLabels, // pay multiple months
     String? allocate, // 'oldest' to clear arrears oldest-first
   }) async {
     try {
@@ -77,7 +78,10 @@ class AccountRepository {
         data: {
           'amount': amount,
           if (items != null && items.isNotEmpty) 'items': items,
-          'monthLabel': ?monthLabel,
+          if (monthLabels != null && monthLabels.isNotEmpty)
+            'monthLabels': monthLabels
+          else
+            'monthLabel': ?monthLabel,
           'allocate': ?allocate,
         },
       );
@@ -95,9 +99,106 @@ class AccountRepository {
         paidOn: data['paidOn'] != null
             ? DateTime.tryParse(data['paidOn'] as String)
             : DateTime.now(),
+        monthsCount: (data['monthsCount'] as num?)?.toInt(),
       );
     } catch (e) {
       throw Exception('Failed to process payment: $e');
+    }
+  }
+
+  Future<MultiMonthPreview> previewMonths({
+    required String studentId,
+    required List<String> monthLabels,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/accounts/student/$studentId/preview-months',
+        data: {'monthLabels': monthLabels},
+      );
+      return MultiMonthPreview.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception('Failed to preview months: $e');
+    }
+  }
+
+  // ── Family / sibling combined fee collection ───────────────────────────────
+
+  /// Parents with their children + each family's total balance. `search` matches
+  /// child name/ID or guardian name/contact/Iqama; empty search browses real
+  /// sibling groups (2+ children).
+  Future<List<FamilySummary>> getFamilies({
+    String? instituteId,
+    String? search,
+    String? classroom,
+  }) async {
+    try {
+      final response = await _dio.get('/accounts/families', queryParameters: {
+        'instituteId': instituteId,
+        'search': search,
+        'classroom': classroom,
+      }..removeWhere((_, v) => v == null || v == '' || v == 'All'));
+      final data = Map<String, dynamic>.from(response.data as Map);
+      return ((data['families'] as List?) ?? [])
+          .map((e) => FamilySummary.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to load families: $e');
+    }
+  }
+
+  Future<PagedResult<FamilySummary>> getFamiliesPage({
+    String? instituteId,
+    String? search,
+    String? classroom,
+    required int page,
+    int limit = 20,
+  }) async {
+    try {
+      final response = await _dio.get('/accounts/families', queryParameters: {
+        'instituteId': instituteId,
+        'search': search,
+        'classroom': classroom,
+        'page': page,
+        'limit': limit,
+      }..removeWhere((_, v) => v == null || v == '' || v == 'All'));
+      return PagedResult<FamilySummary>.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+        (json) => FamilySummary.fromJson(Map<String, dynamic>.from(json as Map)),
+      );
+    } catch (e) {
+      throw Exception('Failed to load families page: $e');
+    }
+  }
+
+  Future<FamilyDetail> getFamilyDetail(String key, {String? instituteId}) async {
+    try {
+      final response = await _dio.get('/accounts/family/detail', queryParameters: {
+        'key': key,
+        'instituteId': instituteId,
+      }..removeWhere((_, v) => v == null || v == ''));
+      return FamilyDetail.fromJson(Map<String, dynamic>.from(response.data as Map));
+    } catch (e) {
+      throw Exception('Failed to load family: $e');
+    }
+  }
+
+  /// Collect for several children in one go — the backend records one shared
+  /// receipt covering the whole family. Each allocation is
+  /// `{studentId, amount, monthLabel?, items?}`.
+  Future<FamilyReceipt> payFamily({
+    required List<Map<String, dynamic>> allocations,
+    String? allocate,
+  }) async {
+    try {
+      final response = await _dio.post('/accounts/family/pay', data: {
+        'allocations': allocations,
+        'allocate': ?allocate,
+      });
+      return FamilyReceipt.fromJson(Map<String, dynamic>.from(response.data as Map));
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map
+          ? (e.response?.data['message'] ?? 'Failed to record family payment')
+          : 'Failed to record family payment');
     }
   }
 

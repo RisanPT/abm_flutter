@@ -35,15 +35,19 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
     ref.watch(permissionControllerProvider);
     final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
     
-    final navItems = user?.role.navigationItems(allowedModules) ??
-        const [
-          AppNavItem(
-            label: 'Dashboard',
-            route: '/dashboard',
-            icon: Icons.dashboard_outlined,
-            module: AppModule.dashboard,
-          ),
-        ];
+    final rawNavItems = user?.role.navigationItems(allowedModules);
+    final navItems = (rawNavItems != null && rawNavItems.isNotEmpty)
+        ? rawNavItems
+        : (user != null
+            ? user.role.navigationItems(kDefaultRolePermissions[user.role] ?? {})
+            : const [
+                AppNavItem(
+                  label: 'Dashboard',
+                  route: '/dashboard',
+                  icon: Icons.dashboard_outlined,
+                  module: AppModule.dashboard,
+                ),
+              ]);
     final currentLocation = GoRouterState.of(context).matchedLocation;
     final selectedIndex = navItems.indexWhere(
       (item) =>

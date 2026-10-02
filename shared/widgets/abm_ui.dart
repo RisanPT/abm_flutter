@@ -79,7 +79,12 @@ class AbmGradientHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              ?trailing,
+              if (trailing != null) ...[
+                trailing!,
+                // Reserve space for the shell's top-right floating buttons on
+                // non-mobile layouts. On mobile the buttons overlay independently.
+                if (!context.isMobile) const Gap(88),
+              ],
             ],
           ),
           if (bottom != null) ...[const Gap(16), bottom!],

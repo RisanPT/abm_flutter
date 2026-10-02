@@ -6,7 +6,6 @@ import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/dashboard/domain/dashboard_stats_model.dart';
 import 'package:abm_madrasa/features/dashboard/presentation/dashboard_controller.dart';
-import 'package:abm_madrasa/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
@@ -372,119 +371,91 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildStatsGrid(BuildContext context, DashboardStats stats, Set<String> allowedModules) {
-    return GridView.extent(
-      maxCrossAxisExtent: 250,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 1.25,
-      children: [
-        StatCard(
-          title: 'Total Students',
-          value: stats.totalStudents.toString(),
-          subtitle: 'Active members',
-          icon: LucideIcons.users,
-          color: context.colors.primary,
+    final colors = context.colors;
+    final canFinance = allowedModules.contains(AppModule.finance.name) ||
+        allowedModules.contains(AppModule.accounts.name);
+
+    final cards = <Widget>[
+      _StatCard(
+        icon: LucideIcons.users,
+        tint: colors.primary,
+        value: stats.totalStudents.toString(),
+        label: 'Total Students',
+        sub: 'Active members',
+      ),
+      _StatCard(
+        icon: LucideIcons.calendarCheck,
+        tint: colors.green,
+        value: '${stats.attendanceRate.toStringAsFixed(stats.attendanceRate % 1 == 0 ? 0 : 1)}%',
+        label: 'Attendance',
+        sub: stats.markedToday > 0
+            ? '${stats.presentToday}/${stats.markedToday} present today'
+            : 'Not marked yet today',
+      ),
+      if (canFinance)
+        _StatCard(
+          icon: LucideIcons.wallet,
+          tint: colors.secondary,
+          value: NumberFormat.compactCurrency(symbol: 'SAR ').format(stats.feeCollectedThisMonth),
+          label: 'Fee Collected',
+          sub: 'This month',
+          trend: stats.feeCollectedTrend,
         ),
-        StatCard(
-          title: 'Attendance',
-          value: '${stats.attendanceRate}%',
-          subtitle: "Today's report",
-          icon: LucideIcons.calendarCheck,
-          color: context.colors.secondary,
-        ),
-        if (allowedModules.contains(AppModule.finance.name) ||
-            allowedModules.contains(AppModule.accounts.name))
-          StatCard(
-            title: 'Fee Collected',
-            value: NumberFormat.compactCurrency(symbol: 'SAR ').format(stats.feeCollectedThisMonth),
-            subtitle: 'This month',
-            icon: LucideIcons.wallet,
-            color: context.colors.accent,
-            trend: stats.feeCollectedTrend.isNotEmpty ? stats.feeCollectedTrend : null,
-          ),
-        StatCard(
-          title: 'Upcoming Events',
-          value: stats.upcomingEvents.toString().padLeft(2, '0'),
-          subtitle: 'Scheduled updates',
-          icon: LucideIcons.bell,
-          color: context.colors.warning,
-        ),
-      ],
+      _StatCard(
+        icon: LucideIcons.bell,
+        tint: colors.warning,
+        value: stats.upcomingEvents.toString().padLeft(2, '0'),
+        label: 'Upcoming Events',
+        sub: 'Scheduled updates',
+      ),
+    ];
+
+    // Responsive: 4 across on wide screens, 2 on phones/tablets.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final cols = w >= 820 ? 4 : 2;
+        const spacing = 16.0;
+        final itemW = (w - spacing * (cols - 1)) / cols;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: cards
+              .map((c) => SizedBox(width: itemW, child: c))
+              .toList(),
+        );
+      },
     );
   }
 
   Widget _buildSegmentData(BuildContext context, DashboardStats stats) {
     if (stats.segmentData.isEmpty) return const SizedBox.shrink();
+    // Only show segments that actually have activity this month.
+    final active = stats.segmentData.entries
+        .where((e) => e.value.income != 0 || e.value.expense != 0)
+        .toList();
+    if (active.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Accounts Segmentation',
-            style: context.typography.h4.copyWith(fontWeight: FontWeight.bold)),
-        const Gap(16),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: stats.segmentData.entries.map((entry) {
-              final segment = entry.key;
-              final data = entry.value;
-              final net = data.income - data.expense;
-              return SizedBox(
-                width: 200,
-                child: Card(
-                  margin: const EdgeInsets.only(right: 16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(segment,
-                            style: context.typography.bodyLarge
-                                .copyWith(fontWeight: FontWeight.bold)),
-                        const Gap(12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Income:', style: context.typography.bodySmall),
-                            Text('SAR ${data.income.toStringAsFixed(0)}',
-                                style: context.typography.bodySmall.copyWith(
-                                    color: Colors.green, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const Gap(4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Expense:', style: context.typography.bodySmall),
-                            Text('SAR ${data.expense.toStringAsFixed(0)}',
-                                style: context.typography.bodySmall.copyWith(
-                                    color: Colors.red, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const Divider(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Net:',
-                                style: context.typography.bodySmall
-                                    .copyWith(fontWeight: FontWeight.bold)),
-                            Text('SAR ${net.toStringAsFixed(0)}',
-                                style: context.typography.bodySmall.copyWith(
-                                    color: net >= 0 ? Colors.green : Colors.red,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
+    return AbmSectionCard(
+      title: 'Accounts this month',
+      icon: LucideIcons.layers,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cols = constraints.maxWidth >= 640 ? active.length.clamp(1, 3) : 1;
+          const spacing = 12.0;
+          final itemW = (constraints.maxWidth - spacing * (cols - 1)) / cols;
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: active
+                .map((e) => SizedBox(
+                      width: itemW,
+                      child: _SegmentCard(name: e.key, data: e.value),
+                    ))
+                .toList(),
+          );
+        },
+      ),
     );
   }
 
@@ -589,69 +560,68 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildQuickActions(BuildContext context, List<AppNavItem> navItems) {
+    final colors = context.colors;
     final typography = context.typography;
     final routes = navItems.map((item) => item.route).toSet();
+
+    final tiles = <AbmQuickTile>[
+      if (routes.contains(RouteNames.attendance))
+        AbmQuickTile(
+          icon: LucideIcons.clipboardCheck,
+          label: 'Attendance',
+          color: colors.secondary,
+          onTap: () => context.push(RouteNames.attendance),
+        ),
+      if (routes.contains(RouteNames.finance))
+        AbmQuickTile(
+          icon: LucideIcons.banknote,
+          label: 'Collect Fee',
+          color: colors.green,
+          onTap: () => context.push(RouteNames.finance),
+        ),
+      if (routes.contains(RouteNames.students))
+        AbmQuickTile(
+          icon: LucideIcons.userPlus,
+          label: 'Add Student',
+          color: colors.primary,
+          onTap: () => context.push(RouteNames.addStudent),
+        ),
+      if (routes.contains(RouteNames.timetable))
+        AbmQuickTile(
+          icon: LucideIcons.calendarDays,
+          label: 'Timetable',
+          color: colors.accent,
+          onTap: () => context.push(RouteNames.timetable),
+        ),
+      if (routes.contains(RouteNames.transport))
+        AbmQuickTile(
+          icon: LucideIcons.bus,
+          label: 'Transport',
+          color: Colors.indigo,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const FleetManagementScreen()),
+          ),
+        ),
+      if (routes.contains(RouteNames.progressReports))
+        AbmQuickTile(
+          icon: LucideIcons.fileSpreadsheet,
+          label: 'Upload Grades',
+          color: Colors.teal,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProgressReportUploadScreen()),
+          ),
+        ),
+    ];
+    if (tiles.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Quick Actions', style: typography.h4.copyWith(fontWeight: FontWeight.bold)),
         const Gap(16),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              if (routes.contains(RouteNames.attendance))
-                _QuickActionItem(
-                  icon: LucideIcons.clipboardCheck,
-                  label: 'Attendance',
-                  color: const Color(0xFFD6B64C),
-                  onTap: () => context.push(RouteNames.attendance),
-                ),
-              if (routes.contains(RouteNames.timetable))
-                _QuickActionItem(
-                  icon: LucideIcons.calendarDays,
-                  label: 'Timetable',
-                  color: const Color(0xFF1B3D2F),
-                  onTap: () => context.push(RouteNames.timetable),
-                ),
-              if (routes.contains(RouteNames.finance))
-                _QuickActionItem(
-                  icon: LucideIcons.banknote,
-                  label: 'Collect Fee',
-                  color: const Color(0xFFC0A040),
-                  onTap: () => context.push(RouteNames.finance),
-                ),
-              if (routes.contains(RouteNames.students))
-                _QuickActionItem(
-                  icon: Icons.person_add_outlined,
-                  label: 'Add Student',
-                  color: const Color(0xFF1B3D2F),
-                  onTap: () => context.push(RouteNames.addStudent),
-                ),
-              if (routes.contains(RouteNames.transport))
-                _QuickActionItem(
-                  icon: LucideIcons.bus,
-                  label: 'Transport',
-                  color: Colors.indigo,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const FleetManagementScreen()),
-                  ),
-                ),
-              if (routes.contains(RouteNames.progressReports))
-                _QuickActionItem(
-                  icon: LucideIcons.fileSpreadsheet,
-                  label: 'Upload Grades',
-                  color: Colors.teal,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProgressReportUploadScreen()),
-                  ),
-                ),
-            ],
-          ),
-        ),
+        AbmQuickGrid(tiles: tiles, perRow: context.isMobile ? 3 : 4),
       ],
     );
   }
@@ -862,52 +832,155 @@ class _MiniStatCard extends StatelessWidget {
   }
 }
 
-// ─── Admin Quick Action Item ───────────────────────────────────────────────────
+// ─── Admin stat card ─────────────────────────────────────────────────────────
 
-class _QuickActionItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback? onTap;
-
-  const _QuickActionItem({
+class _StatCard extends StatelessWidget {
+  const _StatCard({
     required this.icon,
+    required this.tint,
+    required this.value,
     required this.label,
-    required this.color,
-    this.onTap,
+    this.sub,
+    this.trend,
   });
+
+  final IconData icon;
+  final Color tint;
+  final String value;
+  final String label;
+  final String? sub;
+  final String? trend;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
+    final showTrend = trend != null && trend!.isNotEmpty && trend != '+0%' && trend != '+0.0%';
 
     return Container(
-      width: 90,
-      margin: const EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(30),
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-          const Gap(8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: typography.bodySmallSemiBold.copyWith(
-              fontSize: 11,
-              color: colors.textPrimary,
-            ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: tint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, color: tint, size: 21),
+              ),
+              const Spacer(),
+              if (showTrend) _TrendPill(trend: trend!),
+            ],
+          ),
+          const Gap(14),
+          Text(value,
+              style: typography.h3.copyWith(color: colors.textPrimary, fontWeight: FontWeight.bold),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          const Gap(2),
+          Text(label,
+              style: typography.bodyMediumSemiBold.copyWith(color: colors.textPrimary)),
+          if (sub != null) ...[
+            const Gap(2),
+            Text(sub!,
+                style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TrendPill extends StatelessWidget {
+  const _TrendPill({required this.trend});
+  final String trend;
+
+  @override
+  Widget build(BuildContext context) {
+    final typography = context.typography;
+    final down = trend.startsWith('-');
+    final color = down ? Colors.red.shade600 : Colors.green.shade600;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(down ? LucideIcons.trendingDown : LucideIcons.trendingUp, size: 12, color: color),
+          const Gap(3),
+          Text(trend, style: typography.caption.copyWith(color: color, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentCard extends StatelessWidget {
+  const _SegmentCard({required this.name, required this.data});
+  final String name;
+  final AccountSegmentData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+    final net = data.income - data.expense;
+    Widget row(String label, double value, Color color) => Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+              Text('SAR ${value.toStringAsFixed(0)}',
+                  style: typography.bodySmallSemiBold.copyWith(color: color)),
+            ],
+          ),
+        );
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(name, style: typography.bodyMediumSemiBold.copyWith(color: colors.textPrimary)),
+          row('Income', data.income, Colors.green.shade700),
+          row('Expense', data.expense, Colors.red.shade600),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Divider(height: 1, color: colors.border),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Net', style: typography.bodySmallSemiBold.copyWith(color: colors.textPrimary)),
+              Text('SAR ${net.toStringAsFixed(0)}',
+                  style: typography.bodyMediumSemiBold
+                      .copyWith(color: net >= 0 ? Colors.green.shade700 : Colors.red.shade600)),
+            ],
           ),
         ],
       ),

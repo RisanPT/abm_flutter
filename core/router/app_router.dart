@@ -26,6 +26,7 @@ import 'package:abm_madrasa/features/teachers/presentation/teacher_dashboard_scr
 import 'package:abm_madrasa/features/students/presentation/student_dashboard_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/student_portal_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_screen.dart';
+import 'package:abm_madrasa/features/accounts/presentation/family_fees_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/outstanding_dues_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/income_entry_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/fee_structure_setup_screen.dart';
@@ -34,6 +35,12 @@ import 'package:abm_madrasa/features/finance/presentation/payroll_screen.dart';
 import 'package:abm_madrasa/features/events/presentation/event_list_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/settings_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/role_permissions_screen.dart';
+import 'package:abm_madrasa/features/backup/presentation/backup_screen.dart';
+import 'package:abm_madrasa/features/homework/presentation/homework_screen.dart';
+import 'package:abm_madrasa/features/hifz/presentation/hifz_screen.dart';
+import 'package:abm_madrasa/features/exams/presentation/exams_screen.dart';
+import 'package:abm_madrasa/features/materials/presentation/materials_screen.dart';
+import 'package:abm_madrasa/features/student_leave/presentation/student_leave_screen.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/classroom_management_screen.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/institute_management_screen.dart';
 import 'package:abm_madrasa/features/website_management/presentation/website_management_screen.dart';
@@ -132,6 +139,26 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: RouteNames.studentPortal,
         builder: (context, state) => const StudentPortalScreen(),
+      ),
+      // Student-facing homework (standalone, no admin shell).
+      GoRoute(
+        path: RouteNames.myHomework,
+        builder: (context, state) => const HomeworkScreen(),
+      ),
+      // Student-facing Hifz log (standalone, no admin shell).
+      GoRoute(
+        path: RouteNames.myHifz,
+        builder: (context, state) => const HifzScreen(),
+      ),
+      // Student-facing exam results (standalone, no admin shell).
+      GoRoute(
+        path: RouteNames.myResults,
+        builder: (context, state) => const ExamsScreen(),
+      ),
+      // Student-facing leave (standalone, no admin shell).
+      GoRoute(
+        path: RouteNames.myLeave,
+        builder: (context, state) => const StudentLeaveScreen(),
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -254,6 +281,10 @@ GoRouter router(Ref ref) {
             builder: (context, state) => const AccountsScreen(),
           ),
           GoRoute(
+            path: RouteNames.familyFees,
+            builder: (context, state) => const FamilyFeesScreen(),
+          ),
+          GoRoute(
             path: RouteNames.outstandingDues,
             builder: (context, state) => const OutstandingDuesScreen(),
           ),
@@ -305,6 +336,30 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.permissions,
             builder: (context, state) => const RolePermissionsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.dataBackup,
+            builder: (context, state) => const DataBackupScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.homework,
+            builder: (context, state) => const HomeworkScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.hifz,
+            builder: (context, state) => const HifzScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.exams,
+            builder: (context, state) => const ExamsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.materials,
+            builder: (context, state) => const MaterialsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.studentLeave,
+            builder: (context, state) => const StudentLeaveScreen(),
           ),
           GoRoute(
             path: RouteNames.institutes,

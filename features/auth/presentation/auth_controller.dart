@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/features/auth/data/auth_repository.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'auth_controller.g.dart';
@@ -23,6 +24,12 @@ class AuthController extends _$AuthController {
           ),
     );
     state = result;
+    if (!result.hasError) {
+      ref.invalidate(permissionControllerProvider);
+      try {
+        await ref.read(permissionControllerProvider.notifier).refresh();
+      } catch (_) {}
+    }
     return !result.hasError;
   }
 
@@ -35,6 +42,7 @@ class AuthController extends _$AuthController {
     } catch (_) {
       // best-effort: even if the server call fails, clear local session below.
     }
+    ref.invalidate(permissionControllerProvider);
     state = const AsyncValue.data(null);
   }
 }

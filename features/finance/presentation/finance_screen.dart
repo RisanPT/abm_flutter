@@ -1,5 +1,7 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/network/paged_result.dart';
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -9,6 +11,7 @@ import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:go_router/go_router.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -16,6 +19,53 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+IconData _getCategoryIcon(String category) {
+  final lower = category.toLowerCase();
+  if (lower.contains('salary') || lower.contains('payroll')) {
+    return LucideIcons.userCheck;
+  }
+  if (lower.contains('utilit') || lower.contains('electric') || lower.contains('water') || lower.contains('power')) {
+    return LucideIcons.zap;
+  }
+  if (lower.contains('rent') || lower.contains('building') || lower.contains('property')) {
+    return LucideIcons.home;
+  }
+  if (lower.contains('office') || lower.contains('paper') || lower.contains('suppl') || lower.contains('stationery')) {
+    return LucideIcons.fileText;
+  }
+  if (lower.contains('maint') || lower.contains('repair')) {
+    return LucideIcons.wrench;
+  }
+  if (lower.contains('book') || lower.contains('material')) {
+    return LucideIcons.bookOpen;
+  }
+  if (lower.contains('transport') || lower.contains('bus') || lower.contains('fuel')) {
+    return LucideIcons.bus;
+  }
+  return LucideIcons.receipt;
+}
+
+Color _getCategoryColor(String category) {
+  final lower = category.toLowerCase();
+  if (lower.contains('salary') || lower.contains('payroll')) {
+    return const Color(0xFF1B3D2F);
+  }
+  if (lower.contains('utilit') || lower.contains('electric') || lower.contains('power')) {
+    return const Color(0xFFD97706);
+  }
+  if (lower.contains('rent')) {
+    return const Color(0xFF2563EB);
+  }
+  if (lower.contains('office') || lower.contains('paper')) {
+    return const Color(0xFF7C3AED);
+  }
+  if (lower.contains('maint')) {
+    return const Color(0xFF0D9488);
+  }
+  return const Color(0xFF4B5563);
+}
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
@@ -23,34 +73,35 @@ final _categoriesProvider = FutureProvider<List<FinanceCategory>>((ref) async {
   return ref.watch(madrassaFinanceRepositoryProvider).getCategories();
 });
 
-// P&L report keyed by month ('yyyy-MM') — watched (not fetched in build) so the
-// screen doesn't re-hit the server on every rebuild.
+// P&L report keyed by month ('yyyy-MM')
 final _pnlProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, String>((ref, month) {
   return ref.watch(madrassaFinanceRepositoryProvider).getPnlReport(month: month);
 });
 
 class _ExpensesQuery {
-  const _ExpensesQuery(this.month, this.category);
+  const _ExpensesQuery(this.month, this.category, this.page);
   final String month;
   final String? category;
+  final int page;
   @override
   bool operator ==(Object other) =>
-      other is _ExpensesQuery && month == other.month && category == other.category;
+      other is _ExpensesQuery &&
+      month == other.month &&
+      category == other.category &&
+      page == other.page;
   @override
-  int get hashCode => Object.hash(month, category);
+  int get hashCode => Object.hash(month, category, page);
 }
 
-final _expensesProvider = FutureProvider.autoDispose.family<List<MadrassaExpense>, _ExpensesQuery>((ref, q) {
-  return ref.watch(madrassaFinanceRepositoryProvider).getExpenses(category: q.category, month: q.month);
+final _expensesProvider =
+    FutureProvider.autoDispose.family<PagedResult<MadrassaExpense>, _ExpensesQuery>((ref, q) {
+  return ref.watch(madrassaFinanceRepositoryProvider).getExpensesPage(
+        category: q.category,
+        month: q.month,
+        page: q.page,
+        limit: 25,
+      );
 });
-
-// Two summary cards side-by-side on wide screens, stacked full-width on phones.
-Widget _statPair(BuildContext context, Widget a, Widget b) {
-  if (context.isMobile) {
-    return Column(children: [a, const Gap(12), b]);
-  }
-  return Row(children: [Expanded(child: a), const Gap(16), Expanded(child: b)]);
-}
 
 // ─── Finance Screen ────────────────────────────────────────────────────────────
 
@@ -65,6 +116,45 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   DateTime _selectedMonth = DateTime.now();
   String? _selectedCategory;
   int _tab = 0; // 0 = Expenditure, 1 = Income
+  int _page = 1;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      final text = _searchCtrl.text.trim();
+      if (text != _searchQuery) {
+        setState(() => _searchQuery = text);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return _selectedMonth.year == now.year && _selectedMonth.month == now.month;
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + delta, 1);
+      _page = 1;
+    });
+  }
+
+  void _goToCurrentMonth() {
+    setState(() {
+      _selectedMonth = DateTime.now();
+      _page = 1;
+    });
+  }
 
   Future<void> _exportFinanceReportPdf() async {
     try {
@@ -109,6 +199,60 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     }
   }
 
+  Future<void> _confirmDeleteExpense(MadrassaExpense expense) async {
+    final isSalary = expense.category == 'Monthly Salary' || expense.category == 'Salary';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(LucideIcons.alertTriangle, color: Colors.red.shade600, size: 22),
+            const Gap(10),
+            Text(isSalary ? 'Delete Salary Entry' : 'Delete Expense'),
+          ],
+        ),
+        content: Text(
+          isSalary
+              ? 'Delete the salary disbursement of ${sar(expense.amount)} for ${expense.teacherName ?? 'this teacher'}?\n\nThis will remove the transaction from accounts and reopen the teacher in Payroll to allow re-processing.'
+              : 'Delete this expense record of ${sar(expense.amount)} (${expense.category})?\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await ref.read(madrassaFinanceRepositoryProvider).deleteExpense(expense.id);
+      ref.invalidate(_expensesProvider);
+      ref.invalidate(_pnlProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Expense entry deleted successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete expense: ${friendlyErrorMessage(e)}')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -126,6 +270,18 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Quick shortcut to Payroll
+                FilledButton.tonalIcon(
+                  onPressed: () => context.go(RouteNames.payroll),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  icon: const Icon(LucideIcons.wallet, size: 16, color: Color(0xFFD6B64C)),
+                  label: const Text('Payroll', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                ),
+                const Gap(8),
                 if (canEdit) ...[
                   AbmHeaderIconButton(icon: LucideIcons.tag, onTap: _showCategoryManager, tooltip: 'Manage Categories'),
                   const Gap(6),
@@ -136,11 +292,78 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               ],
             ),
           ),
+          // Interactive Month & Tab Bar
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-            child: _FinanceTabs(
-              index: _tab,
-              onChanged: (i) => setState(() => _tab = i),
+            child: Row(
+              children: [
+                // Month Switcher
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(LucideIcons.chevronLeft, size: 18),
+                        onPressed: () => _changeMonth(-1),
+                        tooltip: 'Previous Month',
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      InkWell(
+                        onTap: _pickMonth,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(LucideIcons.calendar, size: 16, color: colors.primary),
+                              const Gap(8),
+                              Text(
+                                DateFormat('MMMM yyyy').format(_selectedMonth),
+                                style: context.typography.bodyMediumSemiBold.copyWith(color: colors.primary),
+                              ),
+                              const Gap(4),
+                              Icon(LucideIcons.chevronDown, size: 14, color: colors.textSecondary),
+                            ],
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.chevronRight, size: 18),
+                        onPressed: _isCurrentMonth ? null : () => _changeMonth(1),
+                        tooltip: 'Next Month',
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      if (!_isCurrentMonth) ...[
+                        const Gap(4),
+                        TextButton.icon(
+                          onPressed: _goToCurrentMonth,
+                          icon: const Icon(LucideIcons.rotateCcw, size: 12),
+                          label: const Text('Current', style: TextStyle(fontSize: 12)),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const Gap(16),
+                // Tab Switcher
+                Expanded(
+                  child: _FinanceTabs(
+                    index: _tab,
+                    onChanged: (i) => setState(() => _tab = i),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -163,7 +386,6 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         final totalExpense = (data['totalExpenses'] as num?)?.toDouble() ?? 0;
         final net = (data['netBalance'] as num?)?.toDouble() ?? (totalIncome - totalExpense);
         final incomes = (data['incomes'] as List?) ?? [];
-        // Only actual collections (amount > 0)
         final collected = incomes.where((e) => ((e['amount'] as num?) ?? 0) > 0).toList();
 
         return Padding(
@@ -171,31 +393,47 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _statPair(
-                context,
-                _IncomeStatCard(
-                  label: 'Total Income',
-                  value: totalIncome,
-                  tint: colors.primary,
-                  icon: LucideIcons.trendingUp,
-                  subtitle: DateFormat('MMMM yyyy').format(_selectedMonth),
-                ),
-                _IncomeStatCard(
-                  label: 'Net Balance',
-                  value: net,
-                  tint: net >= 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-                  icon: LucideIcons.scale,
-                  subtitle: 'Income − Expenditure',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _IncomeStatCard(
+                      label: 'Total Fee Income',
+                      value: totalIncome,
+                      tint: colors.primary,
+                      icon: LucideIcons.trendingUp,
+                      subtitle: DateFormat('MMMM yyyy').format(_selectedMonth),
+                    ),
+                  ),
+                  const Gap(16),
+                  Expanded(
+                    child: _IncomeStatCard(
+                      label: 'Net Balance',
+                      value: net,
+                      tint: net >= 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                      icon: LucideIcons.scale,
+                      subtitle: 'Fee Income − Total Expenditure',
+                    ),
+                  ),
+                ],
               ),
-              const Gap(32),
-              Text('Fee Income', style: typography.h4),
-              const Gap(4),
-              Text('Fees collected this month', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+              const Gap(24),
+              Row(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Fee Collections', style: typography.h4),
+                      Text('${collected.length} collections recorded this month',
+                          style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                    ],
+                  ),
+                  const Spacer(),
+                ],
+              ),
               const Gap(16),
               Expanded(
                 child: collected.isEmpty
-                    ? _buildEmptyState(context)
+                    ? _buildEmptyState(context, 'No fee collections recorded for this month')
                     : ListView.separated(
                         itemCount: collected.length,
                         separatorBuilder: (_, _) => const Gap(10),
@@ -210,49 +448,174 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   }
 
   Widget _buildExpensesBody(BuildContext context) {
+    final colors = context.colors;
     final typography = context.typography;
     final user = ref.watch(authControllerProvider).asData?.value;
     final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
     final canEdit = user?.role.canEditFinance(allowedModules) ?? false;
-    final async = ref.watch(_expensesProvider(
-        _ExpensesQuery(DateFormat('yyyy-MM').format(_selectedMonth), _selectedCategory)));
+    final monthStr = DateFormat('yyyy-MM').format(_selectedMonth);
+
+    final async = ref.watch(_expensesProvider(_ExpensesQuery(monthStr, _selectedCategory, _page)));
+    final pnlAsync = ref.watch(_pnlProvider(monthStr));
+    final categoriesAsync = ref.watch(_categoriesProvider);
+
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text(friendlyErrorMessage(e))),
-      data: (expenses) {
-        final total = expenses.fold<double>(0, (sum, e) => sum + e.amount);
+      data: (pagedResult) {
+        // Financial metrics from P&L report
+        final pnlData = pnlAsync.asData?.value ?? {};
+        final totalExpense = (pnlData['totalExpenses'] as num?)?.toDouble() ??
+            pagedResult.items.fold<double>(0, (sum, e) => sum + e.amount);
+        final totalIncome = (pnlData['totalIncomes'] as num?)?.toDouble() ?? 0;
+        final netBalance = (pnlData['netBalance'] as num?)?.toDouble() ?? (totalIncome - totalExpense);
+        
+        final expenseSummary = (pnlData['expenseSummary'] as Map<String, dynamic>?) ?? {};
+        final salaryTotal = (expenseSummary['Monthly Salary'] as num?)?.toDouble() ?? 0;
+        final operationalTotal = (totalExpense - salaryTotal).clamp(0.0, double.infinity);
+        
+        final allExpensesList = (pnlData['expenses'] as List?) ?? [];
+        final salaryDisbursementsCount = allExpensesList
+            .where((e) => e['category'] == 'Monthly Salary' || e['category'] == 'Salary')
+            .length;
+
+        // Apply client-side search filter
+        final displayItems = pagedResult.items.where((e) {
+          if (_searchQuery.isEmpty) return true;
+          final q = _searchQuery.toLowerCase();
+          final teacher = (e.teacherName ?? '').toLowerCase();
+          final desc = e.description.toLowerCase();
+          final cat = e.category.toLowerCase();
+          final emp = (e.employeeId ?? '').toLowerCase();
+          return teacher.contains(q) || desc.contains(q) || cat.contains(q) || emp.contains(q);
+        }).toList();
 
         return Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSummaryCards(context, total, expenses.length),
-              const Gap(32),
+              // 3-Stat Executive Dashboard Overview
+              _buildExecutiveMetrics(
+                context: context,
+                totalExpense: totalExpense,
+                salaryExpense: salaryTotal,
+                operationalExpense: operationalTotal,
+                salaryCount: salaryDisbursementsCount,
+                totalIncome: totalIncome,
+                netBalance: netBalance,
+              ),
+              const Gap(20),
+
+              // Staff Salary & Payroll Integration Banner
+              _buildPayrollLinkBanner(context, salaryDisbursementsCount, salaryTotal),
+              const Gap(20),
+
+              // Category Pills & Search Bar Row
               Row(
                 children: [
-                  Text('Expenditure List', style: typography.h4),
-                  const Spacer(),
+                  // Search Box
+                  SizedBox(
+                    width: 260,
+                    height: 40,
+                    child: TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'Search expenses, teachers...',
+                        hintStyle: typography.bodySmall.copyWith(color: colors.textSecondary),
+                        prefixIcon: const Icon(LucideIcons.search, size: 16),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(LucideIcons.x, size: 16),
+                                onPressed: () => _searchCtrl.clear(),
+                              )
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: colors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: colors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: colors.primary, width: 1.5),
+                        ),
+                        filled: true,
+                        fillColor: colors.white,
+                      ),
+                      style: typography.bodyMedium,
+                    ),
+                  ),
+                  const Gap(12),
+                  // Category Filter Chips
+                  Expanded(
+                    child: categoriesAsync.maybeWhen(
+                      data: (categories) => _buildCategoryFilterChips(
+                        context,
+                        categories.where((c) => c.type == 'Expense').toList(),
+                        salaryDisbursementsCount,
+                      ),
+                      orElse: () => const SizedBox.shrink(),
+                    ),
+                  ),
+                  const Gap(12),
                   if (canEdit)
                     ElevatedButton.icon(
                       onPressed: _showAddExpenseDialog,
-                      icon: const Icon(LucideIcons.plus, size: 18),
-                      label: const Text('Add Expense'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(LucideIcons.plus, size: 16),
+                      label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                 ],
               ),
               const Gap(16),
+
+              // List of Expenses
               Expanded(
-                child: expenses.isEmpty
-                    ? _buildEmptyState(context)
+                child: displayItems.isEmpty
+                    ? _buildEmptyState(
+                        context,
+                        _selectedCategory == 'Monthly Salary'
+                            ? 'No teacher salaries recorded for this month yet.\nClick "Manage Payroll" to process monthly teacher salaries.'
+                            : 'No expenses matching the criteria for this month.',
+                        actionButton: _selectedCategory == 'Monthly Salary'
+                            ? ElevatedButton.icon(
+                                onPressed: () => context.go(RouteNames.payroll),
+                                icon: const Icon(LucideIcons.wallet, size: 16),
+                                label: const Text('Go to Payroll'),
+                              )
+                            : null,
+                      )
                     : ListView.builder(
-                        itemCount: expenses.length,
+                        itemCount: displayItems.length,
                         itemBuilder: (context, index) {
-                          final expense = expenses[index];
-                          return _ExpenseCard(expense: expense);
+                          final expense = displayItems[index];
+                          return _ExpenseCard(
+                            expense: expense,
+                            canDelete: canEdit,
+                            onDelete: () => _confirmDeleteExpense(expense),
+                            onOpenPayroll: () => context.go(RouteNames.payroll),
+                          );
                         },
                       ),
               ),
+              if (pagedResult.totalPages > 1) ...[
+                const Gap(12),
+                AbmPaginationBar(
+                  page: pagedResult.page,
+                  totalPages: pagedResult.totalPages,
+                  total: pagedResult.total,
+                  onPage: (p) => setState(() => _page = p),
+                ),
+              ],
             ],
           ),
         );
@@ -260,63 +623,486 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     );
   }
 
-  Widget _buildSummaryCards(BuildContext context, double total, int count) {
+  Widget _buildExecutiveMetrics({
+    required BuildContext context,
+    required double totalExpense,
+    required double salaryExpense,
+    required double operationalExpense,
+    required int salaryCount,
+    required double totalIncome,
+    required double netBalance,
+  }) {
     final colors = context.colors;
     final typography = context.typography;
 
+    // Card 1: Total Expenditure
     final expenditureCard = Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [colors.primary, colors.primary.withValues(alpha: 0.8)]),
-        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [const Color(0xFF1B3D2F), const Color(0xFF265240)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1B3D2F).withValues(alpha: 0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Total Expenditure', style: typography.bodyMedium.copyWith(color: Colors.white70)),
-          const Gap(8),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(LucideIcons.trendingDown, color: Colors.white, size: 16),
+              ),
+              const Gap(10),
+              Text('TOTAL EXPENDITURE',
+                  style: typography.bodySmall.copyWith(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  )),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD6B64C).withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  DateFormat('MMM yyyy').format(_selectedMonth),
+                  style: const TextStyle(color: Color(0xFFFDE68A), fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(sar(total), style: typography.h2.copyWith(color: Colors.white)),
+            child: Text(sar(totalExpense),
+                style: typography.h2.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
-          const Gap(4),
-          Text(DateFormat('MMMM yyyy').format(_selectedMonth),
-              style: typography.bodySmall.copyWith(color: Colors.white60)),
+          const Gap(8),
+          Row(
+            children: [
+              Text(
+                'Operational: ${sar(operationalExpense)}',
+                style: typography.bodySmall.copyWith(color: Colors.white70),
+              ),
+              const Text('  •  ', style: TextStyle(color: Colors.white38)),
+              Text(
+                'Salaries: ${sar(salaryExpense)}',
+                style: typography.bodySmall.copyWith(color: const Color(0xFFD6B64C), fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
         ],
       ),
     );
-    final countCard = Container(
-      padding: const EdgeInsets.all(24),
+
+    // Card 2: Staff Salaries & Payroll (Clickable link to Payroll)
+    final payrollCard = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.go(RouteNames.payroll),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFD6B64C).withValues(alpha: 0.5), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD6B64C).withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD6B64C).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(LucideIcons.userCheck, color: Color(0xFF92400E), size: 16),
+                  ),
+                  const Gap(10),
+                  Text('STAFF PAYROLL',
+                      style: typography.bodySmall.copyWith(
+                        color: colors.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      )),
+                  const Spacer(),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Payroll',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: colors.primary,
+                          )),
+                      const Gap(2),
+                      Icon(LucideIcons.arrowUpRight, size: 14, color: colors.primary),
+                    ],
+                  ),
+                ],
+              ),
+              const Gap(12),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(sar(salaryExpense),
+                    style: typography.h2.copyWith(color: colors.primary, fontWeight: FontWeight.bold)),
+              ),
+              const Gap(8),
+              Text(
+                salaryCount > 0
+                    ? '$salaryCount Staff Disbursements Recorded'
+                    : 'No salary entries recorded yet',
+                style: typography.bodySmall.copyWith(
+                  color: salaryCount > 0 ? const Color(0xFF047857) : colors.textSecondary,
+                  fontWeight: salaryCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Card 3: Net Cash Position
+    final netCard = Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: colors.border),
+        color: colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Transaction Count', style: typography.bodyMedium.copyWith(color: colors.textSecondary)),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (netBalance >= 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626)).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  LucideIcons.scale,
+                  color: netBalance >= 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                  size: 16,
+                ),
+              ),
+              const Gap(10),
+              Text('NET BALANCE',
+                  style: typography.bodySmall.copyWith(
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  )),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: (netBalance >= 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626)).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  netBalance >= 0 ? 'Surplus' : 'Deficit',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: netBalance >= 0 ? const Color(0xFF15803D) : const Color(0xFFB91C1C),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${netBalance >= 0 ? '+' : ''}${sar(netBalance)}',
+              style: typography.h2.copyWith(
+                color: netBalance >= 0 ? const Color(0xFF15803D) : const Color(0xFFB91C1C),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           const Gap(8),
-          Text('$count', style: typography.h2.copyWith(color: colors.primary)),
-          const Gap(4),
-          Text('Entries recorded', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+          Text(
+            'Inflow: ${sar(totalIncome)}  •  Outflow: ${sar(totalExpense)}',
+            style: typography.bodySmall.copyWith(color: colors.textSecondary),
+          ),
         ],
       ),
     );
-    return _statPair(context, expenditureCard, countCard);
+
+    if (context.isMobile) {
+      return Column(
+        children: [
+          expenditureCard,
+          const Gap(12),
+          payrollCard,
+          const Gap(12),
+          netCard,
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: expenditureCard),
+        const Gap(16),
+        Expanded(child: payrollCard),
+        const Gap(16),
+        Expanded(child: netCard),
+      ],
+    );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+  Widget _buildPayrollLinkBanner(BuildContext context, int salaryCount, double salaryTotal) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD6B64C).withValues(alpha: 0.4)),
+      ),
+      child: Row(
         children: [
-          Icon(LucideIcons.book, size: 48, color: context.colors.textSecondary.withValues(alpha: 0.3)),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1B3D2F),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(LucideIcons.users, color: Color(0xFFD6B64C), size: 20),
+          ),
           const Gap(16),
-          Text(
-            'No expenses recorded for this month',
-            style: context.typography.bodyLarge.copyWith(color: context.colors.textSecondary),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Teacher & Staff Payroll System',
+                      style: typography.bodyLargeSemiBold.copyWith(color: colors.textPrimary),
+                    ),
+                    const Gap(8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1B3D2F).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Integrated with Finance',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                const Gap(2),
+                Text(
+                  salaryCount > 0
+                      ? '$salaryCount teacher salaries (${sar(salaryTotal)}) processed from timetable attendance for ${DateFormat('MMMM yyyy').format(_selectedMonth)}.'
+                      : 'Calculate attendance-adjusted monthly teacher compensation and automatically book disbursements into Finance.',
+                  style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const Gap(16),
+          FilledButton.icon(
+            onPressed: () => context.go(RouteNames.payroll),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1B3D2F),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(LucideIcons.arrowUpRight, size: 16, color: Color(0xFFD6B64C)),
+            label: const Text('Manage Payroll', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryFilterChips(
+    BuildContext context,
+    List<FinanceCategory> categories,
+    int salaryCount,
+  ) {
+    final colors = context.colors;
+
+    Widget chip({
+      required String label,
+      required bool selected,
+      required VoidCallback onTap,
+      IconData? icon,
+      Color? iconColor,
+      int? count,
+    }) {
+      return GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? colors.primary : colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? colors.primary : colors.border,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 14,
+                  color: selected ? Colors.white : (iconColor ?? colors.textSecondary),
+                ),
+                const Gap(6),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                  color: selected ? Colors.white : colors.textPrimary,
+                ),
+              ),
+              if (count != null && count > 0) ...[
+                const Gap(6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: selected ? Colors.white.withValues(alpha: 0.25) : colors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: selected ? Colors.white : colors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          chip(
+            label: 'All Expenses',
+            selected: _selectedCategory == null,
+            icon: LucideIcons.layers,
+            onTap: () => setState(() {
+              _selectedCategory = null;
+              _page = 1;
+            }),
+          ),
+          const Gap(8),
+          chip(
+            label: 'Staff Salaries',
+            selected: _selectedCategory == 'Monthly Salary',
+            icon: LucideIcons.userCheck,
+            iconColor: const Color(0xFFD6B64C),
+            count: salaryCount > 0 ? salaryCount : null,
+            onTap: () => setState(() {
+              _selectedCategory = _selectedCategory == 'Monthly Salary' ? null : 'Monthly Salary';
+              _page = 1;
+            }),
+          ),
+          for (final cat in categories) ...[
+            if (cat.name != 'Monthly Salary') ...[
+              const Gap(8),
+              chip(
+                label: cat.name,
+                selected: _selectedCategory == cat.name,
+                icon: _getCategoryIcon(cat.name),
+                iconColor: _getCategoryColor(cat.name),
+                onTap: () => setState(() {
+                  _selectedCategory = _selectedCategory == cat.name ? null : cat.name;
+                  _page = 1;
+                }),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, String message, {Widget? actionButton}) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(LucideIcons.inbox, size: 48, color: colors.textSecondary.withValues(alpha: 0.5)),
+            ),
+            const Gap(16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: typography.bodyMedium.copyWith(color: colors.textSecondary, height: 1.4),
+            ),
+            if (actionButton != null) ...[
+              const Gap(16),
+              actionButton,
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -330,7 +1116,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       initialDatePickerMode: DatePickerMode.year,
     );
     if (picked != null) {
-      setState(() => _selectedMonth = picked);
+      setState(() {
+        _selectedMonth = picked;
+        _page = 1;
+      });
     }
   }
 
@@ -361,13 +1150,184 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 // ─── Expense Card ─────────────────────────────────────────────────────────────
 
 class _ExpenseCard extends StatelessWidget {
-  const _ExpenseCard({required this.expense});
+  const _ExpenseCard({
+    required this.expense,
+    required this.canDelete,
+    required this.onDelete,
+    required this.onOpenPayroll,
+  });
+
   final MadrassaExpense expense;
+  final bool canDelete;
+  final VoidCallback onDelete;
+  final VoidCallback onOpenPayroll;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
+    final isSalary = expense.category == 'Monthly Salary' || expense.category == 'Salary';
+
+    if (isSalary) {
+      // Premium Staff Salary Disbursement Card
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFCFDFB),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFD6B64C).withValues(alpha: 0.6), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1B3D2F).withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Teacher / Salary Avatar
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1B3D2F), Color(0xFF265240)],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(LucideIcons.userCheck, color: Color(0xFFD6B64C), size: 20),
+            ),
+            const Gap(16),
+            // Teacher Details & Attendance Note
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1B3D2F).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF1B3D2F).withValues(alpha: 0.2)),
+                        ),
+                        child: const Text(
+                          'TEACHER SALARY',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1B3D2F),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      if (expense.employeeId != null && expense.employeeId!.isNotEmpty) ...[
+                        const Gap(6),
+                        Text(
+                          '#${expense.employeeId}',
+                          style: typography.bodySmall.copyWith(
+                            color: colors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      const Gap(8),
+                      Text(
+                        expense.teacherName ?? 'Teacher',
+                        style: typography.bodyLargeSemiBold.copyWith(color: colors.textPrimary),
+                      ),
+                    ],
+                  ),
+                  const Gap(4),
+                  Text(
+                    expense.description.isNotEmpty ? expense.description : 'Monthly attendance salary disbursement',
+                    style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const Gap(4),
+                  Row(
+                    children: [
+                      Icon(LucideIcons.calendar, size: 12, color: colors.textSecondary),
+                      const Gap(4),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(expense.date),
+                        style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Gap(16),
+            // Amount & Actions
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  sar(expense.amount),
+                  style: typography.h4.copyWith(
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Gap(6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: onOpenPayroll,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: colors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Payroll',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: colors.primary,
+                              ),
+                            ),
+                            const Gap(2),
+                            Icon(LucideIcons.arrowUpRight, size: 12, color: colors.primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (canDelete) ...[
+                      const Gap(6),
+                      IconButton(
+                        icon: Icon(LucideIcons.trash2, size: 15, color: Colors.red.shade600),
+                        onPressed: onDelete,
+                        tooltip: 'Delete salary disbursement',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Standard Operational Expense Card
+    final catColor = _getCategoryColor(expense.category);
+    final catIcon = _getCategoryIcon(expense.category);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -378,43 +1338,79 @@ class _ExpenseCard extends StatelessWidget {
         border: Border.all(color: colors.border),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
+              color: catColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              expense.category == 'Monthly Salary' ? LucideIcons.userCheck : LucideIcons.receipt,
-              color: colors.primary,
-              size: 20,
-            ),
+            child: Icon(catIcon, color: catColor, size: 20),
           ),
           const Gap(16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(expense.category, style: typography.bodyLargeSemiBold),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: catColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(
+                        expense.category.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: catColor,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Gap(4),
                 Text(
                   expense.description.isEmpty ? 'Madrassa expense entry' : expense.description,
-                  style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                  style: typography.bodyMediumSemiBold.copyWith(color: colors.textPrimary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const Gap(4),
+                Text(
+                  DateFormat('dd MMM yyyy').format(expense.date),
+                  style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),
                 ),
               ],
             ),
           ),
+          const Gap(16),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 sar(expense.amount),
-                style: typography.bodyLargeSemiBold.copyWith(color: Colors.red.shade700),
+                style: typography.h4.copyWith(
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              Text(
-                DateFormat('dd MMM').format(expense.date),
-                style: typography.bodySmall.copyWith(color: colors.textSecondary),
-              ),
+              if (canDelete) ...[
+                const Gap(6),
+                IconButton(
+                  icon: Icon(LucideIcons.trash2, size: 15, color: Colors.red.shade600),
+                  onPressed: onDelete,
+                  tooltip: 'Delete expense',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                ),
+              ],
             ],
           ),
         ],
@@ -466,6 +1462,41 @@ class _AddExpenseDialogState extends ConsumerState<_AddExpenseDialog> {
               );
             },
           ),
+          if (_selectedCategory == 'Monthly Salary') ...[
+            const Gap(12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B3D2F).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFD6B64C).withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.lightbulb, size: 18, color: Color(0xFFD6B64C)),
+                  const Gap(10),
+                  Expanded(
+                    child: Text(
+                      'Teacher salaries can be calculated and recorded automatically in the Payroll module.',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
+                    ),
+                  ),
+                  const Gap(8),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.go(RouteNames.payroll);
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: const Text('Go to Payroll', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const Gap(16),
           ABMTextField(
             label: 'Amount (SAR)',

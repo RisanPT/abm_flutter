@@ -18,6 +18,11 @@ enum AppModule {
   teachers,
   teacherCheckIn,
   progressReports,
+  homework,
+  hifz,
+  exams,
+  studyMaterials,
+  studentLeave,
   transport,
   administration,
   settings,
@@ -99,6 +104,36 @@ const List<AppNavItem> kAppNavItems = [
     route: RouteNames.progressReports,
     icon: LucideIcons.fileBarChart,
     module: AppModule.progressReports,
+  ),
+  AppNavItem(
+    label: 'Homework',
+    route: RouteNames.homework,
+    icon: LucideIcons.bookMarked,
+    module: AppModule.homework,
+  ),
+  AppNavItem(
+    label: 'Hifz Tracker',
+    route: RouteNames.hifz,
+    icon: LucideIcons.bookOpen,
+    module: AppModule.hifz,
+  ),
+  AppNavItem(
+    label: 'Exams & Results',
+    route: RouteNames.exams,
+    icon: LucideIcons.award,
+    module: AppModule.exams,
+  ),
+  AppNavItem(
+    label: 'Study Materials',
+    route: RouteNames.materials,
+    icon: LucideIcons.folderOpen,
+    module: AppModule.studyMaterials,
+  ),
+  AppNavItem(
+    label: 'Student Leave',
+    route: RouteNames.studentLeave,
+    icon: LucideIcons.calendarOff,
+    module: AppModule.studentLeave,
   ),
 
   AppNavItem(
@@ -196,6 +231,171 @@ const List<AppNavItem> kAppNavItems = [
   ),
 ];
 
+const Map<String, Set<String>> kDefaultRolePermissions = {
+  AppRoles.superAdmin: {
+    'dashboard',
+    'students',
+    'classrooms',
+    'attendance',
+    'timetable',
+    'finance',
+    'accounts',
+    'outstandingDues',
+    'incomeEntry',
+    'feeSetup',
+    'expenditure',
+    'teachers',
+    'teacherCheckIn',
+    'progressReports',
+    'homework',
+    'hifz',
+    'exams',
+    'studyMaterials',
+    'studentLeave',
+    'transport',
+    'administration',
+    'settings',
+    'institutes',
+    'websiteManagement',
+  },
+  AppRoles.itAdmin: {
+    'dashboard',
+    'students',
+    'classrooms',
+    'attendance',
+    'timetable',
+    'finance',
+    'accounts',
+    'outstandingDues',
+    'incomeEntry',
+    'feeSetup',
+    'expenditure',
+    'teachers',
+    'teacherCheckIn',
+    'progressReports',
+    'homework',
+    'hifz',
+    'exams',
+    'studyMaterials',
+    'studentLeave',
+    'transport',
+    'administration',
+    'settings',
+    'institutes',
+    'websiteManagement',
+  },
+  AppRoles.headMaster: {
+    'dashboard',
+    'students',
+    'classrooms',
+    'attendance',
+    'teacherCheckIn',
+    'progressReports',
+    'homework',
+    'hifz',
+    'exams',
+    'studyMaterials',
+    'studentLeave',
+    'timetable',
+    'teachers',
+    'accounts',
+    'outstandingDues',
+    'incomeEntry',
+    'feeSetup',
+    'transport',
+    'administration',
+    'settings',
+    'institutes',
+  },
+  AppRoles.principal: {
+    'dashboard',
+    'students',
+    'classrooms',
+    'attendance',
+    'teacherCheckIn',
+    'progressReports',
+    'homework',
+    'hifz',
+    'exams',
+    'studyMaterials',
+    'studentLeave',
+    'timetable',
+    'teachers',
+    'accounts',
+    'outstandingDues',
+    'incomeEntry',
+    'feeSetup',
+    'transport',
+    'administration',
+    'settings',
+    'institutes',
+  },
+  AppRoles.treasurer: {
+    'dashboard',
+    'students',
+    'classrooms',
+    'attendance',
+    'timetable',
+    'accounts',
+    'outstandingDues',
+    'incomeEntry',
+    'finance',
+    'feeSetup',
+    'transport',
+    'administration',
+    'settings',
+  },
+  AppRoles.staff: {
+    'dashboard',
+    'students',
+    'classrooms',
+    'attendance',
+    'homework',
+    'hifz',
+    'exams',
+    'studyMaterials',
+    'studentLeave',
+    'timetable',
+    'accounts',
+    'outstandingDues',
+    'finance',
+    'transport',
+    'administration',
+    'settings',
+  },
+  AppRoles.teacher: {
+    'students',
+    'classrooms',
+    'attendance',
+    'teacherCheckIn',
+    'progressReports',
+    'homework',
+    'hifz',
+    'exams',
+    'studyMaterials',
+    'studentLeave',
+    'timetable',
+    'administration',
+  },
+  // Student self-service features the admin can toggle from Module Permissions.
+  AppRoles.student: {
+    'hifz',
+    'homework',
+    'exams',
+    'studentLeave',
+    'studyMaterials',
+  },
+};
+
+/// The student-facing modules an admin can switch on/off for students.
+const List<AppModule> kStudentControllableModules = [
+  AppModule.hifz,
+  AppModule.homework,
+  AppModule.exams,
+  AppModule.studentLeave,
+  AppModule.studyMaterials,
+];
+
 extension RoleStringExtension on String {
   String get label {
     switch (this) {
@@ -218,7 +418,8 @@ extension RoleStringExtension on String {
 
   bool canAccess(AppModule module, Set<String> allowedModules) {
     if (this == AppRoles.superAdmin || this == AppRoles.itAdmin) return true;
-    return allowedModules.contains(module.name);
+    final effective = allowedModules.isNotEmpty ? allowedModules : (kDefaultRolePermissions[this] ?? {});
+    return effective.contains(module.name);
   }
 
   // Permission Logic Helpers based on dynamic modules
@@ -239,7 +440,8 @@ extension RoleStringExtension on String {
   bool canEditFinance(Set<String> allowedModules) => canAccess(AppModule.finance, allowedModules);
 
   List<AppNavItem> navigationItems(Set<String> allowedModules) {
-    return kAppNavItems.where((item) => canAccess(item.module, allowedModules)).toList();
+    final effective = allowedModules.isNotEmpty ? allowedModules : (kDefaultRolePermissions[this] ?? {});
+    return kAppNavItems.where((item) => canAccess(item.module, effective)).toList();
   }
 
   String defaultRoute(Set<String> allowedModules) {
@@ -247,14 +449,15 @@ extension RoleStringExtension on String {
     if (this == AppRoles.student) {
       return RouteNames.studentPortal;
     }
+    final effective = allowedModules.isNotEmpty ? allowedModules : (kDefaultRolePermissions[this] ?? {});
     // Teachers land straight on their own "My Classes" attendance view.
-    if (this == AppRoles.teacher && canAccess(AppModule.attendance, allowedModules)) {
+    if (this == AppRoles.teacher && canAccess(AppModule.attendance, effective)) {
       return RouteNames.attendance;
     }
-    if (canAccess(AppModule.dashboard, allowedModules)) {
+    if (canAccess(AppModule.dashboard, effective)) {
       return RouteNames.dashboard;
     }
-    final items = navigationItems(allowedModules);
+    final items = navigationItems(effective);
     return items.isNotEmpty ? items.first.route : RouteNames.dashboard;
   }
 }

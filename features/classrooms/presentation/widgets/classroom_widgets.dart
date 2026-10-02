@@ -29,113 +29,135 @@ class ClassroomCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
+    final hasMenu = onEdit != null || onDelete != null || onManageSubjects != null || onManageTimetable != null;
+    // Colour-code by shift so sections group visually at a glance.
+    final accent = (shift == 'Shift-2') ? colors.secondary : colors.primary;
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colors.border),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 5)),
         ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onViewStudents,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: colors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(LucideIcons.home, color: colors.primary, size: 24),
-                    ),
-                    if (onEdit != null || onDelete != null)
-                      PopupMenuButton(
-                        icon: const Icon(LucideIcons.moreVertical, size: 20),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        itemBuilder: (context) => [
-                          if (onEdit != null)
-                            const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                          if (onManageSubjects != null)
-                            const PopupMenuItem(value: 'subjects', child: Text('Define Subjects')),
-                          if (onManageTimetable != null)
-                            const PopupMenuItem(value: 'timetable', child: Text('Manage Timetable')),
-                          if (onDelete != null)
-                            const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                        ],
-                        onSelected: (val) {
-                          if (val == 'edit') onEdit?.call();
-                          if (val == 'subjects') onManageSubjects?.call();
-                          if (val == 'timetable') onManageTimetable?.call();
-                          if (val == 'delete') onDelete?.call();
-                        },
-                      ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  title,
-                  style: typography.h3.copyWith(color: const Color(0xFF163D32)),
-                ),
-                const Gap(4),
-                Row(
-                  children: [
-                    Icon(LucideIcons.users, size: 16, color: colors.secondary),
-                    const Gap(6),
-                    Text(
-                      '$studentCount Students',
-                      style: typography.bodyMedium.copyWith(
-                        color: const Color(0xFF6F7A75),
-                      ),
-                    ),
-                    if (shift != null && shift!.isNotEmpty) ...[
-                      const Gap(10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: colors.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+                    // Row 1 — icon + name + menu (name ellipsizes; menu is the only
+                    // fixed trailing item so the row never overflows).
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          child: Icon(LucideIcons.layers, color: accent, size: 21),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(LucideIcons.clock, size: 12, color: colors.primary),
-                            const Gap(4),
-                            Text(
-                              shift!,
-                              style: typography.caption.copyWith(
-                                color: colors.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
+                        const Gap(12),
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: typography.h4.copyWith(color: const Color(0xFF163D32), fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (hasMenu)
+                          SizedBox(
+                            height: 30,
+                            width: 26,
+                            child: PopupMenuButton<String>(
+                              padding: EdgeInsets.zero,
+                              icon: Icon(LucideIcons.moreVertical, size: 18, color: colors.textSecondary),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              itemBuilder: (context) => [
+                                if (onEdit != null)
+                                  const PopupMenuItem(value: 'edit', child: _MenuRow(icon: LucideIcons.pencil, label: 'Rename')),
+                                if (onManageSubjects != null)
+                                  const PopupMenuItem(value: 'subjects', child: _MenuRow(icon: LucideIcons.bookOpen, label: 'Define Subjects')),
+                                if (onManageTimetable != null)
+                                  const PopupMenuItem(value: 'timetable', child: _MenuRow(icon: LucideIcons.calendarDays, label: 'Manage Timetable')),
+                                if (onDelete != null)
+                                  const PopupMenuItem(value: 'delete', child: _MenuRow(icon: LucideIcons.trash2, label: 'Delete', danger: true)),
+                              ],
+                              onSelected: (val) {
+                                if (val == 'edit') onEdit?.call();
+                                if (val == 'subjects') onManageSubjects?.call();
+                                if (val == 'timetable') onManageTimetable?.call();
+                                if (val == 'delete') onDelete?.call();
+                              },
                             ),
-                          ],
+                          ),
+                      ],
+                    ),
+                    const Gap(12),
+                    // Row 2 — student count (fills the slack) + shift pill on the right.
+                    Row(
+                      children: [
+                        Icon(LucideIcons.users, size: 14, color: colors.textSecondary),
+                        const Gap(5),
+                        Expanded(
+                          child: Text(
+                            studentCount == 1 ? '1 student' : '$studentCount students',
+                            style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                        if (shift != null && shift!.isNotEmpty) ...[
+                          const Gap(8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: accent.withValues(alpha: 0.22)),
+                            ),
+                            child: Text(
+                              shift!,
+                              style: typography.caption.copyWith(color: accent, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
-                const Gap(20),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: onViewStudents,
-                    child: const Text('View Students'),
+                // Bottom: view students action.
+                Material(
+                  color: accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: onViewStudents,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('View Students',
+                              style: typography.bodyMediumSemiBold.copyWith(color: accent)),
+                          const Gap(6),
+                          Icon(LucideIcons.arrowRight, size: 16, color: accent),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -143,6 +165,25 @@ class ClassroomCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({required this.icon, required this.label, this.danger = false});
+  final IconData icon;
+  final String label;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? context.colors.red : context.colors.textPrimary;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const Gap(10),
+        Text(label, style: context.typography.bodyMedium.copyWith(color: color)),
+      ],
     );
   }
 }

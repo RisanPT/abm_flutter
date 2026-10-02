@@ -18,6 +18,7 @@ class RouteNames {
   static const String teacherDashboard = '/teacher-dashboard';
   static const String studentDashboard = '/student-dashboard';
   static const String accounts = '/accounts';
+  static const String familyFees = '/family-fees';
   static const String outstandingDues = '/outstanding-dues';
   static const String incomeEntry = '/income-entry';
   static const String finance = '/finance';
@@ -33,6 +34,16 @@ class RouteNames {
   static const String admin = '/admin';
   static const String settings = '/settings';
   static const String permissions = '/permissions';
+  static const String dataBackup = '/data-backup';
+  static const String homework = '/homework';
+  static const String myHomework = '/my-homework'; // student-facing (no admin shell)
+  static const String hifz = '/hifz';
+  static const String myHifz = '/my-hifz'; // student-facing (no admin shell)
+  static const String exams = '/exams';
+  static const String myResults = '/my-results'; // student-facing (no admin shell)
+  static const String materials = '/materials';
+  static const String studentLeave = '/student-leave';
+  static const String myLeave = '/my-leave'; // student-facing (no admin shell)
   static const String institutes = '/institutes';
   static const String parentPortal = '/parent-portal';
   static const String onlineAdmission = '/online-admission';

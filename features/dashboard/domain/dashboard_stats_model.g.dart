@@ -44,9 +44,13 @@ _DashboardStats _$DashboardStatsFromJson(
   Map<String, dynamic> json,
 ) => _DashboardStats(
   totalStudents: (json['totalStudents'] as num?)?.toInt() ?? 0,
+  presentToday: (json['presentToday'] as num?)?.toInt() ?? 0,
+  markedToday: (json['markedToday'] as num?)?.toInt() ?? 0,
   attendanceRate: (json['attendanceRate'] as num?)?.toDouble() ?? 0.0,
   feeCollectedThisMonth:
       (json['feeCollectedThisMonth'] as num?)?.toDouble() ?? 0.0,
+  feeCollectedLastMonth:
+      (json['feeCollectedLastMonth'] as num?)?.toDouble() ?? 0.0,
   feeCollectedTrend: json['feeCollectedTrend'] as String? ?? '',
   upcomingEvents: (json['upcomingEvents'] as num?)?.toInt() ?? 0,
   monthlyFinanceData:
@@ -70,8 +74,11 @@ _DashboardStats _$DashboardStatsFromJson(
 Map<String, dynamic> _$DashboardStatsToJson(_DashboardStats instance) =>
     <String, dynamic>{
       'totalStudents': instance.totalStudents,
+      'presentToday': instance.presentToday,
+      'markedToday': instance.markedToday,
       'attendanceRate': instance.attendanceRate,
       'feeCollectedThisMonth': instance.feeCollectedThisMonth,
+      'feeCollectedLastMonth': instance.feeCollectedLastMonth,
       'feeCollectedTrend': instance.feeCollectedTrend,
       'upcomingEvents': instance.upcomingEvents,
       'monthlyFinanceData': instance.monthlyFinanceData,

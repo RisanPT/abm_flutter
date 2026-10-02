@@ -287,6 +287,23 @@ class PlannerRepository {
     }
   }
 
+  // Admin-customizable evaluation terms (progress-report term options).
+  Future<List<String>> getEvaluationTerms(String instituteId) async {
+    final res = await _dio.get('/institutes/$instituteId/evaluation-terms');
+    final data = Map<String, dynamic>.from(res.data as Map);
+    return ((data['terms'] as List?) ?? []).map((e) => e.toString()).toList();
+  }
+
+  Future<List<String>> setEvaluationTerms(String instituteId, List<String> terms) async {
+    try {
+      final res = await _dio.put('/institutes/$instituteId/evaluation-terms', data: {'terms': terms});
+      final data = Map<String, dynamic>.from(res.data as Map);
+      return ((data['terms'] as List?) ?? []).map((e) => e.toString()).toList();
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map ? (e.response?.data['message'] ?? 'Failed') : 'Failed to save evaluation terms');
+    }
+  }
+
   /// Teacher leave: move one teacher's classes in a date range to a substitute.
   Future<ReassignResult> reassignTeacher({
     required String fromTeacherId,

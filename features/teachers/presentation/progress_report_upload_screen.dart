@@ -1,10 +1,13 @@
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/settings/presentation/evaluation_terms_screen.dart';
 import 'package:abm_madrasa/features/students/data/student_repository.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -26,8 +29,43 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
   StudentModel? _selectedStudent;
   bool _isLoadingStudents = false;
 
-  String _selectedTerm = 'Term 1';
-  final List<String> _terms = ['Term 1', 'Term 2', 'Final Term'];
+  // Options come from the institute's customizable Evaluation Terms (Settings →
+  // Evaluation Terms); start from the defaults and swap in the live list when it
+  // loads. See [evaluationTermsProvider].
+  String _selectedTerm = kDefaultEvaluationTerms.first;
+  List<String> _terms = List<String>.from(kDefaultEvaluationTerms);
+
+  // Map a saved term onto the current options, so editing an older report (which
+  // may hold 'Term 1' / 'Final Term', or a term since removed) never breaks the
+  // dropdown. The result is ALWAYS one of the current `_terms`.
+  String _normalizeTerm(String raw) {
+    if (_terms.contains(raw)) return raw;
+    String? mapped;
+    switch (raw.trim().toLowerCase()) {
+      case 'term 1':
+      case 'term-1':
+        mapped = 'Term-1';
+        break;
+      case 'term 2':
+      case 'term-2':
+        mapped = 'Term-2';
+        break;
+      case 'exam 1':
+      case 'exam-1':
+        mapped = 'Exam-1';
+        break;
+      case 'exam 2':
+      case 'exam-2':
+        mapped = 'Exam-2';
+        break;
+      case 'final term':
+      case 'final':
+        mapped = 'Term-2';
+        break;
+    }
+    if (mapped != null && _terms.contains(mapped)) return mapped;
+    return _terms.isNotEmpty ? _terms.first : raw;
+  }
 
   late List<Map<String, dynamic>> _subjectScores;
   late final TextEditingController _remarksController;
@@ -38,7 +76,7 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
     super.initState();
     
     if (widget.existingReport != null) {
-      _selectedTerm = widget.existingReport!['term'] ?? 'Term 1';
+      _selectedTerm = _normalizeTerm((widget.existingReport!['term'] ?? '').toString());
       _remarksController = TextEditingController(text: widget.existingReport!['remarks'] ?? '');
       
       final grades = widget.existingReport!['grades'] as List<dynamic>? ?? [];
@@ -184,6 +222,20 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
     final colors = context.colors;
     final typography = context.typography;
 
+    // Load the institute's customized evaluation terms; swap them in and keep the
+    // selected value valid against the new list (prevents the Dropdown crash).
+    final instituteId = ref.watch(selectedInstituteProvider).id;
+    ref.listen(evaluationTermsProvider(instituteId), (prev, next) {
+      next.whenData((terms) {
+        if (terms.isNotEmpty && !listEquals(terms, _terms)) {
+          setState(() {
+            _terms = List<String>.from(terms);
+            _selectedTerm = _normalizeTerm(_selectedTerm);
+          });
+        }
+      });
+    });
+
     return Scaffold(
       backgroundColor: colors.background,
       body: Column(
@@ -230,6 +282,10 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                           Text('Evaluation Term', style: typography.h4),
                           const Gap(8),
                           DropdownButtonFormField<String>(
+                            // Rebuild the field when the term list / selection
+                            // changes (e.g. after custom terms load) so the shown
+                            // value stays in sync with the items.
+                            key: ValueKey('${_terms.join('|')}::$_selectedTerm'),
                             initialValue: _selectedTerm,
                             decoration: InputDecoration(
                               filled: true,

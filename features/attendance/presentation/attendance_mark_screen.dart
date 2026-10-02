@@ -926,7 +926,7 @@ class _AttendanceHeader extends StatelessWidget {
                       icon: const Icon(LucideIcons.barChart2, color: Colors.white70),
                       tooltip: 'View Reports',
                     ),
-                    if (!isMobile) const SizedBox(width: 76),
+                    const SizedBox(width: 84),
                     if (user != null && isMobile)
                       Text(
                         user!.role.label,

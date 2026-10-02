@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/user_management_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/attendance_cutoff_screen.dart';
+import 'package:abm_madrasa/features/settings/presentation/evaluation_terms_screen.dart';
 import 'package:abm_madrasa/features/notifications/presentation/bug_report.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
@@ -34,6 +35,7 @@ class SettingsScreen extends ConsumerWidget {
           if (user == null) return const Center(child: Text('User not found'));
 
           final isAdmin = user.role == AppRoles.itAdmin || user.role == AppRoles.headMaster;
+          final isItAdmin = user.role == AppRoles.itAdmin || user.role == AppRoles.superAdmin;
 
           return ListView(
             padding: const EdgeInsets.all(24),
@@ -71,6 +73,26 @@ class SettingsScreen extends ConsumerWidget {
                     );
                   },
                 ),
+                const Gap(12),
+                _SettingsTile(
+                  icon: Icons.checklist_outlined,
+                  title: 'Evaluation Terms',
+                  subtitle: 'Customize progress-report term options',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const EvaluationTermsScreen()),
+                    );
+                  },
+                ),
+                if (isItAdmin) ...[
+                  const Gap(12),
+                  _SettingsTile(
+                    icon: Icons.backup_outlined,
+                    title: 'Data Backup',
+                    subtitle: 'Export all data as JSON · automatic monthly',
+                    onTap: () => context.push(RouteNames.dataBackup),
+                  ),
+                ],
                 const Gap(32),
               ],
               Text('App Settings', style: typography.h4.copyWith(color: colors.textPrimary)),

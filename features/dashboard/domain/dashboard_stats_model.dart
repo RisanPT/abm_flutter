@@ -39,8 +39,11 @@ abstract class AccountSegmentData with _$AccountSegmentData {
 abstract class DashboardStats with _$DashboardStats {
   const factory DashboardStats({
     @Default(0) int totalStudents,
+    @Default(0) int presentToday,
+    @Default(0) int markedToday,
     @Default(0.0) double attendanceRate,
     @Default(0.0) double feeCollectedThisMonth,
+    @Default(0.0) double feeCollectedLastMonth,
     @Default('') String feeCollectedTrend,
     @Default(0) int upcomingEvents,
     @Default([]) List<MonthlyFinanceData> monthlyFinanceData,

@@ -1,3 +1,4 @@
+import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/features/settings/domain/permission_model.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -36,7 +37,24 @@ class PermissionController extends _$PermissionController {
   }
 
   Future<List<PermissionModel>> _fetchPermissions() async {
-    return ref.read(permissionRepositoryProvider).getPermissions();
+    try {
+      return await ref.read(permissionRepositoryProvider).getPermissions();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Re-fetches permissions from the server with the active bearer token.
+  Future<List<PermissionModel>> refresh() async {
+    state = const AsyncValue.loading();
+    try {
+      final list = await ref.read(permissionRepositoryProvider).getPermissions();
+      state = AsyncValue.data(list);
+      return list;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      return [];
+    }
   }
 
   Future<void> updatePermissions(String role, List<String> permissions) async {
@@ -56,15 +74,19 @@ class PermissionController extends _$PermissionController {
     }
   }
 
-  /// Helper to get permissions as a set of strings for a specific role
+  /// Helper to get permissions as a set of strings for a specific role.
+  /// Falls back to [kDefaultRolePermissions] if the server has not yet returned
+  /// or if the role has not been customized.
   Set<String> getPermissionsForRole(String role) {
-    if (!state.hasValue) return {};
+    final defaults = kDefaultRolePermissions[role] ?? {};
+    if (!state.hasValue) return defaults;
     final permissions = state.value!;
     try {
       final model = permissions.firstWhere((p) => p.role == role);
-      return model.permissions.toSet();
+      final set = model.permissions.toSet();
+      return set.isNotEmpty ? set : defaults;
     } catch (e) {
-      return {};
+      return defaults;
     }
   }
 }

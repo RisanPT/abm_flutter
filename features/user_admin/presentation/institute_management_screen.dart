@@ -20,6 +20,7 @@ class InstituteManagementScreen extends ConsumerWidget {
             icon: const Icon(LucideIcons.plus),
             onPressed: () => _showInstituteDialog(context, ref),
           ),
+          const SizedBox(width: 88),
         ],
       ),
       body: institutesAsync.when(

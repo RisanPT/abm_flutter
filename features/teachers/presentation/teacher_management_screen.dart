@@ -37,6 +37,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
   final _searchController = TextEditingController();
   String _query = '';
   String? _selectedTeacherId;
+  String _selectedShiftFilter = 'All';
   Timer? _searchDebounce;
 
   @override
@@ -90,16 +91,47 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('Failed to load teachers. ${friendlyErrorMessage(error)}')),
           data: (dir) {
-            final teachers = dir.items;
-            final selectedTeacher = _resolveSelectedTeacher(teachers);
+            final allItems = allTeachers ?? dir.items;
 
-            if (teachers.isEmpty) {
+            if (allItems.isEmpty) {
               return _TeacherEmptyState(onAdd: () => _showTeacherForm(context));
             }
 
-            final statsSource = allTeachers ?? teachers;
+            final countAll = allItems.length;
+            final countShift1 = allItems.where((t) => t.hasShift1 && !t.isDualShift).length;
+            final countShift2 = allItems.where((t) => t.hasShift2 && !t.isDualShift).length;
+            final countDual = allItems.where((t) => t.isDualShift).length;
+
+            final displayedTeachers = allItems.where((t) {
+              if (_query.isNotEmpty) {
+                final q = _query.toLowerCase();
+                final match = t.fullName.toLowerCase().contains(q) ||
+                    t.employeeId.toLowerCase().contains(q) ||
+                    t.email.toLowerCase().contains(q) ||
+                    t.specialty.toLowerCase().contains(q);
+                if (!match) return false;
+              }
+              if (_selectedShiftFilter == 'Shift 1') {
+                return t.hasShift1 && !t.isDualShift;
+              } else if (_selectedShiftFilter == 'Shift 2') {
+                return t.hasShift2 && !t.isDualShift;
+              } else if (_selectedShiftFilter == 'Shift 1 + Shift 2') {
+                return t.isDualShift;
+              }
+              return true;
+            }).toList();
+
+            final selectedTeacher = _resolveSelectedTeacher(displayedTeachers);
+            final statsSource = allItems;
             void goToPage(int p) =>
                 ref.read(teacherDirectoryProvider(_query).notifier).goToPage(p);
+
+            final shiftCounts = {
+              'All': countAll,
+              'Shift 1': countShift1,
+              'Shift 2': countShift2,
+              'Shift 1 + Shift 2': countDual,
+            };
 
             if (context.isMobile) {
               return Column(
@@ -109,7 +141,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                     searchController: _searchController,
                     onSearchChanged: _onSearchChanged,
                     onAddTeacher: () => _showTeacherForm(context),
-                    onExportPdf: () => _exportTeachersPdf(statsSource),
+                    onExportPdf: () => _exportTeachersPdf(displayedTeachers),
                   ),
                   const Gap(16),
                   _TeacherStatsBar(teachers: statsSource),
@@ -117,17 +149,23 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                   Expanded(
                     child: ListView(
                       children: [
-                        SizedBox(
-                          height: 320,
+                        // Use constrained box so the directory has a sensible
+                        // height range on mobile — not a fixed 360px.
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 260, maxHeight: 400),
                           child: _TeacherDirectory(
-                            teachers: teachers,
-                            totalCount: dir.total,
-                            isSearching: _query.isNotEmpty,
+                            teachers: displayedTeachers,
+                            totalCount: displayedTeachers.length,
+                            isSearching: _query.isNotEmpty || _selectedShiftFilter != 'All',
                             page: dir.page,
                             totalPages: dir.totalPages,
                             pageLoading: dir.pageLoading,
                             onPage: goToPage,
                             selectedTeacherId: _selectedTeacherId,
+                            selectedShift: _selectedShiftFilter,
+                            onShiftChanged: (shift) =>
+                                setState(() => _selectedShiftFilter = shift),
+                            shiftCounts: shiftCounts,
                             onSelect: (teacher) =>
                                 setState(() => _selectedTeacherId = teacher.id),
                             onEdit: (teacher) => _showTeacherForm(context, teacher),
@@ -148,6 +186,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
               );
             }
 
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -155,7 +194,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                   searchController: _searchController,
                   onSearchChanged: _onSearchChanged,
                   onAddTeacher: () => _showTeacherForm(context),
-                  onExportPdf: () => _exportTeachersPdf(statsSource),
+                  onExportPdf: () => _exportTeachersPdf(displayedTeachers),
                 ),
                 const Gap(20),
                 _TeacherStatsBar(teachers: statsSource),
@@ -167,14 +206,18 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                       SizedBox(
                         width: 360,
                         child: _TeacherDirectory(
-                          teachers: teachers,
-                          totalCount: dir.total,
-                          isSearching: _query.isNotEmpty,
+                          teachers: displayedTeachers,
+                          totalCount: displayedTeachers.length,
+                          isSearching: _query.isNotEmpty || _selectedShiftFilter != 'All',
                           page: dir.page,
                           totalPages: dir.totalPages,
                           pageLoading: dir.pageLoading,
                           onPage: goToPage,
                           selectedTeacherId: _selectedTeacherId,
+                          selectedShift: _selectedShiftFilter,
+                          onShiftChanged: (shift) =>
+                              setState(() => _selectedShiftFilter = shift),
+                          shiftCounts: shiftCounts,
                           onSelect: (teacher) =>
                               setState(() => _selectedTeacherId = teacher.id),
                           onEdit: (teacher) => _showTeacherForm(context, teacher),
@@ -206,14 +249,12 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
 
   TeacherModel? _resolveSelectedTeacher(List<TeacherModel> teachers) {
     if (teachers.isEmpty) {
-      _selectedTeacherId = null;
       return null;
     }
     final selected = teachers.where((item) => item.id == _selectedTeacherId);
     if (selected.isNotEmpty) {
       return selected.first;
     }
-    _selectedTeacherId = teachers.first.id;
     return teachers.first;
   }
 
@@ -389,6 +430,7 @@ class _TeacherScreenHeader extends StatelessWidget {
             tooltip: 'Export PDF',
           ),
         ],
+        const Gap(88),
       ],
     );
   }
@@ -545,6 +587,9 @@ class _TeacherDirectory extends StatelessWidget {
     required this.pageLoading,
     required this.onPage,
     required this.selectedTeacherId,
+    required this.selectedShift,
+    required this.onShiftChanged,
+    required this.shiftCounts,
     required this.onSelect,
     required this.onEdit,
     required this.onDelete,
@@ -558,6 +603,9 @@ class _TeacherDirectory extends StatelessWidget {
   final bool pageLoading;
   final ValueChanged<int> onPage;
   final String? selectedTeacherId;
+  final String selectedShift;
+  final ValueChanged<String> onShiftChanged;
+  final Map<String, int> shiftCounts;
   final ValueChanged<TeacherModel> onSelect;
   final ValueChanged<TeacherModel> onEdit;
   final ValueChanged<TeacherModel> onDelete;
@@ -578,7 +626,7 @@ class _TeacherDirectory extends StatelessWidget {
         children: [
           // Directory header with the live count.
           Padding(
-            padding: const EdgeInsets.fromLTRB(6, 2, 6, 12),
+            padding: const EdgeInsets.fromLTRB(6, 2, 6, 10),
             child: Row(
               children: [
                 Icon(LucideIcons.users, size: 18, color: colors.textSecondary),
@@ -601,13 +649,62 @@ class _TeacherDirectory extends StatelessWidget {
               ],
             ),
           ),
+          // Shift filter selector chips (All, Shift 1, Shift 2, Shift 1 + Shift 2)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+            child: Row(
+              children: [
+                _ShiftFilterPill(
+                  label: 'All',
+                  count: shiftCounts['All'] ?? totalCount,
+                  isSelected: selectedShift == 'All',
+                  onTap: () => onShiftChanged('All'),
+                ),
+                const Gap(6),
+                _ShiftFilterPill(
+                  label: 'Shift 1',
+                  count: shiftCounts['Shift 1'] ?? 0,
+                  isSelected: selectedShift == 'Shift 1',
+                  onTap: () => onShiftChanged('Shift 1'),
+                ),
+                const Gap(6),
+                _ShiftFilterPill(
+                  label: 'Shift 2',
+                  count: shiftCounts['Shift 2'] ?? 0,
+                  isSelected: selectedShift == 'Shift 2',
+                  onTap: () => onShiftChanged('Shift 2'),
+                ),
+                const Gap(6),
+                _ShiftFilterPill(
+                  label: 'S1+S2',
+                  count: shiftCounts['Shift 1 + Shift 2'] ?? 0,
+                  isSelected: selectedShift == 'Shift 1 + Shift 2',
+                  onTap: () => onShiftChanged('Shift 1 + Shift 2'),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: teachers.isEmpty
                 ? Center(
-                    child: Text(
-                      'No teachers match your search.',
-                      style: context.typography.bodyMedium.copyWith(
-                        color: colors.textSecondary,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.userX, size: 36, color: colors.textSecondary.withValues(alpha: 0.5)),
+                          const Gap(10),
+                          Text(
+                            isSearching
+                                ? 'No teachers match your search or shift filter.'
+                                : 'No teachers found in this shift.',
+                            style: context.typography.bodySmall.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                   )
@@ -639,6 +736,70 @@ class _TeacherDirectory extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ShiftFilterPill extends StatelessWidget {
+  const _ShiftFilterPill({
+    required this.label,
+    required this.count,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? colors.primary : colors.background,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isSelected ? colors.primary : colors.border,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: context.typography.bodySmallSemiBold.copyWith(
+                color: isSelected ? Colors.white : colors.textPrimary,
+                fontSize: 12,
+              ),
+            ),
+            const Gap(5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white.withValues(alpha: 0.22)
+                    : colors.border.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '$count',
+                style: context.typography.bodySmallSemiBold.copyWith(
+                  color: isSelected ? Colors.white : colors.textSecondary,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -725,18 +886,19 @@ class _TeacherTile extends StatelessWidget {
                     ),
                   ),
                   const Gap(8),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       _MetaPill(
                         icon: LucideIcons.hash,
                         text: teacher.employeeId.isEmpty ? '—' : teacher.employeeId,
                       ),
-                      const Gap(6),
                       _MetaPill(
                         icon: LucideIcons.bookOpen,
-                        text: '${teacher.classes.length} class'
-                            '${teacher.classes.length == 1 ? '' : 'es'}',
+                        text: '${teacher.classes.length} cl',
                       ),
+                      _ShiftPill(teacher: teacher),
                     ],
                   ),
                 ],
@@ -755,6 +917,70 @@ class _TeacherTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ShiftPill extends StatelessWidget {
+  const _ShiftPill({required this.teacher});
+
+  final TeacherModel teacher;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final isDual = teacher.isDualShift;
+    final hasS1 = teacher.hasShift1;
+    final hasS2 = teacher.hasShift2;
+
+    Color bg;
+    Color fg;
+    Color border;
+    String label;
+
+    if (isDual) {
+      bg = const Color(0xFF6366F1).withValues(alpha: 0.12);
+      fg = const Color(0xFF6366F1);
+      border = const Color(0xFF6366F1).withValues(alpha: 0.3);
+      label = 'Shift 1 + 2';
+    } else if (hasS1) {
+      bg = colors.primary.withValues(alpha: 0.10);
+      fg = colors.primary;
+      border = colors.primary.withValues(alpha: 0.25);
+      label = 'Shift 1';
+    } else if (hasS2) {
+      bg = const Color(0xFFD97706).withValues(alpha: 0.12);
+      fg = const Color(0xFFD97706);
+      border = const Color(0xFFD97706).withValues(alpha: 0.3);
+      label = 'Shift 2';
+    } else {
+      bg = colors.cardBackground;
+      fg = colors.textSecondary;
+      border = colors.border;
+      label = 'No Shift';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.clock, size: 10, color: fg),
+          const Gap(4),
+          Text(
+            label,
+            style: context.typography.bodySmallSemiBold.copyWith(
+              color: fg,
+              fontSize: 10,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -831,13 +1057,20 @@ class _TeacherDetailsCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(teacher.fullName, style: context.typography.h2),
+                          Text(
+                            teacher.fullName,
+                            style: context.typography.h2,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const Gap(6),
                           Text(
                             '${teacher.title} • ${teacher.specialty.isEmpty ? 'Class Teacher' : teacher.specialty}',
                             style: context.typography.bodyLarge.copyWith(
                               color: colors.textSecondary,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const Gap(14),
                           Wrap(
@@ -851,6 +1084,7 @@ class _TeacherDetailsCard extends StatelessWidget {
                                 text:
                                     'Joined ${DateFormat('dd MMM yyyy').format(teacher.joinedDate)}',
                               ),
+                              _ShiftHeaderBadge(teacher: teacher),
                             ],
                           ),
                         ],
@@ -876,6 +1110,11 @@ class _TeacherDetailsCard extends StatelessWidget {
                   Column(
                     children: [
                       _TeacherInfoCard(
+                        title: 'Shift Assignment',
+                        child: _TeacherShiftDetailsContent(teacher: teacher),
+                      ),
+                      const Gap(16),
+                      _TeacherInfoCard(
                         title: 'Assigned Classes',
                         child: Wrap(
                           spacing: 8,
@@ -899,7 +1138,15 @@ class _TeacherDetailsCard extends StatelessWidget {
                   )
                 else
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Expanded(
+                        child: _TeacherInfoCard(
+                          title: 'Shift Assignment',
+                          child: _TeacherShiftDetailsContent(teacher: teacher),
+                        ),
+                      ),
+                      const Gap(16),
                       Expanded(
                         child: _TeacherInfoCard(
                           title: 'Assigned Classes',
@@ -1046,6 +1293,177 @@ class _TeacherInfoCard extends StatelessWidget {
           child,
         ],
       ),
+    );
+  }
+}
+
+class _ShiftHeaderBadge extends StatelessWidget {
+  const _ShiftHeaderBadge({required this.teacher});
+
+  final TeacherModel teacher;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final isDual = teacher.isDualShift;
+    final hasS1 = teacher.hasShift1;
+    final hasS2 = teacher.hasShift2;
+
+    Color bg;
+    Color fg;
+    Color border;
+    String label;
+
+    if (isDual) {
+      bg = const Color(0xFF6366F1).withValues(alpha: 0.12);
+      fg = const Color(0xFF6366F1);
+      border = const Color(0xFF6366F1).withValues(alpha: 0.35);
+      label = 'Shift 1 + Shift 2';
+    } else if (hasS1) {
+      bg = colors.primary.withValues(alpha: 0.10);
+      fg = colors.primary;
+      border = colors.primary.withValues(alpha: 0.3);
+      label = 'Shift 1';
+    } else if (hasS2) {
+      bg = const Color(0xFFD97706).withValues(alpha: 0.12);
+      fg = const Color(0xFFD97706);
+      border = const Color(0xFFD97706).withValues(alpha: 0.35);
+      label = 'Shift 2';
+    } else {
+      bg = colors.cardBackground;
+      fg = colors.textSecondary;
+      border = colors.border;
+      label = 'No Shift';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.clock, size: 12, color: fg),
+          const Gap(5),
+          Text(
+            label,
+            style: context.typography.bodySmallSemiBold.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TeacherShiftDetailsContent extends StatelessWidget {
+  const _TeacherShiftDetailsContent({required this.teacher});
+
+  final TeacherModel teacher;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final isDual = teacher.isDualShift;
+    final hasS1 = teacher.hasShift1;
+    final hasS2 = teacher.hasShift2;
+
+    if (!hasS1 && !hasS2 && teacher.shift.isEmpty) {
+      return Text(
+        'No shift assigned yet.',
+        style: context.typography.bodySmall.copyWith(
+          color: colors.textSecondary,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (hasS1)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: colors.primary.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(LucideIcons.sun, size: 13, color: colors.primary),
+                    const Gap(6),
+                    Text(
+                      'Shift 1 (Morning)',
+                      style: context.typography.bodySmallSemiBold.copyWith(
+                        color: colors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (hasS2)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD97706).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.clock, size: 13, color: Color(0xFFD97706)),
+                    const Gap(6),
+                    Text(
+                      'Shift 2 (Afternoon)',
+                      style: context.typography.bodySmallSemiBold.copyWith(
+                        color: const Color(0xFFD97706),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        if (isDual) ...[
+          const Gap(10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(LucideIcons.checkCheck, size: 13, color: Color(0xFF6366F1)),
+                const Gap(6),
+                Flexible(
+                  child: Text(
+                    'Dual Shift Active (Both Shifts)',
+                    style: context.typography.bodySmall.copyWith(
+                      color: const Color(0xFF6366F1),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

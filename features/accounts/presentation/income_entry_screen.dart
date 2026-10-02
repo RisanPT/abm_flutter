@@ -168,7 +168,7 @@ class _IncomeEntryScreenState extends ConsumerState<IncomeEntryScreen> {
               icon: const Icon(LucideIcons.plus),
               tooltip: 'Add Income',
             ),
-          const Gap(8),
+          const Gap(92),
         ],
       ),
       body: Padding(

@@ -87,6 +87,8 @@ class ABMPageHeader extends StatelessWidget {
                       if (globalActions) ...[
                         if (actions != null && actions!.isNotEmpty) const Gap(4),
                         const _HeaderGlobalActions(),
+                      ] else if (actions != null && actions!.isNotEmpty) ...[
+                        if (!isMobile) const Gap(88),
                       ],
                     ],
                   ),

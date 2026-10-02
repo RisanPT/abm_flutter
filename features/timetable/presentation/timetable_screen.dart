@@ -193,6 +193,9 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                                   if (i > 0) const Gap(10),
                                   actions[i],
                                 ],
+                                // Reserve space for shell's top-right buttons only
+                                // on non-mobile — they overlay independently on mobile.
+                                if (!context.isMobile) const Gap(88),
                               ],
                             );
                           }),

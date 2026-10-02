@@ -218,32 +218,32 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
+                // Show EVERY class at once (wrapping to new rows) so none get
+                // cut off / hidden off-screen the way a horizontal scroll did.
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: filterOptions.map((c) {
                       final isSelected = (selectedClass ?? 'All') == c;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: FilterChip(
-                          label: Text(c),
-                          selected: isSelected,
-                          onSelected: (val) {
-                            setState(() => selectedClass = c == 'All' ? null : c);
-                            ref.read(studentControllerProvider.notifier).filter(selectedClass, selectedShift);
-                          },
-                          backgroundColor: colors.white,
-                          selectedColor: colors.primary.withValues(alpha: 0.1),
-                          checkmarkColor: colors.primary,
-                          labelStyle: TextStyle(
-                            color: isSelected ? const Color(0xFF163D32) : const Color(0xFF3B4C45),
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: isSelected ? colors.primary : colors.border),
-                          ),
+                      return FilterChip(
+                        label: Text(c),
+                        selected: isSelected,
+                        onSelected: (val) {
+                          setState(() => selectedClass = c == 'All' ? null : c);
+                          ref.read(studentControllerProvider.notifier).filter(selectedClass, selectedShift);
+                        },
+                        backgroundColor: colors.white,
+                        selectedColor: colors.primary.withValues(alpha: 0.1),
+                        checkmarkColor: colors.primary,
+                        labelStyle: TextStyle(
+                          color: isSelected ? const Color(0xFF163D32) : const Color(0xFF3B4C45),
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: isSelected ? colors.primary : colors.border),
                         ),
                       );
                     }).toList(),

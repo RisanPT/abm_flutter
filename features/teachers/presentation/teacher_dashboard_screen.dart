@@ -2,7 +2,6 @@ import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/utils/institute_time.dart';
 import 'package:abm_madrasa/features/attendance/presentation/class_attendance_sheet.dart';
-import 'package:abm_madrasa/features/notifications/presentation/notification_bell.dart';
 import 'package:abm_madrasa/features/timetable/domain/planning_models.dart';
 import 'package:abm_madrasa/features/timetable/presentation/planner_controller.dart';
 import 'package:flutter/material.dart';
@@ -45,7 +44,7 @@ class TeacherDashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
-          actions: const [NotificationBell(color: _maroon), SizedBox(width: 4)],
+          actions: const [SizedBox(width: 88)],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(48),
             child: Align(
@@ -279,7 +278,7 @@ class _ClassCard extends StatelessWidget {
         : c.period == 1;
 
     final marked = c.alreadyMarked;
-    final canMark = isPeriodAllowed && c.attendanceEnabled && !marked;
+    final canMark = isPeriodAllowed && c.attendanceEnabled;
     final accent = marked
         ? colors.green
         : canMark
@@ -355,26 +354,46 @@ class _ClassCard extends StatelessWidget {
     final markButton = SizedBox(
       height: 46,
       width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () => showClassAttendanceSheet(
-          context,
-          scheduledClassId: c.id,
-          classroomName: c.classroomName,
-          subjectName: c.subjectName,
-          period: c.period,
-          shift: c.shift,
-          onSaved: onRefresh,
-        ),
-        icon: const Icon(LucideIcons.clipboardCheck, size: 18),
-        label: const Text('Mark Attendance'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _maroon,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          textStyle: typography.bodyMediumSemiBold,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
+      child: marked
+          ? OutlinedButton.icon(
+              onPressed: () => showClassAttendanceSheet(
+                context,
+                scheduledClassId: c.id,
+                classroomName: c.classroomName,
+                subjectName: c.subjectName,
+                period: c.period,
+                shift: c.shift,
+                onSaved: onRefresh,
+              ),
+              icon: const Icon(LucideIcons.edit3, size: 16),
+              label: const Text('Edit Attendance'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _maroon,
+                side: const BorderSide(color: _maroon, width: 1.5),
+                textStyle: typography.bodyMediumSemiBold,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            )
+          : ElevatedButton.icon(
+              onPressed: () => showClassAttendanceSheet(
+                context,
+                scheduledClassId: c.id,
+                classroomName: c.classroomName,
+                subjectName: c.subjectName,
+                period: c.period,
+                shift: c.shift,
+                onSaved: onRefresh,
+              ),
+              icon: const Icon(LucideIcons.clipboardCheck, size: 18),
+              label: const Text('Mark Attendance'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _maroon,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                textStyle: typography.bodyMediumSemiBold,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
     );
 
     return Container(
@@ -385,42 +404,57 @@ class _ClassCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(width: 5, color: accent),
-              Expanded(
-                child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+        child: Material(
+          color: Colors.white,
+          child: InkWell(
+            onTap: canMark
+                ? () => showClassAttendanceSheet(
+                      context,
+                      scheduledClassId: c.id,
+                      classroomName: c.classroomName,
+                      subjectName: c.subjectName,
+                      period: c.period,
+                      shift: c.shift,
+                      onSaved: onRefresh,
+                    )
+                : null,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(width: 5, color: accent),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          timeBlock,
-                          const Gap(14),
-                          Expanded(child: info),
-                          if (statusPill != null) ...[const Gap(8), statusPill],
-                          // Desktop keeps the action inline to avoid a stretched button.
-                          if (canMark && !isMobile) ...[
-                            const Gap(12),
-                            SizedBox(width: 190, child: markButton),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              timeBlock,
+                              const Gap(14),
+                              Expanded(child: info),
+                              if (statusPill != null) ...[const Gap(8), statusPill],
+                              // Desktop keeps the action inline to avoid a stretched button.
+                              if (canMark && !isMobile) ...[
+                                const Gap(12),
+                                SizedBox(width: marked ? 175 : 190, child: markButton),
+                              ],
+                            ],
+                          ),
+                          // Mobile: full-width tap target below the details.
+                          if (canMark && isMobile) ...[
+                            const Gap(14),
+                            markButton,
                           ],
                         ],
                       ),
-                      // Mobile: full-width tap target below the details.
-                      if (canMark && isMobile) ...[
-                        const Gap(14),
-                        markButton,
-                      ],
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

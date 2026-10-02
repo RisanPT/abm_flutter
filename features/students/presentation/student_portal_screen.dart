@@ -1,8 +1,13 @@
 import 'dart:math' as math;
 
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/auth/role_permissions.dart';
+import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
+import 'package:go_router/go_router.dart';
 import 'package:abm_madrasa/features/notifications/presentation/notifications_screen.dart';
 import 'package:abm_madrasa/features/notifications/presentation/bug_report.dart';
 import 'package:abm_madrasa/features/students/data/student_portal_repository.dart';
@@ -176,11 +181,19 @@ class _HomeTab extends ConsumerWidget {
         goTab(2);
         break;
       case 'results':
-        _push(context, _ResultsPage(reports: data.reports, profile: data.profile));
+        context.push(RouteNames.myResults);
+        break;
+      case 'hifz':
+        context.push(RouteNames.myHifz);
+        break;
+      case 'homework':
+        context.push(RouteNames.myHomework);
+        break;
+      case 'leave':
+        context.push(RouteNames.myLeave);
         break;
       case 'materials':
       case 'kitab':
-      case 'hifz':
         _push(context, _MaterialsPage());
         break;
       case 'announcements':
@@ -549,17 +562,31 @@ class _QuickServices extends ConsumerWidget {
   final ValueChanged<String> onTap;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unread = ref.watch(unreadCountProvider);
+    // Admin-controlled student access: hide a self-service tile if the admin has
+    // turned that module off for students (Module Permissions → Student access).
+    final perms = ref.watch(permissionControllerProvider).value;
+    final studentMatch = (perms ?? []).where((p) => p.role == AppRoles.student);
+    final allowed = studentMatch.isEmpty
+        ? (kDefaultRolePermissions[AppRoles.student] ?? const <String>{})
+        : studentMatch.first.permissions.toSet();
+    // Tile id → the module that gates it (tiles without an entry are always shown).
+    const gate = {
+      'hifz': 'hifz',
+      'homework': 'homework',
+      'results': 'exams',
+      'leave': 'studentLeave',
+      'kitab': 'studyMaterials',
+    };
     final items = <(String, IconData, String, Color, int)>[
-      ('hifz', LucideIcons.bookMarked, 'Hifz Tracker', _green, 0),
-      ('schedule', LucideIcons.calendarDays, 'Schedule', _tileBlue, 0),
-      ('results', LucideIcons.star, 'Results', _gold, 0),
-      ('announcements', LucideIcons.mailOpen, 'Notices', _tileRed, unread),
-      ('kitab', LucideIcons.bookCopy, 'Kitab & Portal', _tilePurple, 0),
+      ('hifz', LucideIcons.bookOpen, 'Hifz', _green, 0),
+      ('homework', LucideIcons.bookMarked, 'Homework', _tileBlue, 0),
+      ('results', LucideIcons.award, 'Results', _gold, 0),
+      ('leave', LucideIcons.calendarOff, 'Leave', _tileRed, 0),
+      ('kitab', LucideIcons.bookCopy, 'Materials', _tilePurple, 0),
       ('fees', LucideIcons.receipt, 'Fees', _tileTeal, 0),
       ('id', LucideIcons.contact, 'ID Pass', _tileOrange, 0),
       ('profile', LucideIcons.userCog, 'Profile', _tileSlate, 0),
-    ];
+    ].where((it) => !gate.containsKey(it.$1) || allowed.contains(gate[it.$1])).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

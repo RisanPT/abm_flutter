@@ -819,7 +819,7 @@ as double,
 /// @nodoc
 mixin _$DashboardStats {
 
- int get totalStudents; double get attendanceRate; double get feeCollectedThisMonth; String get feeCollectedTrend; int get upcomingEvents; List<MonthlyFinanceData> get monthlyFinanceData; List<RecentActivity> get recentActivities; Map<String, AccountSegmentData> get segmentData;
+ int get totalStudents; int get presentToday; int get markedToday; double get attendanceRate; double get feeCollectedThisMonth; double get feeCollectedLastMonth; String get feeCollectedTrend; int get upcomingEvents; List<MonthlyFinanceData> get monthlyFinanceData; List<RecentActivity> get recentActivities; Map<String, AccountSegmentData> get segmentData;
 /// Create a copy of DashboardStats
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -832,16 +832,16 @@ $DashboardStatsCopyWith<DashboardStats> get copyWith => _$DashboardStatsCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DashboardStats&&(identical(other.totalStudents, totalStudents) || other.totalStudents == totalStudents)&&(identical(other.attendanceRate, attendanceRate) || other.attendanceRate == attendanceRate)&&(identical(other.feeCollectedThisMonth, feeCollectedThisMonth) || other.feeCollectedThisMonth == feeCollectedThisMonth)&&(identical(other.feeCollectedTrend, feeCollectedTrend) || other.feeCollectedTrend == feeCollectedTrend)&&(identical(other.upcomingEvents, upcomingEvents) || other.upcomingEvents == upcomingEvents)&&const DeepCollectionEquality().equals(other.monthlyFinanceData, monthlyFinanceData)&&const DeepCollectionEquality().equals(other.recentActivities, recentActivities)&&const DeepCollectionEquality().equals(other.segmentData, segmentData));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DashboardStats&&(identical(other.totalStudents, totalStudents) || other.totalStudents == totalStudents)&&(identical(other.presentToday, presentToday) || other.presentToday == presentToday)&&(identical(other.markedToday, markedToday) || other.markedToday == markedToday)&&(identical(other.attendanceRate, attendanceRate) || other.attendanceRate == attendanceRate)&&(identical(other.feeCollectedThisMonth, feeCollectedThisMonth) || other.feeCollectedThisMonth == feeCollectedThisMonth)&&(identical(other.feeCollectedLastMonth, feeCollectedLastMonth) || other.feeCollectedLastMonth == feeCollectedLastMonth)&&(identical(other.feeCollectedTrend, feeCollectedTrend) || other.feeCollectedTrend == feeCollectedTrend)&&(identical(other.upcomingEvents, upcomingEvents) || other.upcomingEvents == upcomingEvents)&&const DeepCollectionEquality().equals(other.monthlyFinanceData, monthlyFinanceData)&&const DeepCollectionEquality().equals(other.recentActivities, recentActivities)&&const DeepCollectionEquality().equals(other.segmentData, segmentData));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,totalStudents,attendanceRate,feeCollectedThisMonth,feeCollectedTrend,upcomingEvents,const DeepCollectionEquality().hash(monthlyFinanceData),const DeepCollectionEquality().hash(recentActivities),const DeepCollectionEquality().hash(segmentData));
+int get hashCode => Object.hash(runtimeType,totalStudents,presentToday,markedToday,attendanceRate,feeCollectedThisMonth,feeCollectedLastMonth,feeCollectedTrend,upcomingEvents,const DeepCollectionEquality().hash(monthlyFinanceData),const DeepCollectionEquality().hash(recentActivities),const DeepCollectionEquality().hash(segmentData));
 
 @override
 String toString() {
-  return 'DashboardStats(totalStudents: $totalStudents, attendanceRate: $attendanceRate, feeCollectedThisMonth: $feeCollectedThisMonth, feeCollectedTrend: $feeCollectedTrend, upcomingEvents: $upcomingEvents, monthlyFinanceData: $monthlyFinanceData, recentActivities: $recentActivities, segmentData: $segmentData)';
+  return 'DashboardStats(totalStudents: $totalStudents, presentToday: $presentToday, markedToday: $markedToday, attendanceRate: $attendanceRate, feeCollectedThisMonth: $feeCollectedThisMonth, feeCollectedLastMonth: $feeCollectedLastMonth, feeCollectedTrend: $feeCollectedTrend, upcomingEvents: $upcomingEvents, monthlyFinanceData: $monthlyFinanceData, recentActivities: $recentActivities, segmentData: $segmentData)';
 }
 
 
@@ -852,7 +852,7 @@ abstract mixin class $DashboardStatsCopyWith<$Res>  {
   factory $DashboardStatsCopyWith(DashboardStats value, $Res Function(DashboardStats) _then) = _$DashboardStatsCopyWithImpl;
 @useResult
 $Res call({
- int totalStudents, double attendanceRate, double feeCollectedThisMonth, String feeCollectedTrend, int upcomingEvents, List<MonthlyFinanceData> monthlyFinanceData, List<RecentActivity> recentActivities, Map<String, AccountSegmentData> segmentData
+ int totalStudents, int presentToday, int markedToday, double attendanceRate, double feeCollectedThisMonth, double feeCollectedLastMonth, String feeCollectedTrend, int upcomingEvents, List<MonthlyFinanceData> monthlyFinanceData, List<RecentActivity> recentActivities, Map<String, AccountSegmentData> segmentData
 });
 
 
@@ -869,11 +869,14 @@ class _$DashboardStatsCopyWithImpl<$Res>
 
 /// Create a copy of DashboardStats
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? totalStudents = null,Object? attendanceRate = null,Object? feeCollectedThisMonth = null,Object? feeCollectedTrend = null,Object? upcomingEvents = null,Object? monthlyFinanceData = null,Object? recentActivities = null,Object? segmentData = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? totalStudents = null,Object? presentToday = null,Object? markedToday = null,Object? attendanceRate = null,Object? feeCollectedThisMonth = null,Object? feeCollectedLastMonth = null,Object? feeCollectedTrend = null,Object? upcomingEvents = null,Object? monthlyFinanceData = null,Object? recentActivities = null,Object? segmentData = null,}) {
   return _then(_self.copyWith(
 totalStudents: null == totalStudents ? _self.totalStudents : totalStudents // ignore: cast_nullable_to_non_nullable
+as int,presentToday: null == presentToday ? _self.presentToday : presentToday // ignore: cast_nullable_to_non_nullable
+as int,markedToday: null == markedToday ? _self.markedToday : markedToday // ignore: cast_nullable_to_non_nullable
 as int,attendanceRate: null == attendanceRate ? _self.attendanceRate : attendanceRate // ignore: cast_nullable_to_non_nullable
 as double,feeCollectedThisMonth: null == feeCollectedThisMonth ? _self.feeCollectedThisMonth : feeCollectedThisMonth // ignore: cast_nullable_to_non_nullable
+as double,feeCollectedLastMonth: null == feeCollectedLastMonth ? _self.feeCollectedLastMonth : feeCollectedLastMonth // ignore: cast_nullable_to_non_nullable
 as double,feeCollectedTrend: null == feeCollectedTrend ? _self.feeCollectedTrend : feeCollectedTrend // ignore: cast_nullable_to_non_nullable
 as String,upcomingEvents: null == upcomingEvents ? _self.upcomingEvents : upcomingEvents // ignore: cast_nullable_to_non_nullable
 as int,monthlyFinanceData: null == monthlyFinanceData ? _self.monthlyFinanceData : monthlyFinanceData // ignore: cast_nullable_to_non_nullable
@@ -964,10 +967,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int totalStudents,  double attendanceRate,  double feeCollectedThisMonth,  String feeCollectedTrend,  int upcomingEvents,  List<MonthlyFinanceData> monthlyFinanceData,  List<RecentActivity> recentActivities,  Map<String, AccountSegmentData> segmentData)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int totalStudents,  int presentToday,  int markedToday,  double attendanceRate,  double feeCollectedThisMonth,  double feeCollectedLastMonth,  String feeCollectedTrend,  int upcomingEvents,  List<MonthlyFinanceData> monthlyFinanceData,  List<RecentActivity> recentActivities,  Map<String, AccountSegmentData> segmentData)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DashboardStats() when $default != null:
-return $default(_that.totalStudents,_that.attendanceRate,_that.feeCollectedThisMonth,_that.feeCollectedTrend,_that.upcomingEvents,_that.monthlyFinanceData,_that.recentActivities,_that.segmentData);case _:
+return $default(_that.totalStudents,_that.presentToday,_that.markedToday,_that.attendanceRate,_that.feeCollectedThisMonth,_that.feeCollectedLastMonth,_that.feeCollectedTrend,_that.upcomingEvents,_that.monthlyFinanceData,_that.recentActivities,_that.segmentData);case _:
   return orElse();
 
 }
@@ -985,10 +988,10 @@ return $default(_that.totalStudents,_that.attendanceRate,_that.feeCollectedThisM
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int totalStudents,  double attendanceRate,  double feeCollectedThisMonth,  String feeCollectedTrend,  int upcomingEvents,  List<MonthlyFinanceData> monthlyFinanceData,  List<RecentActivity> recentActivities,  Map<String, AccountSegmentData> segmentData)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int totalStudents,  int presentToday,  int markedToday,  double attendanceRate,  double feeCollectedThisMonth,  double feeCollectedLastMonth,  String feeCollectedTrend,  int upcomingEvents,  List<MonthlyFinanceData> monthlyFinanceData,  List<RecentActivity> recentActivities,  Map<String, AccountSegmentData> segmentData)  $default,) {final _that = this;
 switch (_that) {
 case _DashboardStats():
-return $default(_that.totalStudents,_that.attendanceRate,_that.feeCollectedThisMonth,_that.feeCollectedTrend,_that.upcomingEvents,_that.monthlyFinanceData,_that.recentActivities,_that.segmentData);case _:
+return $default(_that.totalStudents,_that.presentToday,_that.markedToday,_that.attendanceRate,_that.feeCollectedThisMonth,_that.feeCollectedLastMonth,_that.feeCollectedTrend,_that.upcomingEvents,_that.monthlyFinanceData,_that.recentActivities,_that.segmentData);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1005,10 +1008,10 @@ return $default(_that.totalStudents,_that.attendanceRate,_that.feeCollectedThisM
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int totalStudents,  double attendanceRate,  double feeCollectedThisMonth,  String feeCollectedTrend,  int upcomingEvents,  List<MonthlyFinanceData> monthlyFinanceData,  List<RecentActivity> recentActivities,  Map<String, AccountSegmentData> segmentData)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int totalStudents,  int presentToday,  int markedToday,  double attendanceRate,  double feeCollectedThisMonth,  double feeCollectedLastMonth,  String feeCollectedTrend,  int upcomingEvents,  List<MonthlyFinanceData> monthlyFinanceData,  List<RecentActivity> recentActivities,  Map<String, AccountSegmentData> segmentData)?  $default,) {final _that = this;
 switch (_that) {
 case _DashboardStats() when $default != null:
-return $default(_that.totalStudents,_that.attendanceRate,_that.feeCollectedThisMonth,_that.feeCollectedTrend,_that.upcomingEvents,_that.monthlyFinanceData,_that.recentActivities,_that.segmentData);case _:
+return $default(_that.totalStudents,_that.presentToday,_that.markedToday,_that.attendanceRate,_that.feeCollectedThisMonth,_that.feeCollectedLastMonth,_that.feeCollectedTrend,_that.upcomingEvents,_that.monthlyFinanceData,_that.recentActivities,_that.segmentData);case _:
   return null;
 
 }
@@ -1020,12 +1023,15 @@ return $default(_that.totalStudents,_that.attendanceRate,_that.feeCollectedThisM
 @JsonSerializable()
 
 class _DashboardStats implements DashboardStats {
-  const _DashboardStats({this.totalStudents = 0, this.attendanceRate = 0.0, this.feeCollectedThisMonth = 0.0, this.feeCollectedTrend = '', this.upcomingEvents = 0, final  List<MonthlyFinanceData> monthlyFinanceData = const [], final  List<RecentActivity> recentActivities = const [], final  Map<String, AccountSegmentData> segmentData = const {}}): _monthlyFinanceData = monthlyFinanceData,_recentActivities = recentActivities,_segmentData = segmentData;
+  const _DashboardStats({this.totalStudents = 0, this.presentToday = 0, this.markedToday = 0, this.attendanceRate = 0.0, this.feeCollectedThisMonth = 0.0, this.feeCollectedLastMonth = 0.0, this.feeCollectedTrend = '', this.upcomingEvents = 0, final  List<MonthlyFinanceData> monthlyFinanceData = const [], final  List<RecentActivity> recentActivities = const [], final  Map<String, AccountSegmentData> segmentData = const {}}): _monthlyFinanceData = monthlyFinanceData,_recentActivities = recentActivities,_segmentData = segmentData;
   factory _DashboardStats.fromJson(Map<String, dynamic> json) => _$DashboardStatsFromJson(json);
 
 @override@JsonKey() final  int totalStudents;
+@override@JsonKey() final  int presentToday;
+@override@JsonKey() final  int markedToday;
 @override@JsonKey() final  double attendanceRate;
 @override@JsonKey() final  double feeCollectedThisMonth;
+@override@JsonKey() final  double feeCollectedLastMonth;
 @override@JsonKey() final  String feeCollectedTrend;
 @override@JsonKey() final  int upcomingEvents;
  final  List<MonthlyFinanceData> _monthlyFinanceData;
@@ -1063,16 +1069,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DashboardStats&&(identical(other.totalStudents, totalStudents) || other.totalStudents == totalStudents)&&(identical(other.attendanceRate, attendanceRate) || other.attendanceRate == attendanceRate)&&(identical(other.feeCollectedThisMonth, feeCollectedThisMonth) || other.feeCollectedThisMonth == feeCollectedThisMonth)&&(identical(other.feeCollectedTrend, feeCollectedTrend) || other.feeCollectedTrend == feeCollectedTrend)&&(identical(other.upcomingEvents, upcomingEvents) || other.upcomingEvents == upcomingEvents)&&const DeepCollectionEquality().equals(other._monthlyFinanceData, _monthlyFinanceData)&&const DeepCollectionEquality().equals(other._recentActivities, _recentActivities)&&const DeepCollectionEquality().equals(other._segmentData, _segmentData));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DashboardStats&&(identical(other.totalStudents, totalStudents) || other.totalStudents == totalStudents)&&(identical(other.presentToday, presentToday) || other.presentToday == presentToday)&&(identical(other.markedToday, markedToday) || other.markedToday == markedToday)&&(identical(other.attendanceRate, attendanceRate) || other.attendanceRate == attendanceRate)&&(identical(other.feeCollectedThisMonth, feeCollectedThisMonth) || other.feeCollectedThisMonth == feeCollectedThisMonth)&&(identical(other.feeCollectedLastMonth, feeCollectedLastMonth) || other.feeCollectedLastMonth == feeCollectedLastMonth)&&(identical(other.feeCollectedTrend, feeCollectedTrend) || other.feeCollectedTrend == feeCollectedTrend)&&(identical(other.upcomingEvents, upcomingEvents) || other.upcomingEvents == upcomingEvents)&&const DeepCollectionEquality().equals(other._monthlyFinanceData, _monthlyFinanceData)&&const DeepCollectionEquality().equals(other._recentActivities, _recentActivities)&&const DeepCollectionEquality().equals(other._segmentData, _segmentData));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,totalStudents,attendanceRate,feeCollectedThisMonth,feeCollectedTrend,upcomingEvents,const DeepCollectionEquality().hash(_monthlyFinanceData),const DeepCollectionEquality().hash(_recentActivities),const DeepCollectionEquality().hash(_segmentData));
+int get hashCode => Object.hash(runtimeType,totalStudents,presentToday,markedToday,attendanceRate,feeCollectedThisMonth,feeCollectedLastMonth,feeCollectedTrend,upcomingEvents,const DeepCollectionEquality().hash(_monthlyFinanceData),const DeepCollectionEquality().hash(_recentActivities),const DeepCollectionEquality().hash(_segmentData));
 
 @override
 String toString() {
-  return 'DashboardStats(totalStudents: $totalStudents, attendanceRate: $attendanceRate, feeCollectedThisMonth: $feeCollectedThisMonth, feeCollectedTrend: $feeCollectedTrend, upcomingEvents: $upcomingEvents, monthlyFinanceData: $monthlyFinanceData, recentActivities: $recentActivities, segmentData: $segmentData)';
+  return 'DashboardStats(totalStudents: $totalStudents, presentToday: $presentToday, markedToday: $markedToday, attendanceRate: $attendanceRate, feeCollectedThisMonth: $feeCollectedThisMonth, feeCollectedLastMonth: $feeCollectedLastMonth, feeCollectedTrend: $feeCollectedTrend, upcomingEvents: $upcomingEvents, monthlyFinanceData: $monthlyFinanceData, recentActivities: $recentActivities, segmentData: $segmentData)';
 }
 
 
@@ -1083,7 +1089,7 @@ abstract mixin class _$DashboardStatsCopyWith<$Res> implements $DashboardStatsCo
   factory _$DashboardStatsCopyWith(_DashboardStats value, $Res Function(_DashboardStats) _then) = __$DashboardStatsCopyWithImpl;
 @override @useResult
 $Res call({
- int totalStudents, double attendanceRate, double feeCollectedThisMonth, String feeCollectedTrend, int upcomingEvents, List<MonthlyFinanceData> monthlyFinanceData, List<RecentActivity> recentActivities, Map<String, AccountSegmentData> segmentData
+ int totalStudents, int presentToday, int markedToday, double attendanceRate, double feeCollectedThisMonth, double feeCollectedLastMonth, String feeCollectedTrend, int upcomingEvents, List<MonthlyFinanceData> monthlyFinanceData, List<RecentActivity> recentActivities, Map<String, AccountSegmentData> segmentData
 });
 
 
@@ -1100,11 +1106,14 @@ class __$DashboardStatsCopyWithImpl<$Res>
 
 /// Create a copy of DashboardStats
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? totalStudents = null,Object? attendanceRate = null,Object? feeCollectedThisMonth = null,Object? feeCollectedTrend = null,Object? upcomingEvents = null,Object? monthlyFinanceData = null,Object? recentActivities = null,Object? segmentData = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? totalStudents = null,Object? presentToday = null,Object? markedToday = null,Object? attendanceRate = null,Object? feeCollectedThisMonth = null,Object? feeCollectedLastMonth = null,Object? feeCollectedTrend = null,Object? upcomingEvents = null,Object? monthlyFinanceData = null,Object? recentActivities = null,Object? segmentData = null,}) {
   return _then(_DashboardStats(
 totalStudents: null == totalStudents ? _self.totalStudents : totalStudents // ignore: cast_nullable_to_non_nullable
+as int,presentToday: null == presentToday ? _self.presentToday : presentToday // ignore: cast_nullable_to_non_nullable
+as int,markedToday: null == markedToday ? _self.markedToday : markedToday // ignore: cast_nullable_to_non_nullable
 as int,attendanceRate: null == attendanceRate ? _self.attendanceRate : attendanceRate // ignore: cast_nullable_to_non_nullable
 as double,feeCollectedThisMonth: null == feeCollectedThisMonth ? _self.feeCollectedThisMonth : feeCollectedThisMonth // ignore: cast_nullable_to_non_nullable
+as double,feeCollectedLastMonth: null == feeCollectedLastMonth ? _self.feeCollectedLastMonth : feeCollectedLastMonth // ignore: cast_nullable_to_non_nullable
 as double,feeCollectedTrend: null == feeCollectedTrend ? _self.feeCollectedTrend : feeCollectedTrend // ignore: cast_nullable_to_non_nullable
 as String,upcomingEvents: null == upcomingEvents ? _self.upcomingEvents : upcomingEvents // ignore: cast_nullable_to_non_nullable
 as int,monthlyFinanceData: null == monthlyFinanceData ? _self._monthlyFinanceData : monthlyFinanceData // ignore: cast_nullable_to_non_nullable
