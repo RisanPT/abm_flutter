@@ -97,12 +97,12 @@ class HifzRepository {
   final Dio _dio;
 
   Future<HifzHistory> getMine({String? month}) async {
-    final r = await _dio.get('/hifz/me', queryParameters: {if (month != null) 'month': month});
+    final r = await _dio.get('/hifz/me', queryParameters: {'month': ?month});
     return HifzHistory.fromJson(Map<String, dynamic>.from(r.data as Map));
   }
 
   Future<HifzHistory> getStudent(String studentId, {String? month}) async {
-    final r = await _dio.get('/hifz/student/$studentId', queryParameters: {if (month != null) 'month': month});
+    final r = await _dio.get('/hifz/student/$studentId', queryParameters: {'month': ?month});
     return HifzHistory.fromJson(Map<String, dynamic>.from(r.data as Map));
   }
 

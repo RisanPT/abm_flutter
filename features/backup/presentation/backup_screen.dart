@@ -1,11 +1,14 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/utils/web_download.dart';
 import 'package:abm_madrasa/features/backup/data/backup_repository.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -36,6 +39,8 @@ class _DataBackupScreenState extends ConsumerState<DataBackupScreen> {
   // Monthly-automatic: the first time an IT Admin opens this screen in a new
   // month, the backup downloads on its own.
   Future<void> _maybeAutoBackup() async {
+    // Web browsers block downloads triggered without a direct user gesture.
+    if (kIsWeb) return;
     if (_autoChecked) return;
     _autoChecked = true;
     try {
@@ -60,14 +65,20 @@ class _DataBackupScreenState extends ConsumerState<DataBackupScreen> {
 
       final month = DateFormat('MMMM_yyyy').format(DateTime.now());
       final fname = 'madrasa_backup_$month.json';
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/$fname');
-      await file.writeAsString(json);
+      final bytes = utf8.encode(json);
 
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/json', name: fname)],
-        subject: 'Anas Bin Malik Madrasa — data backup ($month)',
-      );
+      if (kIsWeb) {
+        triggerBrowserDownload(bytes, fname, 'application/json');
+      } else {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$fname');
+        await file.writeAsString(json);
+
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/json', name: fname)],
+          subject: 'Anas Bin Malik Madrasa — data backup ($month)',
+        );
+      }
 
       await repo.markMonthly(records: overview.totalRecords, collections: overview.schemas.length);
       ref.invalidate(backupStatusProvider);

@@ -136,7 +136,7 @@ class ExamRepository {
   final Dio _dio;
 
   Future<List<Exam>> getExams({String? classroom}) async {
-    final r = await _dio.get('/exams', queryParameters: {if (classroom != null) 'classroom': classroom});
+    final r = await _dio.get('/exams', queryParameters: {'classroom': ?classroom});
     return (r.data as List).map((e) => Exam.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 

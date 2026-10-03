@@ -230,11 +230,23 @@ class _TeacherHifzView extends ConsumerStatefulWidget {
 }
 
 class _TeacherHifzViewState extends ConsumerState<_TeacherHifzView> {
+  final ScrollController _scrollController = ScrollController();
   String _class = 'All';
+  String _searchQuery = '';
+  String _statusFilter = 'All'; // 'All', 'Logged', 'Pending'
+  int _page = 1;
+  static const int _pageSize = 10;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typography = context.typography;
     final classesAsync = ref.watch(classroomControllerProvider);
     final options = classesAsync.maybeWhen(
       data: (c) => ['All', ...c.map((e) => e.name)],
@@ -250,63 +262,324 @@ class _TeacherHifzViewState extends ConsumerState<_TeacherHifzView> {
           ABMPageHeader(
             title: 'Hifz Tracker',
             subtitle: 'Log daily Sabaq · Sabqi · Manzil',
-            height: context.isMobile ? 160 : 180,
-          ),
-          Container(
-            color: colors.background,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: options.map((c) {
-                  final sel = c == _class;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(c),
-                      selected: sel,
-                      onSelected: (_) => setState(() => _class = c),
-                      selectedColor: colors.primary.withValues(alpha: 0.12),
-                      labelStyle: TextStyle(
-                        color: sel ? colors.primary : colors.textSecondary,
-                        fontWeight: sel ? FontWeight.w700 : FontWeight.normal,
-                      ),
-                    ),
-                  );
-                }).toList(),
+            showBackButton: false,
+            compact: true,
+            actions: [
+              IconButton(
+                onPressed: () {
+                  ref.invalidate(_hifzRosterProvider(_class));
+                  ref.invalidate(classHifzTodayProvider(_class));
+                },
+                icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 18),
+                tooltip: 'Refresh Roster',
+                visualDensity: VisualDensity.compact,
               ),
-            ),
+            ],
           ),
           Expanded(
             child: rosterAsync.when(
-              data: (students) {
-                if (students.isEmpty) {
-                  return const AbmEmptyState(
-                    icon: LucideIcons.users,
-                    title: 'No students',
-                    message: 'Pick a class to log Hifz for its students.',
-                  );
-                }
+              data: (allStudents) {
                 final today = todayAsync.value ?? const <HifzRecord>[];
                 final byStudent = {for (final r in today) r.studentId: r};
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(_hifzRosterProvider(_class));
-                    ref.invalidate(classHifzTodayProvider(_class));
-                  },
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                    itemCount: students.length,
-                    separatorBuilder: (_, _) => const Gap(10),
-                    itemBuilder: (_, i) {
-                      final s = students[i];
-                      final rec = byStudent[s.id];
-                      return _RosterRow(
-                        student: s,
-                        record: rec,
-                        onTap: () => _openLogSheet(s, rec),
-                      );
-                    },
+
+                final loggedCount = allStudents.where((s) => byStudent.containsKey(s.id)).length;
+                final pendingCount = allStudents.length - loggedCount;
+                final completionRate = allStudents.isNotEmpty ? ((loggedCount / allStudents.length) * 100).toInt() : 0;
+
+                // Apply Search & Status filters
+                final filtered = allStudents.where((s) {
+                  final matchesSearch = _searchQuery.isEmpty ||
+                      s.fullName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                      s.admissionNumber.toLowerCase().contains(_searchQuery.toLowerCase());
+
+                  final isLogged = byStudent.containsKey(s.id);
+                  final matchesStatus = _statusFilter == 'All' ||
+                      (_statusFilter == 'Logged' && isLogged) ||
+                      (_statusFilter == 'Pending' && !isLogged);
+
+                  return matchesSearch && matchesStatus;
+                }).toList();
+
+                // Pagination
+                final totalCount = filtered.length;
+                final totalPages = totalCount == 0 ? 1 : (totalCount / _pageSize).ceil();
+                final effectivePage = _page.clamp(1, totalPages);
+                final startIndex = totalCount == 0 ? 0 : (effectivePage - 1) * _pageSize;
+                final endIndex = (startIndex + _pageSize).clamp(0, totalCount);
+                final pagedStudents = totalCount == 0 ? <StudentModel>[] : filtered.sublist(startIndex, endIndex);
+
+                return Scrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: true,
+                  trackVisibility: true,
+                  child: ListView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 100),
+                    children: [
+                      // Top KPI Stat Cards
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isWide = constraints.maxWidth > 700;
+                          final kpis = [
+                            _HifzKpiCard(
+                              title: 'Total Enrolled',
+                              value: '${allStudents.length}',
+                              subtext: _class == 'All' ? 'All Classes' : 'Class $_class',
+                              icon: LucideIcons.users,
+                              color: const Color(0xFF2563EB),
+                              badge: 'Class Roster',
+                            ),
+                            _HifzKpiCard(
+                              title: 'Logged Today',
+                              value: '$loggedCount',
+                              subtext: '$completionRate% completed today',
+                              icon: LucideIcons.checkCircle2,
+                              color: const Color(0xFF059669),
+                              badge: '$completionRate% Done',
+                            ),
+                            _HifzKpiCard(
+                              title: 'Pending Log',
+                              value: '$pendingCount',
+                              subtext: pendingCount == 0 ? 'All students logged' : 'Awaiting today recitation',
+                              icon: LucideIcons.clock,
+                              color: pendingCount == 0 ? const Color(0xFF059669) : const Color(0xFFD97706),
+                              badge: pendingCount == 0 ? 'Complete' : '$pendingCount Remaining',
+                            ),
+                          ];
+
+                          if (isWide) {
+                            return Row(
+                              children: [
+                                for (int i = 0; i < kpis.length; i++) ...[
+                                  if (i > 0) const Gap(12),
+                                  Expanded(child: kpis[i]),
+                                ],
+                              ],
+                            );
+                          }
+                          return Column(
+                            children: [
+                              for (int i = 0; i < kpis.length; i++) ...[
+                                if (i > 0) const Gap(8),
+                                kpis[i],
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+
+                      const Gap(14),
+
+                      // Filter & Search Toolbar
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colors.cardBackground,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: colors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    onChanged: (val) => setState(() {
+                                      _searchQuery = val.trim();
+                                      _page = 1;
+                                    }),
+                                    decoration: InputDecoration(
+                                      hintText: 'Search by student name or admission ID...',
+                                      prefixIcon: const Icon(LucideIcons.search, size: 18),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(color: colors.border),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(color: colors.border),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    ),
+                                  ),
+                                ),
+                                if (_searchQuery.isNotEmpty || _class != 'All' || _statusFilter != 'All') ...[
+                                  const Gap(8),
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _searchQuery = '';
+                                        _class = 'All';
+                                        _statusFilter = 'All';
+                                        _page = 1;
+                                      });
+                                    },
+                                    icon: const Icon(LucideIcons.rotateCcw, size: 14),
+                                    label: const Text('Reset', style: TextStyle(fontSize: 12)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const Gap(10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                // Class dropdown
+                                SizedBox(
+                                  width: 170,
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _class,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      labelText: 'Class / Grade',
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      prefixIcon: const Icon(LucideIcons.graduationCap, size: 16),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(color: colors.border),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(color: colors.border),
+                                      ),
+                                    ),
+                                    items: options
+                                        .map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 12))))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() {
+                                          _class = val;
+                                          _page = 1;
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                // Segmented Status Button
+                                SegmentedButton<String>(
+                                  segments: const [
+                                    ButtonSegment(value: 'All', label: Text('All Students', style: TextStyle(fontSize: 11))),
+                                    ButtonSegment(value: 'Logged', label: Text('Logged', style: TextStyle(fontSize: 11))),
+                                    ButtonSegment(value: 'Pending', label: Text('Pending', style: TextStyle(fontSize: 11))),
+                                  ],
+                                  selected: {_statusFilter},
+                                  onSelectionChanged: (set) => setState(() {
+                                    _statusFilter = set.first;
+                                    _page = 1;
+                                  }),
+                                  style: const ButtonStyle(
+                                    visualDensity: VisualDensity.compact,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const Gap(16),
+
+                      // Results header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            totalCount == 0
+                                ? 'No students found'
+                                : 'Showing ${startIndex + 1}–$endIndex of $totalCount Students',
+                            style: typography.bodyMediumSemiBold,
+                          ),
+                          if (_class != 'All')
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: colors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'Class: $_class',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colors.primary),
+                              ),
+                            ),
+                        ],
+                      ),
+
+                      const Gap(10),
+
+                      if (filtered.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(40),
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: colors.primary.withValues(alpha: 0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(LucideIcons.users, size: 36, color: colors.primary),
+                              ),
+                              const Gap(12),
+                              Text('No matching students', style: typography.bodyLargeSemiBold),
+                              const Gap(6),
+                              Text(
+                                'Try clearing search or picking another class filter.',
+                                style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        )
+                      else ...[
+                        for (final s in pagedStudents) ...[
+                          _RosterRow(
+                            student: s,
+                            record: byStudent[s.id],
+                            onTap: () => _openLogSheet(s, byStudent[s.id]),
+                          ),
+                          const Gap(10),
+                        ],
+                        if (totalPages > 1) ...[
+                          const Gap(10),
+                          Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 420),
+                              child: AbmPaginationBar(
+                                page: effectivePage,
+                                totalPages: totalPages,
+                                total: totalCount,
+                                onPage: (p) {
+                                  setState(() => _page = p);
+                                  _scrollController.animateTo(
+                                    0,
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeOut,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          const Gap(6),
+                          Center(
+                            child: Text(
+                              'Showing ${startIndex + 1}–$endIndex of $totalCount students · $_pageSize per page',
+                              style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ],
                   ),
                 );
               },
@@ -337,6 +610,80 @@ class _TeacherHifzViewState extends ConsumerState<_TeacherHifzView> {
   }
 }
 
+class _HifzKpiCard extends StatelessWidget {
+  const _HifzKpiCard({
+    required this.title,
+    required this.value,
+    required this.subtext,
+    required this.icon,
+    required this.color,
+    required this.badge,
+  });
+
+  final String title;
+  final String value;
+  final String subtext;
+  final IconData icon;
+  final Color color;
+  final String badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  badge,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+                ),
+              ),
+            ],
+          ),
+          const Gap(10),
+          Text(value, style: typography.h2.copyWith(fontWeight: FontWeight.bold)),
+          const Gap(2),
+          Text(title, style: typography.bodyMediumSemiBold),
+          Text(subtext, style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+        ],
+      ),
+    );
+  }
+}
+
 class _RosterRow extends StatelessWidget {
   const _RosterRow({required this.student, required this.record, required this.onTap});
   final StudentModel student;
@@ -346,17 +693,154 @@ class _RosterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typography = context.typography;
     final logged = record != null;
-    return AbmListRow(
-      onTap: onTap,
-      leading: abmInitialsAvatar(context, student.fullName),
-      title: student.fullName,
-      subtitle: logged ? 'Today: ${record!.sabaqLabel}' : 'Not logged today',
-      trailing: logged
-          ? AbmStatusPill(
-              label: record!.quality.isEmpty ? 'Logged' : record!.quality,
-              color: record!.quality.isEmpty ? colors.green : qualityColor(context, record!.quality))
-          : Icon(LucideIcons.plusCircle, color: colors.primary, size: 20),
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: logged ? colors.green.withValues(alpha: 0.3) : colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: logged ? colors.green.withValues(alpha: 0.12) : colors.primary.withValues(alpha: 0.08),
+                  child: Text(
+                    student.fullName.isNotEmpty ? student.fullName[0].toUpperCase() : 'S',
+                    style: TextStyle(
+                      color: logged ? colors.green : colors.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                const Gap(12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              student.fullName,
+                              style: typography.bodyMediumSemiBold,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Gap(6),
+                          if (student.classroom.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(color: const Color(0xFFBFDBFE)),
+                              ),
+                              child: Text(
+                                student.classroom,
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const Gap(4),
+                      if (logged) ...[
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFECFDF5),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(color: const Color(0xFFA7F3D0)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(LucideIcons.bookOpen, size: 11, color: Color(0xFF047857)),
+                                  const Gap(4),
+                                  Text(
+                                    record!.sabaqLabel == '—' ? 'Sabaq recorded' : record!.sabaqLabel,
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (record!.sabqi.isNotEmpty)
+                              Text('Sabqi: ${record!.sabqi}', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                            if (record!.manzil.isNotEmpty)
+                              Text('· Manzil: ${record!.manzil}', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                          ],
+                        ),
+                      ] else ...[
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF59E0B),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const Gap(6),
+                            Text('Not logged today', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const Gap(10),
+                if (logged) ...[
+                  if (record!.quality.isNotEmpty)
+                    AbmStatusPill(
+                      label: record!.quality,
+                      color: qualityColor(context, record!.quality),
+                    ),
+                  const Gap(6),
+                  IconButton(
+                    icon: const Icon(LucideIcons.pencil, size: 16),
+                    onPressed: onTap,
+                    tooltip: 'Edit Today Entry',
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ] else ...[
+                  FilledButton.tonalIcon(
+                    onPressed: onTap,
+                    icon: const Icon(LucideIcons.plus, size: 14),
+                    label: const Text('Log Sabaq', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

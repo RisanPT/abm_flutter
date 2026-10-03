@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ── Models (plain, no codegen) ───────────────────────────────────────────────
@@ -42,28 +44,37 @@ class NotificationItem {
   bool get hasImage => imageUrl.isNotEmpty;
   bool get isDirectMessage => type == 'DirectMessage' || recipientType == 'teacher' || recipientType == 'student';
 
-  factory NotificationItem.fromJson(Map<String, dynamic> j) => NotificationItem(
-        id: (j['_id'] ?? j['id'] ?? '').toString(),
-        title: (j['title'] ?? '').toString(),
-        body: (j['body'] ?? '').toString(),
-        type: (j['type'] ?? 'General').toString(),
-        priority: (j['priority'] ?? 'Normal').toString(),
-        link: (j['link'] ?? '').toString(),
-        eventId: j['eventId']?.toString(),
-        audienceRole: (j['audienceRole'] ?? 'all').toString(),
-        recipientType: (j['recipientType'] ?? 'broadcast').toString(),
-        grade: (j['grade'] ?? '').toString(),
-        postedByName: (j['postedByName'] ?? '').toString(),
-        postedByRole: (j['postedByRole'] ?? '').toString(),
-        teacherId: j['teacherId']?.toString(),
-        teacherName: (j['teacherName'] ?? '').toString(),
-        studentId: j['studentId']?.toString(),
-        studentName: (j['studentName'] ?? '').toString(),
-        imageUrl: (j['imageUrl'] ?? '').toString(),
-        read: (j['read'] ?? false) as bool,
-        readCount: (j['readCount'] ?? 0) is int ? (j['readCount'] as int) : 0,
-        createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
-      );
+  factory NotificationItem.fromJson(Map<String, dynamic> j) {
+    final rawRead = j['read'];
+    final bool isRead = rawRead == true || rawRead == 1 || rawRead == 'true';
+    final rawReadCount = j['readCount'];
+    final int readCount = rawReadCount is num
+        ? rawReadCount.toInt()
+        : (int.tryParse(rawReadCount?.toString() ?? '0') ?? 0);
+
+    return NotificationItem(
+      id: (j['_id'] ?? j['id'] ?? '').toString(),
+      title: (j['title'] ?? '').toString(),
+      body: (j['body'] ?? '').toString(),
+      type: (j['type'] ?? 'General').toString(),
+      priority: (j['priority'] ?? 'Normal').toString(),
+      link: (j['link'] ?? '').toString(),
+      eventId: j['eventId']?.toString(),
+      audienceRole: (j['audienceRole'] ?? 'all').toString(),
+      recipientType: (j['recipientType'] ?? 'broadcast').toString(),
+      grade: (j['grade'] ?? '').toString(),
+      postedByName: (j['postedByName'] ?? '').toString(),
+      postedByRole: (j['postedByRole'] ?? '').toString(),
+      teacherId: j['teacherId']?.toString(),
+      teacherName: (j['teacherName'] ?? '').toString(),
+      studentId: j['studentId']?.toString(),
+      studentName: (j['studentName'] ?? '').toString(),
+      imageUrl: (j['imageUrl'] ?? '').toString(),
+      read: isRead,
+      readCount: readCount,
+      createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
+    );
+  }
 }
 
 class NotificationFeed {
@@ -87,16 +98,45 @@ class NotificationRepository {
 
   Future<NotificationFeed> getMine({int limit = 50}) async {
     final r = await _dio.get('/notifications/me', queryParameters: {'limit': limit});
-    final items = ((r.data['items'] as List?) ?? [])
-        .map((e) => NotificationItem.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
-    return NotificationFeed(items: items, unreadCount: (r.data['unreadCount'] ?? 0) as int);
+    dynamic rawData = r.data;
+    if (rawData is String) {
+      try {
+        rawData = jsonDecode(rawData);
+      } catch (_) {}
+    }
+    final data = rawData is Map ? Map<String, dynamic>.from(rawData) : <String, dynamic>{};
+    final rawList = (data['items'] as List?) ?? [];
+    final items = <NotificationItem>[];
+    for (final e in rawList) {
+      if (e is Map) {
+        try {
+          items.add(NotificationItem.fromJson(Map<String, dynamic>.from(e)));
+        } catch (err) {
+          debugPrint('Error parsing notification item: $err');
+        }
+      }
+    }
+    final rawUnread = data['unreadCount'];
+    final int unreadCount = rawUnread is num
+        ? rawUnread.toInt()
+        : (int.tryParse(rawUnread?.toString() ?? '0') ?? 0);
+    return NotificationFeed(items: items, unreadCount: unreadCount);
   }
 
   /// Mark one notification read; returns the new unread count.
   Future<int> markRead(String id) async {
     final r = await _dio.post('/notifications/me/$id/read');
-    return (r.data['unreadCount'] ?? 0) as int;
+    dynamic rawData = r.data;
+    if (rawData is String) {
+      try {
+        rawData = jsonDecode(rawData);
+      } catch (_) {}
+    }
+    final data = rawData is Map ? Map<String, dynamic>.from(rawData) : <String, dynamic>{};
+    final rawUnread = data['unreadCount'];
+    return rawUnread is num
+        ? rawUnread.toInt()
+        : (int.tryParse(rawUnread?.toString() ?? '0') ?? 0);
   }
 
   Future<void> markAllRead() async {

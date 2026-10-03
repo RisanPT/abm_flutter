@@ -199,7 +199,7 @@ class _ClassTimetableViewScreenState extends ConsumerState<ClassTimetableViewScr
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: periods.length,
-      separatorBuilder: (_, __) => const Gap(10),
+      separatorBuilder: (_, _) => const Gap(10),
       itemBuilder: (_, i) => _periodTile(periods[i], colors, typography),
     );
   }

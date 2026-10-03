@@ -1438,63 +1438,275 @@ Widget _emptyFull(BuildContext context, IconData icon, String title, String subt
 
 // ── Announcements ────────────────────────────────────────────────────────────
 // ── Materials ────────────────────────────────────────────────────────────────
-class _MaterialsPage extends ConsumerWidget {
+class _MaterialsPage extends ConsumerStatefulWidget {
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MaterialsPage> createState() => _MaterialsPageState();
+}
+
+class _MaterialsPageState extends ConsumerState<_MaterialsPage> {
+  String _search = '';
+  String _selectedSubject = 'All';
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(studentMaterialsProvider);
+    final portalAsync = ref.watch(studentPortalProvider);
+    final studentGrade = portalAsync.asData?.value.profile.grade ?? '';
+
     return _PortalPage(
       title: 'Study Materials',
-      subtitle: 'Resources for your class',
+      subtitle: studentGrade.isNotEmpty ? 'Class: $studentGrade & General' : 'Resources for your class',
       child: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _emptyFull(context, LucideIcons.wifiOff, 'Couldn’t load', 'Please try again.'),
-        data: (list) => list.isEmpty
-            ? _emptyFull(context, LucideIcons.bookOpen, 'No materials yet', 'Study materials shared by your teachers will appear here.')
-            : RefreshIndicator(
-                color: _green,
-                onRefresh: () async => ref.invalidate(studentMaterialsProvider),
-                child: ListView(padding: const EdgeInsets.all(16), children: [for (final m in list) _materialTile(context, m)]),
-              ),
+        data: (list) {
+          if (list.isEmpty) {
+            return _emptyFull(context, LucideIcons.bookOpen, 'No materials yet', 'Study materials shared by your teachers for $studentGrade will appear here.');
+          }
+
+          final subjects = <String>{'All'};
+          for (final m in list) {
+            if (m.subject.trim().isNotEmpty) subjects.add(m.subject.trim());
+          }
+
+          final filtered = list.where((m) {
+            final matchesSubject = _selectedSubject == 'All' || m.subject.trim().toLowerCase() == _selectedSubject.toLowerCase();
+            final matchesSearch = _search.isEmpty ||
+                m.title.toLowerCase().contains(_search.toLowerCase()) ||
+                m.subject.toLowerCase().contains(_search.toLowerCase()) ||
+                m.description.toLowerCase().contains(_search.toLowerCase());
+            return matchesSubject && matchesSearch;
+          }).toList();
+
+          return RefreshIndicator(
+            color: _green,
+            onRefresh: () async => ref.invalidate(studentMaterialsProvider),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                // Info banner explaining how class-wise documents are provided
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: _green.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _green.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.shieldCheck, size: 18, color: _green),
+                      const Gap(10),
+                      Expanded(
+                        child: Text(
+                          studentGrade.isNotEmpty
+                              ? 'Curated for your class: $studentGrade & General Madrasa notes'
+                              : 'Materials assigned directly to your class by teachers',
+                          style: context.typography.bodySmall.copyWith(color: _green, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Search bar
+                TextField(
+                  onChanged: (v) => setState(() => _search = v.trim()),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(LucideIcons.search, size: 18, color: Colors.grey),
+                    hintText: 'Search materials or subjects...',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.border)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.border)),
+                  ),
+                ),
+                const Gap(10),
+                // Subject filter horizontal chips
+                if (subjects.length > 2) ...[
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: subjects.map((subj) {
+                        final isSel = _selectedSubject == subj;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(subj, style: TextStyle(fontSize: 12, fontWeight: isSel ? FontWeight.w600 : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
+                            selected: isSel,
+                            selectedColor: _green,
+                            backgroundColor: Colors.white,
+                            onSelected: (_) => setState(() => _selectedSubject = subj),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const Gap(12),
+                ],
+                if (filtered.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 40),
+                    child: Center(
+                      child: Text('No study materials match your search', style: TextStyle(color: context.colors.textSecondary)),
+                    ),
+                  )
+                else
+                  for (final m in filtered) _materialTile(context, m),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 }
 
 Widget _materialTile(BuildContext context, StudyMaterial m) {
-  return InkWell(
-    onTap: () => _launchUrl(context, m.url),
-    borderRadius: BorderRadius.circular(14),
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: context.colors.border)),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: _green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(11)),
-            child: const Icon(LucideIcons.fileText, color: _green, size: 20),
+  Color iconColor;
+  Color iconBg;
+  IconData iconData;
+
+  if (m.isPdf) {
+    iconColor = const Color(0xFFDC2626);
+    iconBg = const Color(0xFFFEE2E2);
+    iconData = LucideIcons.fileText;
+  } else if (m.isVideo) {
+    iconColor = const Color(0xFF7C3AED);
+    iconBg = const Color(0xFFEDE9FE);
+    iconData = LucideIcons.video;
+  } else if (m.isAudio) {
+    iconColor = const Color(0xFF059669);
+    iconBg = const Color(0xFFD1FAE5);
+    iconData = LucideIcons.headphones;
+  } else if (m.isDrive) {
+    iconColor = const Color(0xFF2563EB);
+    iconBg = const Color(0xFFDBEAFE);
+    iconData = LucideIcons.hardDrive;
+  } else {
+    iconColor = _green;
+    iconBg = _green.withValues(alpha: 0.1);
+    iconData = LucideIcons.bookOpen;
+  }
+
+  final isClassSpecific = m.grade.isNotEmpty && m.grade.toLowerCase() != 'all';
+
+  return Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: context.colors.border),
+      boxShadow: [
+        BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2)),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _launchUrl(context, m.url),
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(12)),
+                child: Icon(iconData, color: iconColor, size: 22),
+              ),
+              const Gap(12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(m.title, style: context.typography.bodyMediumSemiBold, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const Gap(4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        // Resource Type badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: iconBg,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            m.displayType,
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: iconColor),
+                          ),
+                        ),
+                        // Class visibility badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isClassSpecific ? const Color(0xFFEFF6FF) : const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: isClassSpecific ? const Color(0xFFBFDBFE) : const Color(0xFFE5E7EB)),
+                          ),
+                          child: Text(
+                            isClassSpecific ? m.grade : 'All Classes',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: isClassSpecific ? const Color(0xFF1D4ED8) : const Color(0xFF4B5563),
+                            ),
+                          ),
+                        ),
+                        if (m.subject.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _green.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              m.subject,
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _green),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (m.description.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          m.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Gap(8),
+              FilledButton.tonal(
+                onPressed: () => _launchUrl(context, m.url),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _green.withValues(alpha: 0.1),
+                  foregroundColor: _green,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  minimumSize: const Size(36, 36),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Open', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    Gap(4),
+                    Icon(LucideIcons.externalLink, size: 13),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const Gap(12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(m.title, style: context.typography.bodyMediumSemiBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (m.subject.isNotEmpty) Text(m.subject, style: context.typography.bodySmall.copyWith(color: _green)),
-                if (m.description.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(m.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary)),
-                  ),
-              ],
-            ),
-          ),
-          const Gap(8),
-          const Icon(LucideIcons.externalLink, size: 18, color: _gold),
-        ],
+        ),
       ),
     ),
   );
@@ -1505,7 +1717,7 @@ Future<void> _launchUrl(BuildContext context, String url) async {
   if (uri != null && await canLaunchUrl(uri)) {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   } else if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open the link.')));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the link.')));
   }
 }
 

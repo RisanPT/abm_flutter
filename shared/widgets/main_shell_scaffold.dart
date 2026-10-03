@@ -52,7 +52,10 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
     final selectedIndex = navItems.indexWhere(
       (item) =>
           currentLocation == item.route ||
-          currentLocation.startsWith('${item.route}/'),
+          (item.route != '/' && currentLocation.startsWith('${item.route}/')) ||
+          (item.children != null && item.children!.any(
+            (c) => currentLocation == c.route || (c.route != '/' && currentLocation.startsWith('${c.route}/'))
+          )),
     );
     final mobileNavItems = navItems.take(5).toList();
 
@@ -79,7 +82,7 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
             children: [
               if (context.isDesktop)
                 Container(
-                  width: 250,
+                  width: 276,
                   decoration: BoxDecoration(
                     color: colors.primary,
                   ),
@@ -97,41 +100,52 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                             final selected = index == selectedIndex;
                             final hasChildren = item.children != null && item.children!.isNotEmpty;
                             final isChildSelected = hasChildren && item.children!.any(
-                              (child) => currentLocation == child.route || currentLocation.startsWith('${child.route}/')
+                              (child) => currentLocation == child.route || (child.route != '/' && currentLocation.startsWith('${child.route}/'))
                             );
                             final isExpanded = selected || isChildSelected;
 
                             if (hasChildren) {
                               return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.only(bottom: 6),
                                 child: Theme(
                                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                                   child: ExpansionTile(
+                                    key: PageStorageKey('sidebar_${item.label}'),
                                     initiallyExpanded: isExpanded,
-                                    tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                    tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18),
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
                                     collapsedShape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18),
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
-                                    backgroundColor: isExpanded ? colors.white.withValues(alpha: 0.05) : Colors.transparent,
-                                    collapsedBackgroundColor: Colors.transparent,
-                                    iconColor: colors.white.withValues(alpha: 0.75),
-                                    collapsedIconColor: colors.white.withValues(alpha: 0.75),
+                                    backgroundColor: isChildSelected
+                                        ? colors.white.withValues(alpha: 0.08)
+                                        : (isExpanded ? colors.white.withValues(alpha: 0.04) : Colors.transparent),
+                                    collapsedBackgroundColor: isChildSelected
+                                        ? colors.white.withValues(alpha: 0.07)
+                                        : Colors.transparent,
+                                    iconColor: colors.secondary,
+                                    collapsedIconColor: isChildSelected
+                                        ? colors.secondary
+                                        : colors.white.withValues(alpha: 0.75),
                                     title: Row(
                                       children: [
                                         Icon(
                                           item.icon,
                                           size: 18,
-                                          color: isExpanded ? colors.secondary : colors.white.withValues(alpha: 0.75),
+                                          color: (isExpanded || isChildSelected)
+                                              ? colors.secondary
+                                              : colors.white.withValues(alpha: 0.75),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
                                             item.label,
                                             style: context.typography.bodyMediumSemiBold.copyWith(
-                                              color: isExpanded ? colors.white : colors.white.withValues(alpha: 0.75),
+                                              color: (isExpanded || isChildSelected)
+                                                  ? colors.white
+                                                  : colors.white.withValues(alpha: 0.8),
                                             ),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -139,46 +153,85 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                                         ),
                                       ],
                                     ),
-                                    children: item.children!.map((child) {
-                                      final childSelected = currentLocation == child.route || currentLocation.startsWith('${child.route}/');
-                                      return Padding(
-                                        padding: const EdgeInsets.only(left: 36, bottom: 8, right: 8, top: 4),
-                                        child: InkWell(
-                                          onTap: () => context.go(child.route),
-                                          borderRadius: BorderRadius.circular(14),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                            decoration: BoxDecoration(
-                                              color: childSelected ? colors.white.withValues(alpha: 0.09) : Colors.transparent,
-                                              borderRadius: BorderRadius.circular(14),
-                                              border: Border.all(
-                                                color: childSelected ? colors.secondary.withValues(alpha: 0.45) : Colors.transparent,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 22, right: 6, bottom: 6, top: 2),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            border: Border(
+                                              left: BorderSide(
+                                                color: colors.white.withValues(alpha: 0.16),
+                                                width: 1.5,
                                               ),
                                             ),
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  child.icon,
-                                                  size: 16,
-                                                  color: childSelected ? colors.secondary : colors.white.withValues(alpha: 0.65),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Text(
-                                                    child.label,
-                                                    style: context.typography.bodyMedium.copyWith(
-                                                      color: childSelected ? colors.white : colors.white.withValues(alpha: 0.65),
+                                          ),
+                                          child: Column(
+                                            children: item.children!.map((child) {
+                                              final childSelected = currentLocation == child.route ||
+                                                  (child.route != '/' && currentLocation.startsWith('${child.route}/'));
+                                              return Padding(
+                                                padding: const EdgeInsets.only(left: 10, bottom: 3, top: 2),
+                                                child: InkWell(
+                                                  onTap: () => context.go(child.route),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                    decoration: BoxDecoration(
+                                                      color: childSelected
+                                                          ? colors.white.withValues(alpha: 0.14)
+                                                          : Colors.transparent,
+                                                      borderRadius: BorderRadius.circular(10),
+                                                      border: Border.all(
+                                                        color: childSelected
+                                                            ? colors.secondary.withValues(alpha: 0.5)
+                                                            : Colors.transparent,
+                                                      ),
                                                     ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(
+                                                          child.icon,
+                                                          size: 15,
+                                                          color: childSelected
+                                                              ? colors.secondary
+                                                              : colors.white.withValues(alpha: 0.65),
+                                                        ),
+                                                        const SizedBox(width: 9),
+                                                        Expanded(
+                                                          child: Text(
+                                                            child.label,
+                                                            style: context.typography.bodyMedium.copyWith(
+                                                              fontSize: 13,
+                                                              fontWeight: childSelected
+                                                                  ? FontWeight.w600
+                                                                  : FontWeight.w500,
+                                                              color: childSelected
+                                                                  ? colors.white
+                                                                  : colors.white.withValues(alpha: 0.78),
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                        ),
+                                                        if (childSelected)
+                                                          Container(
+                                                            width: 5,
+                                                            height: 5,
+                                                            decoration: BoxDecoration(
+                                                              color: colors.secondary,
+                                                              shape: BoxShape.circle,
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
-                                              ],
-                                            ),
+                                              );
+                                            }).toList(),
                                           ),
                                         ),
-                                      );
-                                    }).toList(),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               );
@@ -574,10 +627,10 @@ class _MobileShellDrawer extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final item = navItems[index];
                   final selected = currentLocation == item.route ||
-                      currentLocation.startsWith('${item.route}/');
+                      (item.route != '/' && currentLocation.startsWith('${item.route}/'));
                   final hasChildren = item.children != null && item.children!.isNotEmpty;
                   final isChildSelected = hasChildren && item.children!.any(
-                    (child) => currentLocation == child.route || currentLocation.startsWith('${child.route}/')
+                    (child) => currentLocation == child.route || (child.route != '/' && currentLocation.startsWith('${child.route}/'))
                   );
                   final isExpanded = selected || isChildSelected;
 
@@ -585,6 +638,7 @@ class _MobileShellDrawer extends StatelessWidget {
                     return Theme(
                       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                       child: ExpansionTile(
+                        key: PageStorageKey('mobile_${item.label}'),
                         initiallyExpanded: isExpanded,
                         leading: Icon(
                           item.icon,
@@ -596,31 +650,55 @@ class _MobileShellDrawer extends StatelessWidget {
                             color: isExpanded ? colors.primary : colors.textPrimary,
                           ),
                         ),
-                        children: item.children!.map((child) {
-                          final childSelected = currentLocation == child.route || currentLocation.startsWith('${child.route}/');
-                          return ListTile(
-                            contentPadding: const EdgeInsets.only(left: 54, right: 16),
-                            leading: Icon(
-                              child.icon,
-                              size: 20,
-                              color: childSelected ? colors.primary : colors.textSecondary,
-                            ),
-                            title: Text(
-                              child.label,
-                              style: context.typography.bodyMedium.copyWith(
-                                color: childSelected ? colors.primary : colors.textPrimary,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 36, right: 12, bottom: 6, top: 2),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(
+                                    color: colors.primary.withValues(alpha: 0.2),
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                              child: Column(
+                                children: item.children!.map((child) {
+                                  final childSelected = currentLocation == child.route ||
+                                      (child.route != '/' && currentLocation.startsWith('${child.route}/'));
+                                  return Padding(
+                                    padding: const EdgeInsets.only(left: 10, bottom: 4, top: 2),
+                                    child: ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                                      dense: true,
+                                      leading: Icon(
+                                        child.icon,
+                                        size: 16,
+                                        color: childSelected ? colors.primary : colors.textSecondary,
+                                      ),
+                                      title: Text(
+                                        child.label,
+                                        style: context.typography.bodyMedium.copyWith(
+                                          fontSize: 13,
+                                          fontWeight: childSelected ? FontWeight.w600 : FontWeight.normal,
+                                          color: childSelected ? colors.primary : colors.textPrimary,
+                                        ),
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      tileColor: childSelected ? colors.secondary.withValues(alpha: 0.15) : null,
+                                      onTap: () {
+                                        Navigator.of(context).pop();
+                                        context.go(child.route);
+                                      },
+                                    ),
+                                  );
+                                }).toList(),
                               ),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            tileColor: childSelected ? colors.secondary.withValues(alpha: 0.15) : null,
-                            onTap: () {
-                              Navigator.of(context).pop();
-                              context.go(child.route);
-                            },
-                          );
-                        }).toList(),
+                          ),
+                        ],
                       ),
                     );
                   }

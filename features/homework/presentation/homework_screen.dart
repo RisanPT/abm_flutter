@@ -28,8 +28,17 @@ class HomeworkScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
+  final ScrollController _scrollController = ScrollController();
   String _classFilter = 'All';
+  String _searchQuery = '';
+  String _statusFilter = 'All'; // 'All', 'Active', 'Overdue'
   int _page = 1;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   bool _canManage(String? role) => role != null &&
       role != AppRoles.student &&
@@ -45,6 +54,7 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final typography = context.typography;
     final user = ref.watch(authControllerProvider).value;
     final isStudent = user?.role == AppRoles.student;
     final canManage = _canManage(user?.role);
@@ -53,6 +63,12 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
     final hwQuery = HomeworkQuery(classroom: listKey, page: _page);
     final hwAsync = ref.watch(homeworkPageProvider(hwQuery));
 
+    final classesAsync = ref.watch(classroomControllerProvider);
+    final classOptions = classesAsync.maybeWhen(
+      data: (classes) => ['All', ...classes.map((c) => c.name)],
+      orElse: () => <String>['All'],
+    );
+
     return Scaffold(
       backgroundColor: colors.background,
       body: Column(
@@ -60,9 +76,35 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
           ABMPageHeader(
             title: 'Homework',
             subtitle: isStudent ? 'Assignments for your class' : 'Post and track class assignments',
-            height: context.isMobile ? 165 : 185,
+            showBackButton: false,
+            compact: true,
+            actions: [
+              if (canManage) ...[
+                FilledButton.icon(
+                  onPressed: () => _showForm(context),
+                  icon: const Icon(LucideIcons.plus, size: 16),
+                  label: const Text('New Homework'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const Gap(8),
+              ],
+              IconButton(
+                onPressed: () {
+                  ref.invalidate(homeworkPageProvider);
+                  ref.invalidate(homeworkListProvider);
+                },
+                icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 18),
+                tooltip: 'Refresh Homework',
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
-          if (canManage) _buildClassFilter(context),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
@@ -71,47 +113,314 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
               },
               child: hwAsync.when(
                 data: (pagedResult) {
-                  final items = pagedResult.items;
-                  if (items.isEmpty) {
-                    return ListView(children: [
-                      const Gap(60),
-                      AbmEmptyState(
-                        icon: LucideIcons.bookMarked,
-                        title: 'No homework yet',
-                        message: isStudent
-                            ? 'New assignments for your class will appear here.'
-                            : 'Tap "Add homework" to post an assignment.',
-                      ),
-                    ]);
+                  final allItems = pagedResult.items;
+
+                  // Compute KPIs
+                  final now = DateTime.now();
+                  int dueThisWeek = 0;
+                  int overdueCount = 0;
+                  final subjectSet = <String>{};
+
+                  for (final item in allItems) {
+                    if (item.subject.isNotEmpty) subjectSet.add(item.subject);
+                    if (item.dueDate != null) {
+                      final diff = item.dueDate!.difference(DateTime(now.year, now.month, now.day)).inDays;
+                      if (diff < 0) {
+                        overdueCount++;
+                      } else if (diff <= 7) {
+                        dueThisWeek++;
+                      }
+                    }
                   }
-                  return Column(
-                    children: [
-                      Expanded(
-                        child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                          itemCount: items.length,
-                          separatorBuilder: (_, _) => const Gap(12),
-                          itemBuilder: (_, i) => _HomeworkCard(
-                            hw: items[i],
-                            canManage: canManage,
-                            isStudent: isStudent,
-                            onToggleDone: (done) => _toggleDone(items[i], done),
-                            onEdit: () => _showForm(context, existing: items[i]),
-                            onDelete: () => _delete(items[i]),
+
+                  // Apply client-side search & status filtering
+                  final filtered = allItems.where((hw) {
+                    final matchesSearch = _searchQuery.isEmpty ||
+                        hw.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                        hw.subject.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                        hw.description.toLowerCase().contains(_searchQuery.toLowerCase());
+
+                    bool matchesStatus = true;
+                    if (_statusFilter == 'Active' && hw.dueDate != null) {
+                      matchesStatus = hw.dueDate!.difference(DateTime(now.year, now.month, now.day)).inDays >= 0;
+                    } else if (_statusFilter == 'Overdue' && hw.dueDate != null) {
+                      matchesStatus = hw.dueDate!.difference(DateTime(now.year, now.month, now.day)).inDays < 0;
+                    }
+
+                    return matchesSearch && matchesStatus;
+                  }).toList();
+
+                  return Scrollbar(
+                    controller: _scrollController,
+                    thumbVisibility: true,
+                    trackVisibility: true,
+                    child: ListView(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 100),
+                      children: [
+                        // Top KPI Stat Cards
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isWide = constraints.maxWidth > 700;
+                            final kpis = [
+                              _HomeworkKpiCard(
+                                title: 'Total Tasks',
+                                value: '${pagedResult.total}',
+                                subtext: '${subjectSet.length} subjects covered',
+                                icon: LucideIcons.bookMarked,
+                                color: const Color(0xFF2563EB),
+                                badge: 'Assignments',
+                              ),
+                              _HomeworkKpiCard(
+                                title: 'Due This Week',
+                                value: '$dueThisWeek',
+                                subtext: 'Upcoming deadlines',
+                                icon: LucideIcons.calendarCheck,
+                                color: const Color(0xFF059669),
+                                badge: '$dueThisWeek Priority',
+                              ),
+                              _HomeworkKpiCard(
+                                title: 'Past Deadline',
+                                value: '$overdueCount',
+                                subtext: overdueCount == 0 ? 'No overdue tasks' : 'Requires follow-up',
+                                icon: LucideIcons.alertTriangle,
+                                color: overdueCount == 0 ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                badge: overdueCount == 0 ? 'Clear' : '$overdueCount Overdue',
+                              ),
+                            ];
+
+                            if (isWide) {
+                              return Row(
+                                children: [
+                                  for (int i = 0; i < kpis.length; i++) ...[
+                                    if (i > 0) const Gap(12),
+                                    Expanded(child: kpis[i]),
+                                  ],
+                                ],
+                              );
+                            }
+                            return Column(
+                              children: [
+                                for (int i = 0; i < kpis.length; i++) ...[
+                                  if (i > 0) const Gap(8),
+                                  kpis[i],
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+
+                        const Gap(14),
+
+                        // Search and Filter Toolbar
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colors.cardBackground,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: colors.border),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                                      decoration: InputDecoration(
+                                        hintText: 'Search by title, subject, or description...',
+                                        prefixIcon: const Icon(LucideIcons.search, size: 18),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: colors.border),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: colors.border),
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      ),
+                                    ),
+                                  ),
+                                  if (_searchQuery.isNotEmpty || _classFilter != 'All' || _statusFilter != 'All') ...[
+                                    const Gap(8),
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        setState(() {
+                                          _searchQuery = '';
+                                          _classFilter = 'All';
+                                          _statusFilter = 'All';
+                                          _page = 1;
+                                        });
+                                      },
+                                      icon: const Icon(LucideIcons.rotateCcw, size: 14),
+                                      label: const Text('Reset', style: TextStyle(fontSize: 12)),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const Gap(10),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  if (canManage)
+                                    SizedBox(
+                                      width: 170,
+                                      child: DropdownButtonFormField<String>(
+                                        initialValue: _classFilter,
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          labelText: 'Class / Grade',
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          prefixIcon: const Icon(LucideIcons.graduationCap, size: 16),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                            borderSide: BorderSide(color: colors.border),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                            borderSide: BorderSide(color: colors.border),
+                                          ),
+                                        ),
+                                        items: classOptions
+                                            .map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 12))))
+                                            .toList(),
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setState(() {
+                                              _classFilter = val;
+                                              _page = 1;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  SegmentedButton<String>(
+                                    segments: const [
+                                      ButtonSegment(value: 'All', label: Text('All Tasks', style: TextStyle(fontSize: 11))),
+                                      ButtonSegment(value: 'Active', label: Text('Active', style: TextStyle(fontSize: 11))),
+                                      ButtonSegment(value: 'Overdue', label: Text('Overdue', style: TextStyle(fontSize: 11))),
+                                    ],
+                                    selected: {_statusFilter},
+                                    onSelectionChanged: (set) => setState(() => _statusFilter = set.first),
+                                    style: const ButtonStyle(
+                                      visualDensity: VisualDensity.compact,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      if (pagedResult.totalPages > 1)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: AbmPaginationBar(
-                            page: pagedResult.page,
-                            totalPages: pagedResult.totalPages,
-                            total: pagedResult.total,
-                            onPage: (p) => setState(() => _page = p),
-                          ),
+
+                        const Gap(16),
+
+                        // Header counts
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              filtered.isEmpty
+                                  ? 'No homework assignments'
+                                  : 'Assignments (${filtered.length})',
+                              style: typography.bodyMediumSemiBold,
+                            ),
+                            if (_classFilter != 'All')
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: colors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Class: $_classFilter',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colors.primary),
+                                ),
+                              ),
+                          ],
                         ),
-                    ],
+
+                        const Gap(10),
+
+                        if (filtered.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(40),
+                            alignment: Alignment.center,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: colors.primary.withValues(alpha: 0.08),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(LucideIcons.bookMarked, size: 36, color: colors.primary),
+                                ),
+                                const Gap(12),
+                                Text('No assignments found', style: typography.bodyLargeSemiBold),
+                                const Gap(6),
+                                Text(
+                                  isStudent
+                                      ? 'No homework has been assigned for your selection.'
+                                      : 'Try adjusting filters or tap "New Homework" to post one.',
+                                  style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          )
+                        else ...[
+                          for (final hw in filtered) ...[
+                            _HomeworkCard(
+                              hw: hw,
+                              canManage: canManage,
+                              isStudent: isStudent,
+                              onToggleDone: (done) => _toggleDone(hw, done),
+                              onEdit: () => _showForm(context, existing: hw),
+                              onDelete: () => _delete(hw),
+                            ),
+                            const Gap(12),
+                          ],
+                          if (pagedResult.totalPages > 1) ...[
+                            const Gap(8),
+                            Center(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 420),
+                                child: AbmPaginationBar(
+                                  page: pagedResult.page,
+                                  totalPages: pagedResult.totalPages,
+                                  total: pagedResult.total,
+                                  onPage: (p) {
+                                    setState(() => _page = p);
+                                    _scrollController.animateTo(
+                                      0,
+                                      duration: const Duration(milliseconds: 250),
+                                      curve: Curves.easeOut,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            const Gap(6),
+                            Center(
+                              child: Text(
+                                'Page ${pagedResult.page} of ${pagedResult.totalPages} · ${pagedResult.total} total items',
+                                style: typography.bodySmall.copyWith(color: colors.textSecondary),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ],
+                    ),
                   );
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
@@ -132,43 +441,6 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
               label: const Text('Add homework', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             )
           : null,
-    );
-  }
-
-  Widget _buildClassFilter(BuildContext context) {
-    final colors = context.colors;
-    final classesAsync = ref.watch(classroomControllerProvider);
-    final options = classesAsync.maybeWhen(
-      data: (classes) => ['All', ...classes.map((c) => c.name)],
-      orElse: () => <String>['All'],
-    );
-    return Container(
-      color: colors.background,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: options.map((c) {
-            final selected = c == _classFilter;
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(c),
-                selected: selected,
-                onSelected: (_) => setState(() {
-                  _classFilter = c;
-                  _page = 1;
-                }),
-                selectedColor: colors.primary.withValues(alpha: 0.12),
-                labelStyle: TextStyle(
-                  color: selected ? colors.primary : colors.textSecondary,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
     );
   }
 
@@ -314,7 +586,7 @@ class _HomeworkCard extends StatelessWidget {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              if (dueChip != null) dueChip,
+              ?dueChip,
               if (hw.assignedByName.isNotEmpty)
                 Text('by ${hw.assignedByName}', style: t.bodySmall.copyWith(color: colors.textSecondary)),
               if (hw.hasAttachment)
@@ -361,6 +633,80 @@ class _Tag extends StatelessWidget {
         decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
         child: Text(text, style: context.typography.bodySmallSemiBold.copyWith(color: color)),
       );
+}
+
+class _HomeworkKpiCard extends StatelessWidget {
+  const _HomeworkKpiCard({
+    required this.title,
+    required this.value,
+    required this.subtext,
+    required this.icon,
+    required this.color,
+    required this.badge,
+  });
+
+  final String title;
+  final String value;
+  final String subtext;
+  final IconData icon;
+  final Color color;
+  final String badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  badge,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+                ),
+              ),
+            ],
+          ),
+          const Gap(10),
+          Text(value, style: typography.h2.copyWith(fontWeight: FontWeight.bold)),
+          const Gap(2),
+          Text(title, style: typography.bodyMediumSemiBold),
+          Text(subtext, style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+        ],
+      ),
+    );
+  }
 }
 
 /// Add / edit homework form (bottom sheet).

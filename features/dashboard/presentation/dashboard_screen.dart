@@ -562,7 +562,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget _buildQuickActions(BuildContext context, List<AppNavItem> navItems) {
     final colors = context.colors;
     final typography = context.typography;
-    final routes = navItems.map((item) => item.route).toSet();
+    final routes = navItems.expand((item) => [item.route, ...(item.children?.map((c) => c.route) ?? [])]).toSet();
 
     final tiles = <AbmQuickTile>[
       if (routes.contains(RouteNames.attendance))

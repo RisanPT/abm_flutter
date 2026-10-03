@@ -42,15 +42,50 @@ class PortalProfile {
 }
 
 class StudyMaterial {
-  const StudyMaterial({required this.title, required this.subject, required this.description, required this.url, required this.grade, this.createdAt});
-  final String title, subject, description, url, grade;
+  const StudyMaterial({
+    required this.title,
+    required this.subject,
+    required this.description,
+    required this.url,
+    required this.grade,
+    this.resourceType = 'Document',
+    this.createdAt,
+  });
+  final String title, subject, description, url, grade, resourceType;
   final DateTime? createdAt;
+
+  bool get isPdf =>
+      resourceType.toLowerCase() == 'pdf' ||
+      url.toLowerCase().endsWith('.pdf') ||
+      url.toLowerCase().contains('/pdf');
+  bool get isVideo =>
+      resourceType.toLowerCase() == 'video' ||
+      url.toLowerCase().contains('youtube.com') ||
+      url.toLowerCase().contains('youtu.be') ||
+      url.toLowerCase().contains('vimeo.com');
+  bool get isAudio =>
+      resourceType.toLowerCase() == 'audio' ||
+      url.toLowerCase().endsWith('.mp3') ||
+      url.toLowerCase().endsWith('.m4a');
+  bool get isDrive =>
+      resourceType.toLowerCase() == 'drive' ||
+      url.toLowerCase().contains('drive.google.com');
+
+  String get displayType {
+    if (isPdf) return 'PDF Document';
+    if (isVideo) return 'Video Lesson';
+    if (isAudio) return 'Audio Recitation';
+    if (isDrive) return 'Google Drive';
+    return resourceType.isNotEmpty ? resourceType : 'Document / Note';
+  }
+
   factory StudyMaterial.fromJson(Map<String, dynamic> j) => StudyMaterial(
         title: (j['title'] ?? '').toString(),
         subject: (j['subject'] ?? '').toString(),
         description: (j['description'] ?? '').toString(),
         url: (j['url'] ?? '').toString(),
         grade: (j['grade'] ?? 'all').toString(),
+        resourceType: (j['resourceType'] ?? 'Document').toString(),
         createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
       );
 }

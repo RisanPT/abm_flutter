@@ -143,10 +143,10 @@ class HomeworkRepository {
     DateTime? dueDate,
   }) async {
     await _dio.patch('/homework/$id', data: {
-      if (classroom != null) 'classroom': classroom,
-      if (title != null) 'title': title,
-      if (subject != null) 'subject': subject,
-      if (description != null) 'description': description,
+      'classroom': ?classroom,
+      'title': ?title,
+      'subject': ?subject,
+      'description': ?description,
       if (dueDate != null) 'dueDate': dueDate.toIso8601String(),
     });
   }

@@ -41,6 +41,11 @@ class NotificationsScreen extends ConsumerWidget {
             title: 'Notifications',
             subtitle: 'Your notices, circulars and reminders.',
             actions: [
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: () => ref.invalidate(myNotificationsProvider),
+                icon: const Icon(LucideIcons.refreshCw, size: 17, color: Colors.white),
+              ),
               feedAsync.maybeWhen(
                 data: (f) => f.unreadCount > 0
                     ? TextButton.icon(
@@ -57,15 +62,64 @@ class NotificationsScreen extends ConsumerWidget {
             ],
           ),
           Expanded(
-            child: feedAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => _empty(context, LucideIcons.wifiOff, 'Couldn’t load', 'Please pull to refresh.'),
-              data: (feed) => feed.items.isEmpty
-                  ? _empty(context, LucideIcons.bellOff, 'No notifications', 'You’re all caught up.')
-                  : RefreshIndicator(
-                      color: colors.primary,
-                      onRefresh: () async => ref.invalidate(myNotificationsProvider),
-                      child: ListView.builder(
+            child: RefreshIndicator(
+              color: colors.primary,
+              onRefresh: () async => ref.invalidate(myNotificationsProvider),
+              child: feedAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    const Gap(80),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: colors.red.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(LucideIcons.alertCircle, size: 38, color: colors.red),
+                      ),
+                    ),
+                    const Gap(16),
+                    Center(
+                      child: Text(
+                        'Unable to load notifications',
+                        style: context.typography.bodyLargeSemiBold,
+                      ),
+                    ),
+                    const Gap(6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Center(
+                        child: Text(
+                          friendlyErrorMessage(e),
+                          textAlign: TextAlign.center,
+                          style: context.typography.bodySmall.copyWith(color: colors.textSecondary),
+                        ),
+                      ),
+                    ),
+                    const Gap(20),
+                    Center(
+                      child: ElevatedButton.icon(
+                        onPressed: () => ref.invalidate(myNotificationsProvider),
+                        icon: const Icon(LucideIcons.refreshCw, size: 15),
+                        label: const Text('Retry'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                data: (feed) => feed.items.isEmpty
+                    ? _empty(context, LucideIcons.bellOff, 'No notifications', 'You’re all caught up.')
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.all(16),
                         itemCount: feed.items.length,
                         itemBuilder: (_, i) => _NotificationTile(
@@ -73,7 +127,7 @@ class NotificationsScreen extends ConsumerWidget {
                           onTap: () => _markRead(ref, feed.items[i]),
                         ),
                       ),
-                    ),
+              ),
             ),
           ),
         ],

@@ -46,6 +46,23 @@ class AppNavItem {
   final AppModule module;
   final String? mobileLabel;
   final List<AppNavItem>? children;
+
+  AppNavItem copyWith({
+    String? label,
+    String? route,
+    IconData? icon,
+    AppModule? module,
+    String? mobileLabel,
+    List<AppNavItem>? children,
+  }) =>
+      AppNavItem(
+        label: label ?? this.label,
+        route: route ?? this.route,
+        icon: icon ?? this.icon,
+        module: module ?? this.module,
+        mobileLabel: mobileLabel ?? this.mobileLabel,
+        children: children ?? this.children,
+      );
 }
 
 const List<AppNavItem> kAppNavItems = [
@@ -60,12 +77,82 @@ const List<AppNavItem> kAppNavItems = [
     route: RouteNames.students,
     icon: LucideIcons.users,
     module: AppModule.students,
+    children: [
+      AppNavItem(
+        label: 'Student Directory',
+        route: RouteNames.students,
+        icon: LucideIcons.users,
+        module: AppModule.students,
+      ),
+      AppNavItem(
+        label: 'Progress Reports',
+        route: RouteNames.progressReports,
+        icon: LucideIcons.fileBarChart,
+        module: AppModule.progressReports,
+      ),
+      AppNavItem(
+        label: 'Homework',
+        route: RouteNames.homework,
+        icon: LucideIcons.bookMarked,
+        module: AppModule.homework,
+      ),
+      AppNavItem(
+        label: 'Hifz Tracker',
+        route: RouteNames.hifz,
+        icon: LucideIcons.bookOpen,
+        module: AppModule.hifz,
+      ),
+      AppNavItem(
+        label: 'Exams & Results',
+        route: RouteNames.exams,
+        icon: LucideIcons.award,
+        module: AppModule.exams,
+      ),
+      AppNavItem(
+        label: 'Study Materials',
+        route: RouteNames.materials,
+        icon: LucideIcons.folderOpen,
+        module: AppModule.studyMaterials,
+      ),
+      AppNavItem(
+        label: 'Student Leaves',
+        route: RouteNames.studentLeave,
+        icon: LucideIcons.calendarOff,
+        module: AppModule.studentLeave,
+      ),
+    ],
   ),
   AppNavItem(
-    label: 'Classrooms',
-    route: RouteNames.classrooms,
-    icon: LucideIcons.layers,
-    module: AppModule.classrooms,
+    label: 'Timetable',
+    route: RouteNames.timetable,
+    icon: LucideIcons.calendarDays,
+    module: AppModule.timetable,
+    children: [
+      AppNavItem(
+        label: 'Timetable Planner',
+        route: RouteNames.timetable,
+        icon: LucideIcons.calendarDays,
+        module: AppModule.timetable,
+      ),
+      AppNavItem(
+        label: 'Shift Planner',
+        route: RouteNames.shiftPlanner,
+        icon: LucideIcons.calendarCheck,
+        module: AppModule.timetable,
+      ),
+      AppNavItem(
+        label: 'Class Timetables',
+        route: RouteNames.classTimetableView,
+        icon: LucideIcons.clock,
+        module: AppModule.timetable,
+      ),
+      AppNavItem(
+        label: 'Classrooms',
+        route: RouteNames.classrooms,
+        icon: LucideIcons.layers,
+        module: AppModule.classrooms,
+      ),
+    ],
   ),
   AppNavItem(
     label: 'Attendance',
@@ -80,122 +167,79 @@ const List<AppNavItem> kAppNavItems = [
         module: AppModule.attendance,
       ),
       AppNavItem(
+        label: 'Staff Check-in',
+        route: RouteNames.staffCheckin,
+        icon: LucideIcons.userCheck,
+        module: AppModule.teacherCheckIn,
+      ),
+      AppNavItem(
         label: 'Student Reports',
         route: RouteNames.studentAttendanceReport,
-        icon: LucideIcons.bookOpen,
+        icon: LucideIcons.fileText,
         module: AppModule.attendance,
       ),
       AppNavItem(
         label: 'Teacher Reports',
         route: RouteNames.teacherAttendanceReport,
-        icon: LucideIcons.userCheck,
+        icon: LucideIcons.fileSpreadsheet,
         module: AppModule.attendance,
       ),
     ],
   ),
   AppNavItem(
-    label: 'My Attendance',
-    route: RouteNames.staffCheckin,
-    icon: LucideIcons.userCheck,
-    module: AppModule.teacherCheckIn,
-  ),
-  AppNavItem(
-    label: 'Progress Reports',
-    route: RouteNames.progressReports,
-    icon: LucideIcons.fileBarChart,
-    module: AppModule.progressReports,
-  ),
-  AppNavItem(
-    label: 'Homework',
-    route: RouteNames.homework,
-    icon: LucideIcons.bookMarked,
-    module: AppModule.homework,
-  ),
-  AppNavItem(
-    label: 'Hifz Tracker',
-    route: RouteNames.hifz,
-    icon: LucideIcons.bookOpen,
-    module: AppModule.hifz,
-  ),
-  AppNavItem(
-    label: 'Exams & Results',
-    route: RouteNames.exams,
-    icon: LucideIcons.award,
-    module: AppModule.exams,
-  ),
-  AppNavItem(
-    label: 'Study Materials',
-    route: RouteNames.materials,
-    icon: LucideIcons.folderOpen,
-    module: AppModule.studyMaterials,
-  ),
-  AppNavItem(
-    label: 'Student Leave',
-    route: RouteNames.studentLeave,
-    icon: LucideIcons.calendarOff,
-    module: AppModule.studentLeave,
-  ),
-
-  AppNavItem(
-    label: 'Timetable',
-    route: RouteNames.timetable,
-    icon: LucideIcons.calendarDays,
-    module: AppModule.timetable,
+    label: 'Finance & Accounts',
+    route: RouteNames.finance,
+    icon: LucideIcons.wallet,
+    module: AppModule.finance,
     children: [
       AppNavItem(
-        label: 'Timetable',
-        route: RouteNames.timetable,
-        icon: LucideIcons.calendarDays,
-        module: AppModule.timetable,
+        label: 'Madrassa Finance',
+        route: RouteNames.finance,
+        icon: LucideIcons.wallet,
+        module: AppModule.finance,
       ),
       AppNavItem(
-        label: 'Shift Planner',
-        route: RouteNames.shiftPlanner,
-        icon: LucideIcons.calendarCheck,
-        module: AppModule.timetable,
+        label: 'Staff Payroll',
+        route: RouteNames.payroll,
+        icon: LucideIcons.banknote,
+        module: AppModule.finance,
+      ),
+      AppNavItem(
+        label: 'Accounts & Fees',
+        route: RouteNames.accounts,
+        icon: LucideIcons.receipt,
+        module: AppModule.accounts,
+      ),
+      AppNavItem(
+        label: 'Family Fees',
+        route: RouteNames.familyFees,
+        icon: LucideIcons.users,
+        module: AppModule.accounts,
+      ),
+      AppNavItem(
+        label: 'Outstanding Dues',
+        route: RouteNames.outstandingDues,
+        icon: LucideIcons.alertCircle,
+        module: AppModule.outstandingDues,
+      ),
+      AppNavItem(
+        label: 'Income Entry',
+        route: RouteNames.incomeEntry,
+        icon: LucideIcons.trendingUp,
+        module: AppModule.incomeEntry,
+      ),
+      AppNavItem(
+        label: 'Fee Setup',
+        route: RouteNames.feeSetup,
+        icon: LucideIcons.fileCog,
+        module: AppModule.feeSetup,
       ),
     ],
   ),
   AppNavItem(
-    label: 'Accounts',
-    route: RouteNames.accounts,
-    icon: LucideIcons.banknote,
-    module: AppModule.accounts,
-  ),
-  AppNavItem(
-    label: 'Outstanding Dues',
-    route: RouteNames.outstandingDues,
-    icon: LucideIcons.alertCircle,
-    module: AppModule.outstandingDues,
-  ),
-  AppNavItem(
-    label: 'Income Entry',
-    route: RouteNames.incomeEntry,
-    icon: LucideIcons.trendingUp,
-    module: AppModule.incomeEntry,
-  ),
-  AppNavItem(
-    label: 'Finance',
-    route: RouteNames.finance,
-    icon: LucideIcons.wallet,
-    module: AppModule.finance,
-  ),
-  AppNavItem(
-    label: 'Payroll',
-    route: RouteNames.payroll,
-    icon: LucideIcons.banknote,
-    module: AppModule.finance,
-  ),
-  AppNavItem(
-    label: 'Fee Setup',
-    route: RouteNames.feeSetup,
-    icon: LucideIcons.fileCog,
-    module: AppModule.feeSetup,
-  ),
-  AppNavItem(
     label: 'Teachers',
     route: RouteNames.teachers,
-    icon: LucideIcons.bookOpen,
+    icon: LucideIcons.graduationCap,
     module: AppModule.teachers,
   ),
   AppNavItem(
@@ -207,27 +251,53 @@ const List<AppNavItem> kAppNavItems = [
   AppNavItem(
     label: 'Administration',
     route: RouteNames.admin,
-    icon: LucideIcons.clapperboard,
+    icon: LucideIcons.shieldCheck,
     module: AppModule.administration,
+    children: [
+      AppNavItem(
+        label: 'Admin Overview',
+        route: RouteNames.admin,
+        icon: LucideIcons.clapperboard,
+        module: AppModule.administration,
+      ),
+      AppNavItem(
+        label: 'User Permissions',
+        route: RouteNames.permissions,
+        icon: LucideIcons.key,
+        module: AppModule.administration,
+      ),
+      AppNavItem(
+        label: 'Data Backup',
+        route: RouteNames.dataBackup,
+        icon: LucideIcons.database,
+        module: AppModule.administration,
+      ),
+      AppNavItem(
+        label: 'Notifications',
+        route: RouteNames.notifications,
+        icon: LucideIcons.bell,
+        module: AppModule.administration,
+      ),
+      AppNavItem(
+        label: 'Institutes',
+        route: RouteNames.institutes,
+        icon: LucideIcons.building,
+        module: AppModule.institutes,
+      ),
+      AppNavItem(
+        label: 'Website Content',
+        route: RouteNames.websiteContent,
+        icon: LucideIcons.layout,
+        module: AppModule.websiteManagement,
+      ),
+    ],
   ),
   AppNavItem(
     label: 'Settings',
     route: RouteNames.settings,
     icon: LucideIcons.settings,
     module: AppModule.settings,
-    mobileLabel: 'More',
-  ),
-  AppNavItem(
-    label: 'Institutes',
-    route: RouteNames.institutes,
-    icon: LucideIcons.building,
-    module: AppModule.institutes,
-  ),
-  AppNavItem(
-    label: 'Website Content',
-    route: RouteNames.websiteContent,
-    icon: LucideIcons.layout,
-    module: AppModule.websiteManagement,
+    mobileLabel: 'Settings',
   ),
 ];
 
@@ -441,7 +511,25 @@ extension RoleStringExtension on String {
 
   List<AppNavItem> navigationItems(Set<String> allowedModules) {
     final effective = allowedModules.isNotEmpty ? allowedModules : (kDefaultRolePermissions[this] ?? {});
-    return kAppNavItems.where((item) => canAccess(item.module, effective)).toList();
+    final result = <AppNavItem>[];
+
+    for (final item in kAppNavItems) {
+      if (item.children != null && item.children!.isNotEmpty) {
+        final accessibleChildren = item.children!
+            .where((child) => canAccess(child.module, effective))
+            .toList();
+
+        if (canAccess(item.module, effective) || accessibleChildren.isNotEmpty) {
+          result.add(item.copyWith(children: accessibleChildren));
+        }
+      } else {
+        if (canAccess(item.module, effective)) {
+          result.add(item);
+        }
+      }
+    }
+
+    return result;
   }
 
   String defaultRoute(Set<String> allowedModules) {

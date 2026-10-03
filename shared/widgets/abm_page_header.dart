@@ -23,6 +23,10 @@ class ABMPageHeader extends StatelessWidget {
   /// over the screen. Off by default until every screen adopts this header.
   final bool globalActions;
 
+  /// When true, uses a space-efficient single-row layout where title/subtitle
+  /// sit on the left and actions sit on the right, keeping height around 115-125px.
+  final bool compact;
+
   const ABMPageHeader({
     super.key,
     required this.title,
@@ -34,6 +38,7 @@ class ABMPageHeader extends StatelessWidget {
     this.showBackButton = true,
     this.instituteBanner,
     this.globalActions = false,
+    this.compact = false,
   });
 
   @override
@@ -42,16 +47,18 @@ class ABMPageHeader extends StatelessWidget {
     final isMobile = context.isMobile;
     final bool hasBanner = instituteBanner != null;
     final effectiveHeight = height ??
-        (hasBanner
-            ? (isMobile ? 295.0 : 340.0)
-            : (isMobile ? 240.0 : 280.0));
+        (compact
+            ? (isMobile ? 115.0 : 125.0)
+            : (hasBanner
+                ? (isMobile ? 295.0 : 340.0)
+                : (isMobile ? 240.0 : 280.0)));
 
     return Container(
       width: double.infinity,
       height: effectiveHeight,
       decoration: BoxDecoration(
         gradient: abmGreenGradient(context),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(compact ? 24 : 40)),
       ),
       child: Stack(
         children: [
@@ -66,63 +73,116 @@ class ABMPageHeader extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.fromLTRB(
                 isMobile ? 16 : 24,
-                isMobile ? 12 : 20,
+                compact ? (isMobile ? 10 : 14) : (isMobile ? 12 : 20),
                 isMobile ? 16 : 24,
-                isMobile ? 20 : 24,
+                compact ? (isMobile ? 12 : 16) : (isMobile ? 20 : 24),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (showBackButton)
-                        IconButton(
-                          icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
-                          onPressed: () => Navigator.of(context).maybePop(),
-                        )
-                      else
-                        ?leading,
-                      const Spacer(),
-                      if (actions != null) ...actions!,
-                      if (globalActions) ...[
-                        if (actions != null && actions!.isNotEmpty) const Gap(4),
-                        const _HeaderGlobalActions(),
-                      ] else if (actions != null && actions!.isNotEmpty) ...[
-                        if (!isMobile) const Gap(88),
-                      ],
-                    ],
-                  ),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: compact
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          title,
-                          style: typography.h2.copyWith(color: Colors.white),
+                        if (showBackButton) ...[
+                          IconButton(
+                            icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          const Gap(8),
+                        ] else if (leading != null) ...[
+                          leading!,
+                          const Gap(8),
+                        ],
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: (isMobile ? typography.h3 : typography.h2).copyWith(color: Colors.white),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (subtitle != null) ...[
+                                const Gap(2),
+                                Text(
+                                  subtitle!,
+                                  style: typography.bodySmall.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.75),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                        if (subtitle != null) ...[
-                          const Gap(4),
-                          Text(
-                            subtitle!,
-                            style: typography.bodyMedium.copyWith(
-                              color: Colors.white.withValues(alpha: 0.7),
-                            ),
+                        if (actions != null && actions!.isNotEmpty) ...[
+                          const Gap(12),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: actions!,
                           ),
                         ],
-                        if (bottomChild != null) ...[
-                          const Gap(16),
-                          bottomChild!,
+                        if (globalActions) ...[
+                          const Gap(8),
+                          const _HeaderGlobalActions(),
+                        ],
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (showBackButton)
+                              IconButton(
+                                icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
+                                onPressed: () => Navigator.of(context).maybePop(),
+                              )
+                            else
+                              ?leading,
+                            const Spacer(),
+                            if (actions != null) ...actions!,
+                            if (globalActions) ...[
+                              if (actions != null && actions!.isNotEmpty) const Gap(4),
+                              const _HeaderGlobalActions(),
+                            ] else if (actions != null && actions!.isNotEmpty) ...[
+                              if (!isMobile) const Gap(88),
+                            ],
+                          ],
+                        ),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: typography.h2.copyWith(color: Colors.white),
+                              ),
+                              if (subtitle != null) ...[
+                                const Gap(4),
+                                Text(
+                                  subtitle!,
+                                  style: typography.bodyMedium.copyWith(
+                                    color: Colors.white.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              ],
+                              if (bottomChild != null) ...[
+                                const Gap(16),
+                                bottomChild!,
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (instituteBanner != null) ...[
+                          const Gap(8),
+                          instituteBanner!,
                         ],
                       ],
                     ),
-                  ),
-                  if (instituteBanner != null) ...[
-                    const Gap(8),
-                    instituteBanner!,
-                  ],
-                ],
-              ),
             ),
           ),
         ],

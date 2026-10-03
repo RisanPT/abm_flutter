@@ -125,7 +125,7 @@ class StudentLeaveRepository {
       'fromDate': fromDate.toIso8601String(),
       'toDate': toDate.toIso8601String(),
       'reason': reason,
-      if (studentId != null) 'studentId': studentId,
+      'studentId': ?studentId,
     });
   }
 
