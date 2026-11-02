@@ -374,8 +374,10 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
         snackText = 'Updated ${r.daysUpdated} future day(s) · ${r.classesWritten} classes';
       } else if (r.daysFilled > 0) {
         snackText = 'Copied to ${r.daysFilled} future day(s) · ${r.classesWritten} classes';
-      } else {
+      } else if (r.skippedDays > 0) {
         snackText = 'No future days needed updates (${r.skippedDays} existing days kept)';
+      } else {
+        snackText = 'No future days found to copy';
       }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(snackText),
