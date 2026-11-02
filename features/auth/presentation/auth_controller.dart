@@ -33,6 +33,22 @@ class AuthController extends _$AuthController {
     return !result.hasError;
   }
 
+  /// Passwordless parent sign-in with the mobile number only.
+  Future<bool> parentLogin(String phone) async {
+    state = const AsyncValue.loading();
+    final result = await AsyncValue.guard(
+      () => ref.read(authRepositoryProvider).parentPhoneLogin(phone),
+    );
+    state = result;
+    if (!result.hasError) {
+      ref.invalidate(permissionControllerProvider);
+      try {
+        await ref.read(permissionControllerProvider.notifier).refresh();
+      } catch (_) {}
+    }
+    return !result.hasError;
+  }
+
   Future<void> logout() async {
     state = const AsyncValue.loading();
     // Guard so a failed logout never leaves the UI stuck in loading — the user

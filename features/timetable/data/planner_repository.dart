@@ -304,6 +304,33 @@ class PlannerRepository {
     }
   }
 
+  Future<Map<String, dynamic>> getAttendanceGeofence(String instituteId) async {
+    final res = await _dio.get('/institutes/$instituteId/attendance-geofence');
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<Map<String, dynamic>> setAttendanceGeofence(
+    String instituteId, {
+    required bool enabled,
+    double? latitude,
+    double? longitude,
+    int? radiusMeters,
+    String? mapsLink,
+  }) async {
+    try {
+      final res = await _dio.put('/institutes/$instituteId/attendance-geofence', data: {
+        'enabled': enabled,
+        'latitude': ?latitude,
+        'longitude': ?longitude,
+        'radiusMeters': ?radiusMeters,
+        if (mapsLink != null && mapsLink.isNotEmpty) 'mapsLink': mapsLink,
+      });
+      return Map<String, dynamic>.from(res.data as Map);
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map ? (e.response?.data['message'] ?? 'Failed') : 'Failed to save geofence');
+    }
+  }
+
   /// Teacher leave: move one teacher's classes in a date range to a substitute.
   Future<ReassignResult> reassignTeacher({
     required String fromTeacherId,
@@ -386,6 +413,90 @@ class PlannerRepository {
       'academicYear': academicYear,
       'shift': shift,
       'classroomName': ?classroomName,
+    });
+  }
+
+  // ── Weekly template ─────────────────────────────────────────────────────────
+  // weekday is 0-6 (Sun-Sat) to match the backend's getUTCDay(); `widget.date` is
+  // a UTC-midnight date so `date.toUtc().weekday % 7` maps Dart's Mon=1..Sun=7
+  // onto Sun=0..Sat=6.
+
+  /// Save a class's recurring pattern for the weekday of [date] and fill every
+  /// FUTURE planned day of that weekday (newly-planned months inherit it too).
+  /// Returns (daysFilled, classesWritten).
+  Future<({int daysFilled, int classesWritten})> saveWeeklyTemplate({
+    required DateTime date,
+    required String instituteId,
+    required String academicYear,
+    required String shift,
+    required String classroomName,
+    required List<DayPeriod> periods,
+  }) async {
+    try {
+      final res = await _dio.put('/timetable/template', data: {
+        'instituteId': instituteId,
+        'academicYear': academicYear,
+        'shift': shift,
+        'classroomName': classroomName,
+        'weekday': date.toUtc().weekday % 7,
+        'periods': periods
+            .map((p) => {
+                  'period': p.period,
+                  'subjectName': p.subjectName,
+                  'teacherId': p.teacherId,
+                  'startTime': p.startTime,
+                  'endTime': p.endTime,
+                  'room': p.room,
+                })
+            .toList(),
+      });
+      final d = res.data as Map<String, dynamic>;
+      return (
+        daysFilled: (d['daysFilled'] as num?)?.toInt() ?? 0,
+        classesWritten: (d['classesWritten'] as num?)?.toInt() ?? 0,
+      );
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map
+          ? (e.response?.data['message'] ?? 'Failed to save weekly pattern')
+          : 'Failed to save weekly pattern');
+    }
+  }
+
+  /// The saved weekly pattern for a class on the weekday of [date] (read-only).
+  Future<List<DayPeriod>> getWeeklyTemplate({
+    required DateTime date,
+    required String instituteId,
+    required String academicYear,
+    required String shift,
+    required String classroomName,
+  }) async {
+    final res = await _dio.get('/timetable/template', queryParameters: {
+      'instituteId': instituteId,
+      'academicYear': academicYear,
+      'shift': shift,
+      'classroom': classroomName,
+      'weekday': date.toUtc().weekday % 7,
+    });
+    final d = res.data as Map<String, dynamic>;
+    return ((d['periods'] as List?) ?? [])
+        .map((e) => DayPeriod.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Remove a class's weekly pattern for the weekday of [date] + its future rows.
+  Future<void> deleteWeeklyTemplate({
+    required DateTime date,
+    required String instituteId,
+    required String academicYear,
+    required String shift,
+    required String classroomName,
+  }) async {
+    await _dio.delete('/timetable/template', data: {
+      'instituteId': instituteId,
+      'academicYear': academicYear,
+      'shift': shift,
+      'classroomName': classroomName,
+      'weekday': date.toUtc().weekday % 7,
     });
   }
 

@@ -1,8 +1,11 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/features/user_admin/presentation/institute_management_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 
@@ -65,18 +68,50 @@ class InstituteSwitcher extends ConsumerWidget {
               const SizedBox(height: 16),
               institutesAsync.when(
                 data: (institutes) => Column(
-                  children: institutes.map((inst) => ListTile(
-                    leading: Icon(inst.icon, color: ref.read(selectedInstituteProvider).id == inst.id ? context.colors.primary : null),
-                    title: Text(inst.name),
-                    subtitle: Text(inst.location),
-                    onTap: () {
-                      ref.read(selectedInstituteProvider.notifier).setInstitute(inst);
-                      Navigator.pop(context);
-                    },
-                    trailing: ref.read(selectedInstituteProvider).id == inst.id 
-                      ? Icon(LucideIcons.check, color: context.colors.primary) 
-                      : null,
-                  )).toList(),
+                  children: [
+                    ...institutes.map((inst) => ListTile(
+                      leading: Icon(inst.icon, color: ref.read(selectedInstituteProvider).id == inst.id ? context.colors.primary : null),
+                      title: Text(inst.name),
+                      subtitle: Text(inst.location),
+                      onTap: () {
+                        ref.read(selectedInstituteProvider.notifier).setInstitute(inst);
+                        Navigator.pop(context);
+                      },
+                      trailing: ref.read(selectedInstituteProvider).id == inst.id 
+                        ? Icon(LucideIcons.check, color: context.colors.primary) 
+                        : null,
+                    )),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                context.push(RouteNames.institutes);
+                              },
+                              icon: const Icon(LucideIcons.settings, size: 15),
+                              label: const Text('Manage', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                showInstituteFormDialog(context, ref);
+                              },
+                              icon: const Icon(LucideIcons.plus, size: 15),
+                              label: const Text('Add Institute', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              style: FilledButton.styleFrom(backgroundColor: context.colors.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 loading: () => const Center(child: Padding(
                   padding: EdgeInsets.all(20.0),

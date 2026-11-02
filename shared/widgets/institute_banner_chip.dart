@@ -1,10 +1,13 @@
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
+import 'package:abm_madrasa/features/user_admin/presentation/institute_management_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 /// A compact frosted-glass pill chip that shows the active institute name
@@ -140,25 +143,39 @@ class _InstitutePickerSheet extends ConsumerWidget {
                   child: Icon(LucideIcons.building2, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Select Institute',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: colors.textPrimary,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Select Institute',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: colors.textPrimary,
+                        ),
                       ),
-                    ),
-                    institutesAsync.maybeWhen(
-                      data: (list) => Text(
-                        '${list.length} institute${list.length == 1 ? '' : 's'} available',
-                        style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                      institutesAsync.maybeWhen(
+                        data: (list) => Text(
+                          '${list.length} institute${list.length == 1 ? '' : 's'} available',
+                          style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                        ),
+                        orElse: () => const SizedBox.shrink(),
                       ),
-                      orElse: () => const SizedBox.shrink(),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    showInstituteFormDialog(context, ref);
+                  },
+                  icon: const Icon(LucideIcons.plus, size: 14),
+                  label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
                 ),
               ],
             ),
@@ -297,6 +314,43 @@ class _InstitutePickerSheet extends ConsumerWidget {
             error: (e, _) => Padding(
               padding: const EdgeInsets.all(24),
               child: Text('Could not load institutes. ${friendlyErrorMessage(e)}'),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      context.push(RouteNames.institutes);
+                    },
+                    icon: const Icon(LucideIcons.settings, size: 15),
+                    label: const Text('Manage Campuses', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      showInstituteFormDialog(context, ref);
+                    },
+                    icon: const Icon(LucideIcons.plus, size: 15),
+                    label: const Text('Add Institute', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

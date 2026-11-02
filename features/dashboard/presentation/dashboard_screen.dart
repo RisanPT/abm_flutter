@@ -50,8 +50,13 @@ class DashboardScreen extends ConsumerWidget {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1100),
                     child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        20,
+                        20,
+                        context.isMobile ? 100 : 20,
+                      ),
+                      child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (isTeacher) ...[
@@ -119,8 +124,8 @@ class DashboardScreen extends ConsumerWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Clear the shell's floating menu button (top-left).
-              const Gap(36),
+              // Clear the shell's floating menu button (top-left) and action pills (top-right).
+              Gap(context.isMobile ? 44 : 36),
               Row(
                 children: [
                   Expanded(
@@ -295,6 +300,24 @@ class DashboardScreen extends ConsumerWidget {
           subtitle: "Record today's student attendance",
           color: const Color(0xFF2E7D32),
           onTap: () => context.push(RouteNames.attendance),
+        ),
+        const Gap(12),
+
+        _TeacherActionCard(
+          icon: LucideIcons.bookOpen,
+          title: 'Hifz Tracker',
+          subtitle: 'Log daily Sabaq · Sabqi · Manzil',
+          color: const Color(0xFFB8860B),
+          onTap: () => context.push(RouteNames.hifz),
+        ),
+        const Gap(12),
+
+        _TeacherActionCard(
+          icon: LucideIcons.bookMarked,
+          title: 'Homework',
+          subtitle: 'Assign & review class homework',
+          color: const Color(0xFF1E88E5),
+          onTap: () => context.push(RouteNames.homework),
         ),
         const Gap(12),
 

@@ -8,6 +8,7 @@ class RouteNames {
   static const String editStudent = '/edit-student';
   static const String studentProfile = '/student-profile';
   static const String studentPortal = '/student-portal';
+  static const String parentHome = '/parent-home'; // parent login portal (no admin shell)
   static const String attendance = '/attendance';
   static const String studentAttendanceReport = '/attendance-report/student';
   static const String teacherAttendanceReport = '/attendance-report/teacher';
@@ -42,6 +43,7 @@ class RouteNames {
   static const String exams = '/exams';
   static const String myResults = '/my-results'; // student-facing (no admin shell)
   static const String materials = '/materials';
+  static const String books = '/books';
   static const String studentLeave = '/student-leave';
   static const String myLeave = '/my-leave'; // student-facing (no admin shell)
   static const String institutes = '/institutes';

@@ -40,7 +40,8 @@ class _StudentPortalScreenState extends ConsumerState<StudentPortalScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final async = ref.watch(studentPortalProvider);
-    return Scaffold(
+    return SelectionArea(
+      child: Scaffold(
       backgroundColor: colors.background,
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -55,6 +56,7 @@ class _StudentPortalScreenState extends ConsumerState<StudentPortalScreen> {
         data: (_) => _BottomNav(index: _tab, onTap: (i) => setState(() => _tab = i)),
         orElse: () => null,
       ),
+    ),
     );
   }
 }

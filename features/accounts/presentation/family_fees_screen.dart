@@ -1,10 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:abm_madrasa/core/network/paged_result.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/utils/money.dart';
+import 'package:abm_madrasa/core/whatsapp/whatsapp_service.dart';
 import 'package:abm_madrasa/features/accounts/data/finance_repository.dart';
 import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_controller.dart';
@@ -13,22 +19,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
+import 'package:abm_madrasa/features/accounts/presentation/widgets/charge_dialogs.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 class FamilyQuery {
-  const FamilyQuery({this.search = '', this.page = 1});
+  const FamilyQuery({this.search = '', this.page = 1, this.status = 'all'});
   final String search;
   final int page;
+  final String status; // 'all' | 'pending' | 'paid'
 
   @override
   bool operator ==(Object other) =>
-      other is FamilyQuery && search == other.search && page == other.page;
+      other is FamilyQuery && search == other.search && page == other.page && status == other.status;
 
   @override
-  int get hashCode => Object.hash(search, page);
+  int get hashCode => Object.hash(search, page, status);
 }
 
 final familiesPageProvider =
@@ -37,6 +45,7 @@ final familiesPageProvider =
   return ref.read(accountRepositoryProvider).getFamiliesPage(
         instituteId: instituteId,
         search: q.search.isEmpty ? null : q.search,
+        status: q.status,
         page: q.page,
         limit: 20,
       );
@@ -69,7 +78,56 @@ class _FamilyFeesScreenState extends ConsumerState<FamilyFeesScreen> {
   final _searchController = TextEditingController();
   String _query = '';
   int _page = 1;
+  String _status = 'all'; // 'all' | 'pending' | 'paid'
   Timer? _debounce;
+  bool _bulkBusy = false;
+
+  void _onStatusChanged(String s) => setState(() {
+        _status = s;
+        _page = 1;
+      });
+
+  Future<void> _bulkEnablePhoneLogin() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enable phone login for all families?'),
+        content: const Text(
+          'Every family with a mobile number on file will be able to sign in to the parent portal using just their phone number — no password.\n\n'
+          'Anyone who knows an enabled family’s number could view that family’s fees & attendance. You can turn it off per family anytime.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Enable all')),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    setState(() => _bulkBusy = true);
+    try {
+      final res = await ref.read(accountRepositoryProvider).enablePhoneLoginForAll();
+      if (!mounted) return;
+      setState(() => _bulkBusy = false);
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Phone login enabled'),
+          content: Text(
+            '${res.activeTotal} of ${res.totalFamilies} families can now sign in with their mobile number.\n\n'
+            '• ${res.created} new logins created\n'
+            '• ${res.enabled} existing logins enabled'
+            '${res.skippedCount > 0 ? '\n• ${res.skippedCount} skipped (no phone number on file)' : ''}',
+          ),
+          actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Done'))],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _bulkBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    }
+  }
 
   @override
   void dispose() {
@@ -94,7 +152,7 @@ class _FamilyFeesScreenState extends ConsumerState<FamilyFeesScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
-    final familyQuery = FamilyQuery(search: _query, page: _page);
+    final familyQuery = FamilyQuery(search: _query, page: _page, status: _status);
     final familiesAsync = ref.watch(familiesPageProvider(familyQuery));
 
     return Scaffold(
@@ -109,6 +167,18 @@ class _FamilyFeesScreenState extends ConsumerState<FamilyFeesScreen> {
               tooltip: 'Back',
               onTap: () => Navigator.of(context).maybePop(),
             ),
+            trailing: _bulkBusy
+                ? const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                  )
+                : AbmHeaderIconButton(
+                    icon: LucideIcons.keyRound,
+                    tooltip: 'Enable phone login for all families',
+                    onTap: _bulkEnablePhoneLogin,
+                  ),
             bottom: TextField(
               controller: _searchController,
               onChanged: _onQueryChanged,
@@ -125,6 +195,41 @@ class _FamilyFeesScreenState extends ConsumerState<FamilyFeesScreen> {
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+            child: Row(
+              children: [
+                Text('Fees', style: typography.bodySmallSemiBold.copyWith(color: colors.textSecondary)),
+                const Gap(10),
+                ...const [('All', 'all'), ('Pending', 'pending'), ('Paid', 'paid')].map((opt) {
+                  final sel = _status == opt.$2;
+                  final accent = opt.$2 == 'pending'
+                      ? Colors.red.shade600
+                      : opt.$2 == 'paid'
+                          ? Colors.green.shade600
+                          : colors.primary;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => _onStatusChanged(opt.$2),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: sel ? accent : Colors.transparent,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: sel ? accent : colors.border),
+                        ),
+                        child: Text(opt.$1,
+                            style: typography.bodySmallSemiBold.copyWith(
+                                color: sel ? Colors.white : colors.textSecondary)),
+                      ),
+                    ),
+                  );
+                }),
+              ],
             ),
           ),
           Expanded(
@@ -408,6 +513,43 @@ class _FamilyDetailScreenState extends ConsumerState<FamilyDetailScreen> {
     });
   }
 
+  Future<void> _manageParentLogin(FamilyDetail detail) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ParentLoginDialog(
+        familyKey: widget.familyKey,
+        guardianName: detail.guardianName,
+        defaultUsername: detail.parentContact.trim(),
+      ),
+    );
+  }
+
+  Future<void> _openChildCharge(FamilyChildDetail c) async {
+    final now = DateTime.now();
+    final labels = <String>{};
+    for (int i = -3; i <= 11; i++) {
+      labels.add(DateFormat('MMMM yyyy').format(DateTime(now.year, now.month + i, 1)));
+    }
+    final monthOptions = labels.toList()
+      ..sort((a, b) => DateFormat('MMMM yyyy').parse(a).compareTo(DateFormat('MMMM yyyy').parse(b)));
+    final current = DateFormat('MMMM yyyy').format(DateTime(now.year, now.month, 1));
+
+    final res = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => AddChargeDialog(
+        studentId: c.studentId,
+        monthOptions: monthOptions,
+        initialMonths: [current],
+      ),
+    );
+    if (res != null && mounted) {
+      ref.invalidate(familyDetailProvider(widget.familyKey));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${res['title']} added to ${c.fullName}')),
+      );
+    }
+  }
+
   Widget _buildContent(BuildContext context, FamilyDetail detail) {
     final colors = context.colors;
     final typography = context.typography;
@@ -426,6 +568,11 @@ class _FamilyDetailScreenState extends ConsumerState<FamilyDetailScreen> {
             icon: LucideIcons.arrowLeft,
             tooltip: 'Back',
             onTap: () => Navigator.of(context).maybePop(),
+          ),
+          trailing: AbmHeaderIconButton(
+            icon: LucideIcons.keyRound,
+            tooltip: 'Parent login',
+            onTap: () => _manageParentLogin(detail),
           ),
         ),
         Expanded(
@@ -695,7 +842,21 @@ class _FamilyDetailScreenState extends ConsumerState<FamilyDetailScreen> {
                 _breakdownPill(context, 'Advance credit', c.advanceBalance, Colors.green.shade600),
             ],
           ),
-          const Gap(12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _openChildCharge(c),
+              icon: const Icon(LucideIcons.plus, size: 15),
+              label: const Text('Add books / charge'),
+              style: TextButton.styleFrom(
+                foregroundColor: colors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+          const Gap(8),
           // Amount to collect — clearly labelled, with a one-tap "Full" fill.
           Row(
             children: [
@@ -834,7 +995,8 @@ class _FamilyInvoiceDialog extends StatelessWidget {
     final typography = context.typography;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Dialog(
+    return SelectionArea(
+      child: Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Container(
@@ -932,15 +1094,27 @@ class _FamilyInvoiceDialog extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Gap(12),
+                  const Gap(10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _printInvoice(),
+                      icon: const Icon(LucideIcons.printer, size: 16),
+                      label: const Text('Print'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const Gap(10),
                   Expanded(
                     flex: 2,
                     child: ElevatedButton.icon(
-                      onPressed: () => _printInvoice(),
-                      icon: const Icon(LucideIcons.printer, size: 16),
-                      label: const Text('Print Receipt'),
+                      onPressed: () => _sendWhatsApp(context),
+                      icon: const Icon(LucideIcons.messageCircle, size: 16),
+                      label: const Text('WhatsApp'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: colors.primary,
+                        backgroundColor: const Color(0xFF25D366),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -952,6 +1126,7 @@ class _FamilyInvoiceDialog extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -971,76 +1146,470 @@ class _FamilyInvoiceDialog extends StatelessWidget {
   }
 
   Future<void> _printInvoice() async {
+    await Printing.layoutPdf(onLayout: (_) => _buildPdf().save());
+  }
+
+  String _whatsAppMessage() {
+    final b = StringBuffer()
+      ..writeln('*Fee Receipt — Anas Bin Malik Madrasa*')
+      ..writeln('Receipt: #${receipt.receiptNumber}')
+      ..writeln('Guardian: ${receipt.guardianName}')
+      ..writeln('Date: ${DateFormat('dd MMM yyyy').format(receipt.paidOn)}')
+      ..writeln('');
+    for (final c in receipt.children) {
+      final tag = [c.classroom, c.monthLabel].where((s) => s.isNotEmpty).join(' • ');
+      b.writeln('• ${c.fullName}${tag.isNotEmpty ? ' ($tag)' : ''}: ${sar(c.amountPaid)}');
+    }
+    b
+      ..writeln('')
+      ..writeln('Total Paid: ${sar(receipt.totalCollected)}')
+      ..writeln('')
+      ..writeln('Thank you! May Allah bless you.');
+    return b.toString();
+  }
+
+  Future<void> _sendWhatsApp(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    // Capture the share-sheet anchor (iPad) synchronously, before any await.
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : const Rect.fromLTWH(0, 0, 100, 100);
+    final message = _whatsAppMessage();
+    final bytes = await _buildPdf().save();
+    final fname = 'receipt-${receipt.receiptNumber}.pdf';
+
+    if (!kIsWeb) {
+      // Mobile: one share-sheet action carrying BOTH the PDF (attached) and the
+      // receipt text (as caption). Staff pick the guardian's WhatsApp chat → the
+      // PDF and message go together. wa.me links can't attach files.
+      try {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$fname');
+        await file.writeAsBytes(bytes, flush: true);
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/pdf', name: fname)],
+          text: message,
+          sharePositionOrigin: origin,
+        );
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+      }
+      return;
+    }
+
+    // Web: download the PDF (staff attach it) then open the guardian's chat.
+    try {
+      await Printing.sharePdf(bytes: bytes, filename: fname);
+    } catch (_) {}
+    final ok = await WhatsAppService.send(receipt.parentContact, message);
+    if (!ok) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(receipt.parentContact.trim().isEmpty
+            ? 'No guardian number on file for this family.'
+            : 'Could not open WhatsApp for ${receipt.parentContact}.'),
+      ));
+    }
+  }
+
+  pw.Document _buildPdf() {
     final pdf = pw.Document();
+    final green = PdfColor.fromInt(0xFF1B3D2F);
+    final gold = PdfColor.fromInt(0xFFB8860B);
+    final softBg = PdfColor.fromInt(0xFFF4F6F3);
+    final dateStr = DateFormat('dd MMM yyyy').format(receipt.paidOn);
+
+    pw.Widget cell(String label, String value, {bool right = false}) => pw.Column(
+          crossAxisAlignment: right ? pw.CrossAxisAlignment.end : pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(label.toUpperCase(),
+                style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600, letterSpacing: 0.5)),
+            pw.SizedBox(height: 2),
+            pw.Text(value, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+          ],
+        );
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a5,
-        margin: const pw.EdgeInsets.all(28),
+        margin: pw.EdgeInsets.zero,
         build: (ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            pw.Center(
-              child: pw.Column(children: [
-                pw.Text('ANAS BIN MALIK MADRASA',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
-                pw.SizedBox(height: 4),
-                pw.Text('FAMILY FEE RECEIPT', style: pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
-              ]),
-            ),
-            pw.SizedBox(height: 14),
-            pw.Divider(),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Receipt #: ${receipt.receiptNumber}',
-                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                pw.Text('Date: ${DateFormat('dd MMM yyyy').format(receipt.paidOn)}',
-                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-              ],
-            ),
-            pw.SizedBox(height: 6),
-            pw.Text('Guardian: ${receipt.guardianName}', style: const pw.TextStyle(fontSize: 11)),
-            if (receipt.parentContact.isNotEmpty)
-              pw.Text('Contact: ${receipt.parentContact}', style: const pw.TextStyle(fontSize: 11)),
-            pw.SizedBox(height: 10),
-            pw.Divider(),
-            pw.SizedBox(height: 6),
-            pw.Text('Children', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-            pw.SizedBox(height: 6),
-            ...receipt.children.map((c) => pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 5),
-                  child: pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            pw.Container(
+              color: green,
+              padding: const pw.EdgeInsets.fromLTRB(28, 24, 28, 20),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Expanded(
-                        child: pw.Text('${c.fullName}  (${c.classroom} • ${c.monthLabel})',
-                            style: const pw.TextStyle(fontSize: 10)),
-                      ),
-                      pw.Text('SAR ${c.amountPaid.toStringAsFixed(0)}',
-                          style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text('ANAS BIN MALIK MADRASA',
+                          style: pw.TextStyle(color: PdfColors.white, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 3),
+                      pw.Text('FAMILY FEE RECEIPT', style: pw.TextStyle(color: gold, fontSize: 9, letterSpacing: 1.5)),
                     ],
                   ),
-                )),
-            pw.SizedBox(height: 8),
-            pw.Divider(thickness: 1.5),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Total Paid', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-                pw.Text('SAR ${receipt.totalCollected.toStringAsFixed(0)}',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-              ],
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: pw.BoxDecoration(color: PdfColor.fromInt(0xFF2E7D32), borderRadius: pw.BorderRadius.circular(4)),
+                    child: pw.Text('PAID',
+                        style: pw.TextStyle(color: PdfColors.white, fontSize: 11, fontWeight: pw.FontWeight.bold, letterSpacing: 1.5)),
+                  ),
+                ],
+              ),
             ),
-            pw.SizedBox(height: 16),
-            pw.Center(
-              child: pw.Text('Thank you! May Allah bless you.',
-                  style: pw.TextStyle(
-                      fontStyle: pw.FontStyle.italic, color: PdfColors.grey600, fontSize: 10)),
+            pw.Container(height: 3, color: gold),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(28),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                    cell('Receipt No.', receipt.receiptNumber),
+                    cell('Date', dateStr, right: true),
+                  ]),
+                  pw.SizedBox(height: 18),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(14),
+                    decoration: pw.BoxDecoration(color: softBg, borderRadius: pw.BorderRadius.circular(8)),
+                    child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                      pw.Text('BILLED TO',
+                          style: pw.TextStyle(fontSize: 7, color: green, letterSpacing: 0.8, fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 4),
+                      pw.Text(receipt.guardianName, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: green)),
+                      pw.SizedBox(height: 10),
+                      pw.Row(children: [
+                        pw.Expanded(
+                            child: receipt.parentContact.isNotEmpty
+                                ? cell('Contact', receipt.parentContact)
+                                : cell('Family', 'Sibling group')),
+                        pw.Expanded(child: cell('Children', '${receipt.children.length}', right: true)),
+                      ]),
+                    ]),
+                  ),
+                  pw.SizedBox(height: 18),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: pw.BoxDecoration(color: green, borderRadius: pw.BorderRadius.circular(4)),
+                    child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                      pw.Text('CHILD',
+                          style: pw.TextStyle(color: PdfColors.white, fontSize: 8, fontWeight: pw.FontWeight.bold, letterSpacing: 0.5)),
+                      pw.Text('AMOUNT',
+                          style: pw.TextStyle(color: PdfColors.white, fontSize: 8, fontWeight: pw.FontWeight.bold, letterSpacing: 0.5)),
+                    ]),
+                  ),
+                  ...receipt.children.asMap().entries.map((e) => pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        color: e.key.isEven ? PdfColors.white : softBg,
+                        child: pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Expanded(
+                              child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                                pw.Text(e.value.fullName, style: const pw.TextStyle(fontSize: 10)),
+                                pw.Text(
+                                    [e.value.classroom, e.value.monthLabel].where((s) => s.isNotEmpty).join('  •  '),
+                                    style: pw.TextStyle(fontSize: 7.5, color: PdfColors.grey600)),
+                              ]),
+                            ),
+                            pw.Text('SAR ${e.value.amountPaid.toStringAsFixed(0)}', style: const pw.TextStyle(fontSize: 10)),
+                          ],
+                        ),
+                      )),
+                  pw.SizedBox(height: 14),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: pw.BoxDecoration(color: green, borderRadius: pw.BorderRadius.circular(8)),
+                    child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+                      pw.Text('TOTAL PAID',
+                          style: pw.TextStyle(color: PdfColors.white, fontSize: 11, fontWeight: pw.FontWeight.bold, letterSpacing: 0.5)),
+                      pw.Text('SAR ${receipt.totalCollected.toStringAsFixed(0)}',
+                          style: pw.TextStyle(color: PdfColors.white, fontSize: 17, fontWeight: pw.FontWeight.bold)),
+                    ]),
+                  ),
+                  pw.SizedBox(height: 28),
+                  pw.Center(
+                    child: pw.Text('Thank you! May Allah bless you.',
+                        style: pw.TextStyle(fontStyle: pw.FontStyle.italic, color: green, fontSize: 10)),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Center(
+                    child: pw.Text('This is a computer-generated receipt and needs no signature.',
+                        style: pw.TextStyle(color: PdfColors.grey500, fontSize: 7)),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
     );
-    await Printing.layoutPdf(onLayout: (_) => pdf.save());
+    return pdf;
+  }
+}
+
+// ─── Parent login management (office) ────────────────────────────────────────
+class _ParentLoginDialog extends ConsumerStatefulWidget {
+  const _ParentLoginDialog({
+    required this.familyKey,
+    required this.guardianName,
+    required this.defaultUsername,
+  });
+  final String familyKey;
+  final String guardianName;
+  final String defaultUsername;
+
+  @override
+  ConsumerState<_ParentLoginDialog> createState() => _ParentLoginDialogState();
+}
+
+class _ParentLoginDialogState extends ConsumerState<_ParentLoginDialog> {
+  final _userCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  bool _loading = true, _saving = false, _obscure = true;
+  bool _phoneLogin = true; // passwordless (mobile-number) sign-in
+  FamilyLoginStatus? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _userCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final s = await ref.read(accountRepositoryProvider).getFamilyLogin(widget.familyKey);
+      if (!mounted) return;
+      setState(() {
+        _status = s;
+        _userCtrl.text = s.username ?? widget.defaultUsername;
+        _phoneLogin = s.hasLogin ? s.phoneLoginEnabled : true;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _userCtrl.text = widget.defaultUsername;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  void _snack(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+
+  Future<void> _save({required bool enabled}) async {
+    final hasLogin = _status?.hasLogin == true;
+    if (_userCtrl.text.trim().isEmpty) return _snack('Enter a username');
+    if (!hasLogin && !_phoneLogin && _passCtrl.text.trim().isEmpty) {
+      return _snack('Set a password, or turn on phone sign-in');
+    }
+    setState(() => _saving = true);
+    try {
+      final s = await ref.read(accountRepositoryProvider).setFamilyLogin(
+            widget.familyKey,
+            username: _userCtrl.text.trim(),
+            password: _passCtrl.text.trim(),
+            enabled: enabled,
+            phoneLogin: _phoneLogin,
+          );
+      if (!mounted) return;
+      setState(() {
+        _status = s;
+        _saving = false;
+      });
+      _snack(enabled ? 'Parent login saved' : 'Parent login disabled');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        _snack(friendlyErrorMessage(e));
+      }
+    }
+  }
+
+  Future<void> _remove() async {
+    setState(() => _saving = true);
+    try {
+      await ref.read(accountRepositoryProvider).deleteFamilyLogin(widget.familyKey);
+      if (!mounted) return;
+      setState(() {
+        _status = const FamilyLoginStatus(hasLogin: false, username: null, enabled: false);
+        _passCtrl.clear();
+        _saving = false;
+      });
+      _snack('Parent login removed');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        _snack(friendlyErrorMessage(e));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final t = context.typography;
+    final hasLogin = _status?.hasLogin == true;
+    final enabled = _status?.enabled == true;
+
+    return AlertDialog(
+      title: const Row(
+        children: [Icon(LucideIcons.keyRound, size: 18), Gap(8), Text('Parent Login')],
+      ),
+      content: SizedBox(
+        width: 400,
+        child: _loading
+            ? const Padding(padding: EdgeInsets.all(28), child: Center(child: CircularProgressIndicator()))
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'One login for ${widget.guardianName}\'s family — the parent sees all their children, attendance and fees, and gets absence & fee alerts.',
+                      style: t.bodySmall.copyWith(color: colors.textSecondary),
+                    ),
+                    const Gap(10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: colors.primary.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: SwitchListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        dense: true,
+                        value: _phoneLogin,
+                        onChanged: _saving ? null : (v) => setState(() => _phoneLogin = v),
+                        title: Text('Sign in with phone number',
+                            style: t.bodyMediumSemiBold.copyWith(color: colors.textPrimary)),
+                        subtitle: Text('Parent logs in with just their mobile — no password needed',
+                            style: t.bodySmall.copyWith(color: colors.textSecondary)),
+                      ),
+                    ),
+                    const Gap(12),
+                    if (hasLogin)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: (enabled ? colors.green : colors.warning).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(enabled ? LucideIcons.checkCircle2 : LucideIcons.pauseCircle,
+                                size: 16, color: enabled ? colors.green : colors.warning),
+                            const Gap(8),
+                            Text(enabled ? 'Login active' : 'Login disabled',
+                                style: t.bodySmallSemiBold.copyWith(color: colors.textPrimary)),
+                          ],
+                        ),
+                      ),
+                    TextField(
+                      controller: _userCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Username (usually the phone)',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        prefixIcon: Icon(LucideIcons.userCog, size: 18),
+                      ),
+                    ),
+                    const Gap(12),
+                    TextField(
+                      controller: _passCtrl,
+                      obscureText: _obscure,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: _phoneLogin
+                            ? 'Password (optional)'
+                            : (hasLogin ? 'New password (blank = keep current)' : 'Password'),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        prefixIcon: const Icon(LucideIcons.lock, size: 18),
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscure ? LucideIcons.eye : LucideIcons.eyeOff, size: 18),
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                        ),
+                      ),
+                    ),
+                    if (_phoneLogin)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.info, size: 14, color: colors.textSecondary),
+                            const Gap(6),
+                            Expanded(
+                              child: Text(
+                                'Parent signs in with just their mobile number — nothing to share.',
+                                style: t.bodySmall.copyWith(color: colors.textSecondary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (_passCtrl.text.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Share with parent — ${_userCtrl.text.trim()} / ${_passCtrl.text.trim()}',
+                                style: t.bodySmall.copyWith(color: colors.textSecondary),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(LucideIcons.copy, size: 16),
+                              tooltip: 'Copy',
+                              onPressed: () {
+                                Clipboard.setData(ClipboardData(
+                                    text: 'Username: ${_userCtrl.text.trim()}\nPassword: ${_passCtrl.text.trim()}'));
+                                _snack('Credentials copied');
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+      ),
+      actions: [
+        if (hasLogin)
+          TextButton(
+            onPressed: _saving ? null : _remove,
+            child: Text('Remove', style: TextStyle(color: Colors.red.shade600)),
+          ),
+        if (hasLogin)
+          TextButton(
+            onPressed: _saving ? null : () => _save(enabled: !enabled),
+            child: Text(enabled ? 'Disable' : 'Enable'),
+          ),
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : () => _save(enabled: true),
+          child: _saving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : Text(hasLogin ? 'Update' : 'Create login'),
+        ),
+      ],
+    );
   }
 }

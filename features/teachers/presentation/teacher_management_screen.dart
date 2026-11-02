@@ -85,9 +85,16 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
 
     return Scaffold(
       backgroundColor: colors.background,
-      body: Padding(
-        padding: EdgeInsets.all(context.isMobile ? 16 : 24),
-        child: teachersAsync.when(
+      body: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            context.isMobile ? 16 : 24,
+            context.isMobile ? 8 : 24,
+            context.isMobile ? 16 : 24,
+            0,
+          ),
+          child: teachersAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('Failed to load teachers. ${friendlyErrorMessage(error)}')),
           data: (dir) {
@@ -148,6 +155,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
                   const Gap(16),
                   Expanded(
                     child: ListView(
+                      padding: EdgeInsets.only(bottom: context.isMobile ? 100 : 16),
                       children: [
                         // Use constrained box so the directory has a sensible
                         // height range on mobile — not a fixed 360px.
@@ -243,6 +251,7 @@ class _TeacherManagementScreenState extends ConsumerState<TeacherManagementScree
             );
           },
         ),
+      ),
       ),
     );
   }
@@ -384,7 +393,10 @@ class _TeacherScreenHeader extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          intro,
+          Padding(
+            padding: const EdgeInsets.only(left: 48, right: 96),
+            child: intro,
+          ),
           const Gap(16),
           search,
           const Gap(12),
@@ -430,7 +442,7 @@ class _TeacherScreenHeader extends StatelessWidget {
             tooltip: 'Export PDF',
           ),
         ],
-        const Gap(88),
+        const Gap(152),
       ],
     );
   }
@@ -859,6 +871,25 @@ class _TeacherTile extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (teacher.isHeadMaster) ...[
+                        const Gap(6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD6B64C).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: const Color(0xFFD6B64C).withValues(alpha: 0.6)),
+                          ),
+                          child: const Text(
+                            'Head Master',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF9E7C10),
+                            ),
+                          ),
+                        ),
+                      ],
                       if (!teacher.isActive)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -1649,6 +1680,7 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
   bool _isActive = true;
   bool _shift1 = false;
   bool _shift2 = false;
+  String _teacherType = 'Teacher';
   bool _isSaving = false;
   Uint8List? _pickedImageBytes;
   String? _pickedImageName;
@@ -1669,6 +1701,7 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
       _emailController.text = teacher.email;
       _specialtyController.text = teacher.specialty;
       _salaryController.text = teacher.monthlySalary.toStringAsFixed(0);
+      _teacherType = teacher.teacherType;
       
       _fullPhone = teacher.phone;
       _fullWhatsapp = teacher.whatsappNumber ?? '';
@@ -1834,6 +1867,20 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
         controller: _titleController,
         validator: (value) =>
             (value == null || value.trim().isEmpty) ? 'Title is required' : null,
+      ),
+      DropdownButtonFormField<String>(
+        initialValue: _teacherType,
+        decoration: InputDecoration(
+          labelText: 'Teacher Type / Role',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        items: const [
+          DropdownMenuItem(value: 'Teacher', child: Text('Teacher')),
+          DropdownMenuItem(value: 'Head Master', child: Text('Head Master')),
+        ],
+        onChanged: (val) {
+          if (val != null) setState(() => _teacherType = val);
+        },
       ),
       IntlPhoneField(
         initialCountryCode: _phoneCountryCode,
@@ -2074,6 +2121,7 @@ class _TeacherFormDialogState extends ConsumerState<_TeacherFormDialog> {
         qualificationIslamic: _qualificationIslamicController.text.trim(),
         qualificationAcademics: _qualificationAcademicsController.text.trim(),
         shift: shiftList,
+        teacherType: _teacherType,
       );
 
       if (_isEdit) {

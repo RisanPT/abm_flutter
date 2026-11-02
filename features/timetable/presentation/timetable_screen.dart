@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/widgets/classroom_subjects_dialog.dart';
+import 'package:abm_madrasa/features/students/domain/classroom_model.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
@@ -104,25 +105,6 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ── Shift Tabs ────────────────────────────────────
-                          Container(
-                            decoration: BoxDecoration(
-                              color: colors.white.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.all(4),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _buildShiftTab('Shift-1', colors),
-                                ),
-                                Expanded(
-                                  child: _buildShiftTab('Shift-2', colors),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Gap(16),
                           // ── Title + Actions ───────────────────────────────
                           Builder(builder: (context) {
                             final titleCol = Column(
@@ -130,7 +112,10 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                               children: [
                                 Text(
                                   'Timetable — ${DateFormat('MMMM yyyy').format(_focusedMonth)}',
-                                  style: typography.h2.copyWith(color: colors.white),
+                                  style: typography.h2.copyWith(
+                                    color: colors.white,
+                                    fontSize: context.isMobile ? 20 : null,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -163,14 +148,10 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                               label: const Text('Shift Planner'),
                             );
                             final subjBtn = ElevatedButton.icon(
-                              onPressed: _selectedClass == 'All Classes'
-                                  ? null
-                                  : () => _showSubjectDialog(context, data),
+                              onPressed: () => _openDefineSubjectsPicker(context, data),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: colors.white.withValues(alpha: 0.2),
                                 foregroundColor: colors.white,
-                                disabledBackgroundColor: colors.white.withValues(alpha: 0.08),
-                                disabledForegroundColor: colors.white.withValues(alpha: 0.4),
                               ),
                               icon: const Icon(LucideIcons.listTodo, size: 18),
                               label: const Text('Define Subjects'),
@@ -180,8 +161,11 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  titleCol,
-                                  const Gap(12),
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 48, right: 96),
+                                    child: titleCol,
+                                  ),
+                                  const Gap(14),
                                   Wrap(spacing: 8, runSpacing: 8, children: actions),
                                 ],
                               );
@@ -193,12 +177,29 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                                   if (i > 0) const Gap(10),
                                   actions[i],
                                 ],
-                                // Reserve space for shell's top-right buttons only
-                                // on non-mobile — they overlay independently on mobile.
-                                if (!context.isMobile) const Gap(88),
+                                const Gap(152),
                               ],
                             );
                           }),
+                          const Gap(16),
+                          // ── Shift Tabs ────────────────────────────────────
+                          Container(
+                            decoration: BoxDecoration(
+                              color: colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _buildShiftTab('Shift-1', colors),
+                                ),
+                                Expanded(
+                                  child: _buildShiftTab('Shift-2', colors),
+                                ),
+                              ],
+                            ),
+                          ),
                           const Gap(16),
                           // ── Month Navigation ──────────────────────────────
                           Wrap(
@@ -309,7 +310,12 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.fromLTRB(
+                  context.isMobile ? 16 : 24,
+                  context.isMobile ? 16 : 24,
+                  context.isMobile ? 16 : 24,
+                  context.isMobile ? 100 : 24,
+                ),
                 sliver: SliverToBoxAdapter(
                   child: context.isDesktop
                       ? Row(
@@ -401,10 +407,59 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
     );
   }
 
-  void _showSubjectDialog(BuildContext context, TimetableData data) {
-    final classroom = data.allClassrooms.firstWhere(
-      (c) => c.name == _selectedClass,
+  void _openDefineSubjectsPicker(BuildContext context, TimetableData data) {
+    if (data.allClassrooms.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No classrooms found for this institute.')),
+      );
+      return;
+    }
+
+    if (_selectedClass != 'All Classes') {
+      final classroom = data.allClassrooms.firstWhere(
+        (c) => c.name == _selectedClass,
+        orElse: () => data.allClassrooms.first,
+      );
+      _openSubjectsForClassroom(context, classroom);
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Define Subjects - Select Class'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: data.allClassrooms.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (ctx, index) {
+              final c = data.allClassrooms[index];
+              return ListTile(
+                leading: const Icon(LucideIcons.bookOpen, size: 20),
+                title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text('${c.subjects.length} subjects defined'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() => _selectedClass = c.name);
+                  _openSubjectsForClassroom(context, c);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
     );
+  }
+
+  void _openSubjectsForClassroom(BuildContext context, ClassroomModel classroom) {
     showDialog(
       context: context,
       builder: (context) => ClassroomSubjectsDialog(classroom: classroom),

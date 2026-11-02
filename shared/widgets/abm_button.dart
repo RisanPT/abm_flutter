@@ -10,6 +10,11 @@ class ABMButton extends StatelessWidget {
   final Color? foregroundColor;
   final IconData? icon;
 
+  final double? height;
+  final double? fontSize;
+  final double? iconSize;
+  final EdgeInsetsGeometry? padding;
+
   const ABMButton({
     super.key,
     required this.text,
@@ -19,6 +24,10 @@ class ABMButton extends StatelessWidget {
     this.color,
     this.foregroundColor,
     this.icon,
+    this.height,
+    this.fontSize,
+    this.iconSize,
+    this.padding,
   });
 
   @override
@@ -31,12 +40,13 @@ class ABMButton extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      height: 56,
+      height: height ?? 56,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: bg,
           foregroundColor: fg,
+          padding: padding,
           side: isSecondary ? BorderSide(color: colors.primary) : null,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -44,19 +54,35 @@ class ABMButton extends StatelessWidget {
           elevation: isSecondary ? 0 : 4,
         ),
         child: isLoading
-            ? Center(child: CircularProgressIndicator(color: fg))
+            ? Center(
+                child: SizedBox(
+                  width: (height != null && height! < 48) ? 20 : 24,
+                  height: (height != null && height! < 48) ? 20 : 24,
+                  child: CircularProgressIndicator(color: fg, strokeWidth: 2.5),
+                ),
+              )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   if (icon != null) ...[
-                    Icon(icon, size: 20),
+                    Icon(icon, size: iconSize ?? 18),
                     const SizedBox(width: 8),
                   ],
-                  Text(
-                    text,
-                    style: typography.bodyLarge.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: fg,
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        text,
+                        maxLines: 1,
+                        style: (fontSize != null
+                                ? typography.bodyMedium.copyWith(fontSize: fontSize)
+                                : typography.bodyLarge)
+                            .copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: fg,
+                        ),
+                      ),
                     ),
                   ),
                 ],

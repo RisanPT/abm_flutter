@@ -7,20 +7,22 @@ final homeworkRepositoryProvider =
     Provider<HomeworkRepository>((ref) => HomeworkRepository(ref.watch(dioProvider)));
 
 class HomeworkQuery {
-  const HomeworkQuery({this.classroom, this.page = 1, this.mine = false});
+  const HomeworkQuery({this.classroom, this.page = 1, this.mine = false, this.instituteId});
   final String? classroom;
   final int page;
   final bool mine;
+  final String? instituteId;
 
   @override
   bool operator ==(Object other) =>
       other is HomeworkQuery &&
       classroom == other.classroom &&
       page == other.page &&
-      mine == other.mine;
+      mine == other.mine &&
+      instituteId == other.instituteId;
 
   @override
-  int get hashCode => Object.hash(classroom, page, mine);
+  int get hashCode => Object.hash(classroom, page, mine, instituteId);
 }
 
 /// Paginated homework list, keyed by classroom & page.
@@ -30,6 +32,7 @@ final homeworkPageProvider =
         classroom: (q.classroom?.isEmpty ?? true) ? null : q.classroom,
         page: q.page,
         mine: q.mine,
+        instituteId: q.instituteId,
       );
 });
 
@@ -90,10 +93,11 @@ class HomeworkRepository {
   HomeworkRepository(this._dio);
   final Dio _dio;
 
-  Future<List<Homework>> getHomework({String? classroom, bool mine = false}) async {
+  Future<List<Homework>> getHomework({String? classroom, bool mine = false, String? instituteId}) async {
     final r = await _dio.get('/homework', queryParameters: {
       if (classroom != null && classroom.isNotEmpty) 'classroom': classroom,
       if (mine) 'mine': 'true',
+      'instituteId': ?instituteId,
     });
     return (r.data as List).map((e) => Homework.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
@@ -103,10 +107,12 @@ class HomeworkRepository {
     bool mine = false,
     required int page,
     int limit = 20,
+    String? instituteId,
   }) async {
     final r = await _dio.get('/homework', queryParameters: {
       if (classroom != null && classroom.isNotEmpty) 'classroom': classroom,
       if (mine) 'mine': 'true',
+      'instituteId': ?instituteId,
       'page': page,
       'limit': limit,
     });
@@ -123,6 +129,7 @@ class HomeworkRepository {
     String description = '',
     DateTime? dueDate,
     String? attachment,
+    String? instituteId,
   }) async {
     await _dio.post('/homework', data: {
       'classroom': classroom,
@@ -131,6 +138,7 @@ class HomeworkRepository {
       'description': description,
       if (dueDate != null) 'dueDate': dueDate.toIso8601String(),
       if (attachment != null && attachment.isNotEmpty) 'attachment': attachment,
+      'instituteId': ?instituteId,
     });
   }
 

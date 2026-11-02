@@ -99,7 +99,7 @@ Widget _historyList(BuildContext context, HifzHistory h, {required String ownerL
     );
   }
   return ListView(
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+    padding: EdgeInsets.fromLTRB(16, 12, 16, context.isMobile ? 100 : 32),
     children: [
       _ProgressCard(history: h),
       const Gap(16),
@@ -143,7 +143,7 @@ class _ProgressCard extends StatelessWidget {
           Row(
             children: [
               Expanded(child: _stat(context, '${history.daysLogged}', 'Days logged')),
-              Expanded(child: _stat(context, last?.sabaqLabel ?? '—', 'Latest Sabaq')),
+              Expanded(child: _stat(context, last?.sabaqLabel ?? '—', 'Latest Hifz')),
             ],
           ),
           if (last?.quality.isNotEmpty == true) ...[
@@ -211,10 +211,10 @@ class _HifzEntryCard extends StatelessWidget {
                 AbmStatusPill(label: record.quality, color: qualityColor(context, record.quality)),
             ],
           ),
-          line('Sabaq', record.sabaqLabel == '—' ? '' : record.sabaqLabel),
-          line('Sabqi', record.sabqi),
-          line('Manzil', record.manzil),
+          line('Hifz', record.sabaqLabel == '—' ? '' : record.sabaqLabel),
+          line("Muraja'ah", record.murajaLabel == '—' ? '' : record.murajaLabel),
           line('Notes', record.notes),
+          line('Remarks', record.lastRemarks),
         ],
       ),
     );
@@ -261,7 +261,7 @@ class _TeacherHifzViewState extends ConsumerState<_TeacherHifzView> {
         children: [
           ABMPageHeader(
             title: 'Hifz Tracker',
-            subtitle: 'Log daily Sabaq · Sabqi · Manzil',
+            subtitle: "Log daily Hifz and Muraja'ah",
             showBackButton: false,
             compact: true,
             actions: [
@@ -780,16 +780,14 @@ class _RosterRow extends StatelessWidget {
                                   const Icon(LucideIcons.bookOpen, size: 11, color: Color(0xFF047857)),
                                   const Gap(4),
                                   Text(
-                                    record!.sabaqLabel == '—' ? 'Sabaq recorded' : record!.sabaqLabel,
+                                    record!.sabaqLabel == '—' ? 'Entry recorded' : record!.sabaqLabel,
                                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF047857)),
                                   ),
                                 ],
                               ),
                             ),
-                            if (record!.sabqi.isNotEmpty)
-                              Text('Sabqi: ${record!.sabqi}', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
-                            if (record!.manzil.isNotEmpty)
-                              Text('· Manzil: ${record!.manzil}', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                            if (record!.murajaLabel != '—')
+                              Text("Muraja'ah: ${record!.murajaLabel}", style: typography.bodySmall.copyWith(color: colors.textSecondary)),
                           ],
                         ),
                       ] else ...[
@@ -829,7 +827,7 @@ class _RosterRow extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: onTap,
                     icon: const Icon(LucideIcons.plus, size: 14),
-                    label: const Text('Log Sabaq', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    label: const Text('Log entry', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       visualDensity: VisualDensity.compact,
@@ -858,10 +856,15 @@ class _HifzLogSheetState extends ConsumerState<_HifzLogSheet> {
   late final _surah = TextEditingController(text: widget.existing?.sabaqSurah ?? '');
   late final _from = TextEditingController(text: widget.existing?.sabaqFrom ?? '');
   late final _to = TextEditingController(text: widget.existing?.sabaqTo ?? '');
+  late final _mSurah = TextEditingController(text: widget.existing?.murajaSurah ?? '');
+  late final _mFrom = TextEditingController(text: widget.existing?.murajaFrom ?? '');
+  late final _mTo = TextEditingController(text: widget.existing?.murajaTo ?? '');
   late final _sabqi = TextEditingController(text: widget.existing?.sabqi ?? '');
   late final _manzil = TextEditingController(text: widget.existing?.manzil ?? '');
   late final _notes = TextEditingController(text: widget.existing?.notes ?? '');
+  late final _remarks = TextEditingController(text: widget.existing?.lastRemarks ?? '');
   late String _quality = widget.existing?.quality ?? '';
+  late String _mQuality = widget.existing?.murajaQuality ?? '';
   bool _saving = false;
 
   @override
@@ -869,10 +872,33 @@ class _HifzLogSheetState extends ConsumerState<_HifzLogSheet> {
     _surah.dispose();
     _from.dispose();
     _to.dispose();
+    _mSurah.dispose();
+    _mFrom.dispose();
+    _mTo.dispose();
     _sabqi.dispose();
     _manzil.dispose();
     _notes.dispose();
+    _remarks.dispose();
     super.dispose();
+  }
+
+  // Taqdeer (التقدير) chips, reused for Hifz and Muraja'ah.
+  Widget _taqdeerChips(String current, ValueChanged<String> onPick) {
+    final colors = context.colors;
+    return Wrap(
+      spacing: 8,
+      children: _qualityOptions.map((q) {
+        final sel = current == q;
+        final c = qualityColor(context, q);
+        return ChoiceChip(
+          label: Text(q),
+          selected: sel,
+          onSelected: (_) => onPick(sel ? '' : q),
+          selectedColor: c.withValues(alpha: 0.15),
+          labelStyle: TextStyle(color: sel ? c : colors.textSecondary, fontWeight: sel ? FontWeight.w700 : FontWeight.normal),
+        );
+      }).toList(),
+    );
   }
 
   Future<void> _save() async {
@@ -884,10 +910,15 @@ class _HifzLogSheetState extends ConsumerState<_HifzLogSheet> {
             sabaqSurah: _surah.text.trim(),
             sabaqFrom: _from.text.trim(),
             sabaqTo: _to.text.trim(),
+            murajaSurah: _mSurah.text.trim(),
+            murajaFrom: _mFrom.text.trim(),
+            murajaTo: _mTo.text.trim(),
+            murajaQuality: _mQuality,
             sabqi: _sabqi.text.trim(),
             manzil: _manzil.text.trim(),
             quality: _quality,
             notes: _notes.text.trim(),
+            lastRemarks: _remarks.text.trim(),
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -903,7 +934,7 @@ class _HifzLogSheetState extends ConsumerState<_HifzLogSheet> {
     final colors = context.colors;
     return Padding(
       padding: EdgeInsets.only(
-        left: 16, right: 16, top: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
+        left: 16, right: 16, top: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 16 + MediaQuery.paddingOf(context).bottom),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -912,40 +943,60 @@ class _HifzLogSheetState extends ConsumerState<_HifzLogSheet> {
             Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(
                 color: colors.border, borderRadius: BorderRadius.circular(2)))),
             const Gap(14),
-            Text("Today's Hifz — ${widget.student.fullName}", style: context.typography.h4),
-            const Gap(4),
-            Text('Sabaq (new lesson)', style: context.typography.bodyMediumSemiBold.copyWith(color: colors.primary)),
+            Text("Today's entry — ${widget.student.fullName}", style: context.typography.h4),
+            const Gap(14),
+
+            // ── Hifz (new memorization) ──────────────────────────────────────
+            Text('الحفظ · New memorization', style: context.typography.bodyMediumSemiBold.copyWith(color: colors.primary)),
             const Gap(8),
             ABMTextField(label: 'Surah', hint: 'e.g. Al-Baqarah', controller: _surah),
             const Gap(10),
             Row(children: [
-              Expanded(child: ABMTextField(label: 'From', hint: 'ayah/line', controller: _from)),
+              Expanded(child: ABMTextField(label: 'From ayah', hint: 'e.g. 1', controller: _from)),
               const Gap(10),
-              Expanded(child: ABMTextField(label: 'To', hint: 'ayah/line', controller: _to)),
+              Expanded(child: ABMTextField(label: 'To ayah', hint: 'e.g. 20', controller: _to)),
             ]),
-            const Gap(14),
-            ABMTextField(label: 'Sabqi (recent revision)', hint: 'e.g. Juz 3–4', controller: _sabqi),
             const Gap(10),
-            ABMTextField(label: 'Manzil (old revision)', hint: 'e.g. Juz 1–2', controller: _manzil),
-            const Gap(14),
-            Text('Quality', style: context.typography.bodyMediumSemiBold),
+            Text('Taqdeer (grade)', style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+            const Gap(6),
+            _taqdeerChips(_quality, (v) => setState(() => _quality = v)),
+            const Gap(16),
+
+            // ── Muraja'ah (revision) — now structured, not just a Juz ─────────
+            Text("المراجعة · Revision", style: context.typography.bodyMediumSemiBold.copyWith(color: colors.primary)),
             const Gap(8),
-            Wrap(
-              spacing: 8,
-              children: _qualityOptions.map((q) {
-                final sel = _quality == q;
-                final c = qualityColor(context, q);
-                return ChoiceChip(
-                  label: Text(q),
-                  selected: sel,
-                  onSelected: (_) => setState(() => _quality = sel ? '' : q),
-                  selectedColor: c.withValues(alpha: 0.15),
-                  labelStyle: TextStyle(color: sel ? c : colors.textSecondary, fontWeight: sel ? FontWeight.w700 : FontWeight.normal),
-                );
-              }).toList(),
+            ABMTextField(label: 'Surah', hint: 'e.g. Al-Baqarah', controller: _mSurah),
+            const Gap(10),
+            Row(children: [
+              Expanded(child: ABMTextField(label: 'From ayah', hint: 'e.g. 1', controller: _mFrom)),
+              const Gap(10),
+              Expanded(child: ABMTextField(label: 'To ayah', hint: 'e.g. 48', controller: _mTo)),
+            ]),
+            const Gap(10),
+            Text('Taqdeer (grade)', style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+            const Gap(6),
+            _taqdeerChips(_mQuality, (v) => setState(() => _mQuality = v)),
+            const Gap(8),
+
+            // Legacy Juz-style revision, optional and collapsed by default.
+            Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: 8),
+                title: Text('Juz-style revision (optional)',
+                    style: context.typography.bodySmall.copyWith(color: colors.textSecondary)),
+                children: [
+                  ABMTextField(label: 'Sabqi (recent)', hint: 'e.g. Juz 3–4', controller: _sabqi),
+                  const Gap(10),
+                  ABMTextField(label: 'Manzil (old)', hint: 'e.g. Juz 1–2', controller: _manzil),
+                ],
+              ),
             ),
-            const Gap(14),
-            ABMTextField(label: 'Notes (optional)', hint: 'Any remarks…', controller: _notes, maxLines: 2),
+            const Gap(8),
+            ABMTextField(label: 'Notes', hint: 'e.g. absent, needs repeat…', controller: _notes, maxLines: 2),
+            const Gap(10),
+            ABMTextField(label: 'Last remarks', hint: 'Closing remarks for the day…', controller: _remarks, maxLines: 2),
             const Gap(20),
             ABMButton(text: 'Save entry', isLoading: _saving, onPressed: _save),
             const Gap(8),

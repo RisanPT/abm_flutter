@@ -119,43 +119,94 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 orElse: () => 'Manage all enrolled students',
               ),
               showBackButton: false,
-              actions: [
-                Container(
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: IconButton(
-                    icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 20),
-                    tooltip: 'Refresh',
-                    onPressed: () => ref.read(studentControllerProvider.notifier).refresh(),
-                  ),
-                ),
-                const Gap(8),
-                Container(
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: IconButton(
-                    icon: const Icon(LucideIcons.table, color: Colors.white, size: 20),
-                    tooltip: 'Bulk Add / Import CSV',
-                    onPressed: () => context.push(RouteNames.bulkAddStudents),
-                  ),
-                ),
-                const Gap(8),
-                Container(
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: IconButton(
-                    icon: const Icon(LucideIcons.arrowUpCircle, color: Colors.white, size: 20),
-                    tooltip: 'Promote Eligible Students',
-                    onPressed: () => _handlePromoteStudents(context),
-                  ),
-                ),
-                const Gap(8),
-                Container(
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: IconButton(
-                    icon: const Icon(LucideIcons.download, color: Colors.white, size: 20),
-                    onPressed: _handleExportPdf,
-                    tooltip: 'Export PDF (all)',
-                  ),
-                ),
-              ],
+              actions: context.isMobile
+                  ? [
+                      Container(
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 20),
+                          tooltip: 'Refresh',
+                          onPressed: () => ref.read(studentControllerProvider.notifier).refresh(),
+                        ),
+                      ),
+                      const Gap(6),
+                      Container(
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        child: PopupMenuButton<String>(
+                          icon: const Icon(LucideIcons.moreVertical, color: Colors.white, size: 20),
+                          tooltip: 'More actions',
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          onSelected: (val) {
+                            if (val == 'bulk') context.push(RouteNames.bulkAddStudents);
+                            if (val == 'promote') _handlePromoteStudents(context);
+                            if (val == 'export') _handleExportPdf();
+                          },
+                          itemBuilder: (ctx) => [
+                            const PopupMenuItem(
+                              value: 'bulk',
+                              child: Row(children: [
+                                Icon(LucideIcons.table, size: 18, color: Color(0xFF163D32)),
+                                Gap(10),
+                                Text('Bulk Import CSV'),
+                              ]),
+                            ),
+                            const PopupMenuItem(
+                              value: 'promote',
+                              child: Row(children: [
+                                Icon(LucideIcons.arrowUpCircle, size: 18, color: Color(0xFF163D32)),
+                                Gap(10),
+                                Text('Promote Students'),
+                              ]),
+                            ),
+                            const PopupMenuItem(
+                              value: 'export',
+                              child: Row(children: [
+                                Icon(LucideIcons.download, size: 18, color: Color(0xFF163D32)),
+                                Gap(10),
+                                Text('Export Directory PDF'),
+                              ]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ]
+                  : [
+                      Container(
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.refreshCw, color: Colors.white, size: 20),
+                          tooltip: 'Refresh',
+                          onPressed: () => ref.read(studentControllerProvider.notifier).refresh(),
+                        ),
+                      ),
+                      const Gap(8),
+                      Container(
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.table, color: Colors.white, size: 20),
+                          tooltip: 'Bulk Add / Import CSV',
+                          onPressed: () => context.push(RouteNames.bulkAddStudents),
+                        ),
+                      ),
+                      const Gap(8),
+                      Container(
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.arrowUpCircle, color: Colors.white, size: 20),
+                          tooltip: 'Promote Eligible Students',
+                          onPressed: () => _handlePromoteStudents(context),
+                        ),
+                      ),
+                      const Gap(8),
+                      Container(
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        child: IconButton(
+                          icon: const Icon(LucideIcons.download, color: Colors.white, size: 20),
+                          onPressed: _handleExportPdf,
+                          tooltip: 'Export PDF (all)',
+                        ),
+                      ),
+                    ],
               bottomChild: StudentSearchField(
                 onChanged: (val) => ref.read(studentControllerProvider.notifier).search(val),
               ),
@@ -166,12 +217,20 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
         ],
       ),
       bottomNavigationBar: _buildPaginationFooter(context, studentsAsync),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(RouteNames.addStudent),
-        backgroundColor: colors.primary,
-        icon: const Icon(LucideIcons.plus, color: Colors.white),
-        label: const Text('Add Student', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
+      floatingActionButton: context.isMobile
+          ? FloatingActionButton(
+              heroTag: 'addStudentFab',
+              onPressed: () => context.push(RouteNames.addStudent),
+              backgroundColor: colors.primary,
+              child: const Icon(LucideIcons.plus, color: Colors.white),
+            )
+          : FloatingActionButton.extended(
+              heroTag: 'addStudentFab',
+              onPressed: () => context.push(RouteNames.addStudent),
+              backgroundColor: colors.primary,
+              icon: const Icon(LucideIcons.plus, color: Colors.white),
+              label: const Text('Add Student', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
     );
   }
 
@@ -188,16 +247,17 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if (confirmed == true && context.mounted) {
+      final messenger = ScaffoldMessenger.of(context);
       try {
         final count = await ref.read(studentRepositoryProvider).promoteStudents();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Successfully promoted $count students.')));
+          messenger.showSnackBar(SnackBar(content: Text('Successfully promoted $count students.')));
           ref.read(studentControllerProvider.notifier).refresh();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+          messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
         }
       }
     }
@@ -397,7 +457,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
               ),
             ),
             // Space so the last row clears the sticky footer + FAB.
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            SliverToBoxAdapter(child: SizedBox(height: context.isMobile ? 88 : 24)),
           ],
         );
       },

@@ -60,6 +60,7 @@ class TeacherModel {
     this.qualificationIslamic,
     this.qualificationAcademics,
     this.shift = const [],
+    this.teacherType = 'Teacher',
   });
 
   final String id;
@@ -84,6 +85,7 @@ class TeacherModel {
   final String? qualificationIslamic;
   final String? qualificationAcademics;
   final List<String> shift;
+  final String teacherType;
 
   factory TeacherModel.fromJson(Map<String, dynamic> json) {
     return TeacherModel(
@@ -118,6 +120,7 @@ class TeacherModel {
       shift: (json['shift'] as List<dynamic>? ?? const [])
           .map((item) => item.toString())
           .toList(),
+      teacherType: json['teacherType'] as String? ?? 'Teacher',
     );
   }
 
@@ -144,7 +147,10 @@ class TeacherModel {
         'qualificationIslamic': qualificationIslamic,
         'qualificationAcademics': qualificationAcademics,
         'shift': shift,
+        'teacherType': teacherType,
       };
+
+  bool get isHeadMaster => teacherType == 'Head Master' || title.toLowerCase().contains('head master');
 
   bool get hasShift1 => shift.any((s) {
         final clean = s.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');

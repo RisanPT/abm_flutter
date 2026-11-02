@@ -1,4 +1,5 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -6,30 +7,36 @@ import 'package:lucide_icons/lucide_icons.dart';
 class ClassroomCard extends StatelessWidget {
   final String title;
   final int studentCount;
+  final int booksCount;
+  final double booksTotalValue;
   final String? shift;
   final VoidCallback onViewStudents;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onManageSubjects;
   final VoidCallback? onManageTimetable;
+  final VoidCallback? onViewBooks;
 
   const ClassroomCard({
     super.key,
     required this.title,
     required this.studentCount,
+    this.booksCount = 0,
+    this.booksTotalValue = 0.0,
     this.shift,
     required this.onViewStudents,
     this.onEdit,
     this.onDelete,
     this.onManageSubjects,
     this.onManageTimetable,
+    this.onViewBooks,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
-    final hasMenu = onEdit != null || onDelete != null || onManageSubjects != null || onManageTimetable != null;
+    final hasMenu = onEdit != null || onDelete != null || onManageSubjects != null || onManageTimetable != null || onViewBooks != null;
     // Colour-code by shift so sections group visually at a glance.
     final accent = (shift == 'Shift-2') ? colors.secondary : colors.primary;
 
@@ -87,6 +94,8 @@ class ClassroomCard extends StatelessWidget {
                               icon: Icon(LucideIcons.moreVertical, size: 18, color: colors.textSecondary),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               itemBuilder: (context) => [
+                                if (onViewBooks != null)
+                                  const PopupMenuItem(value: 'books', child: _MenuRow(icon: LucideIcons.book, label: 'Curriculum Books')),
                                 if (onEdit != null)
                                   const PopupMenuItem(value: 'edit', child: _MenuRow(icon: LucideIcons.pencil, label: 'Rename')),
                                 if (onManageSubjects != null)
@@ -97,6 +106,7 @@ class ClassroomCard extends StatelessWidget {
                                   const PopupMenuItem(value: 'delete', child: _MenuRow(icon: LucideIcons.trash2, label: 'Delete', danger: true)),
                               ],
                               onSelected: (val) {
+                                if (val == 'books') onViewBooks?.call();
                                 if (val == 'edit') onEdit?.call();
                                 if (val == 'subjects') onManageSubjects?.call();
                                 if (val == 'timetable') onManageTimetable?.call();
@@ -137,6 +147,23 @@ class ClassroomCard extends StatelessWidget {
                         ],
                       ],
                     ),
+                    if (booksCount > 0) ...[
+                      const Gap(6),
+                      InkWell(
+                        onTap: onViewBooks,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.book, size: 13, color: colors.primary),
+                            const Gap(5),
+                            Text(
+                              '$booksCount Books (${sar(booksTotalValue)})',
+                              style: typography.bodySmall.copyWith(color: colors.primary, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 // Bottom: view students action.

@@ -8,16 +8,20 @@ final examRepositoryProvider =
     Provider<ExamRepository>((ref) => ExamRepository(ref.watch(dioProvider)));
 
 class ExamQuery {
-  const ExamQuery({this.classroom, this.page = 1});
+  const ExamQuery({this.classroom, this.shift, this.page = 1});
   final String? classroom;
+  final String? shift;
   final int page;
 
   @override
   bool operator ==(Object other) =>
-      other is ExamQuery && classroom == other.classroom && page == other.page;
+      other is ExamQuery &&
+      classroom == other.classroom &&
+      shift == other.shift &&
+      page == other.page;
 
   @override
-  int get hashCode => Object.hash(classroom, page);
+  int get hashCode => Object.hash(classroom, shift, page);
 }
 
 final examsPageProvider =
@@ -25,6 +29,7 @@ final examsPageProvider =
   ref.watch(selectedInstituteProvider);
   return ref.read(examRepositoryProvider).getExamsPage(
         classroom: (q.classroom == null || q.classroom == 'All' || q.classroom!.isEmpty) ? null : q.classroom,
+        shift: (q.shift == null || q.shift == 'All' || q.shift!.isEmpty) ? null : q.shift,
         page: q.page,
       );
 });
@@ -41,12 +46,21 @@ final myResultsProvider =
     FutureProvider.autoDispose<List<ExamResult>>((ref) => ref.read(examRepositoryProvider).getMyResults());
 
 class ExamSubject {
-  const ExamSubject({required this.name, required this.maxMarks});
+  const ExamSubject({required this.name, required this.maxMarks, this.teacher = ''});
   final String name;
   final int maxMarks;
+  final String teacher;
   factory ExamSubject.fromJson(Map<String, dynamic> j) =>
-      ExamSubject(name: (j['name'] ?? '').toString(), maxMarks: (j['maxMarks'] as num?)?.toInt() ?? 100);
-  Map<String, dynamic> toJson() => {'name': name, 'maxMarks': maxMarks};
+      ExamSubject(
+        name: (j['name'] ?? '').toString(),
+        maxMarks: (j['maxMarks'] as num?)?.toInt() ?? 100,
+        teacher: (j['teacher'] ?? '').toString(),
+      );
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'maxMarks': maxMarks,
+        if (teacher.isNotEmpty) 'teacher': teacher,
+      };
 }
 
 class Exam {
@@ -54,29 +68,38 @@ class Exam {
     required this.id,
     required this.name,
     required this.classroom,
+    this.shift = 'Shift-1',
     this.term = '',
     this.date,
     this.subjects = const [],
+    this.assignedTeacher = '',
     this.createdByName = '',
+    this.createdAt,
   });
   final String id;
   final String name;
   final String classroom;
+  final String shift;
   final String term;
   final DateTime? date;
   final List<ExamSubject> subjects;
+  final String assignedTeacher;
   final String createdByName;
+  final DateTime? createdAt;
 
   factory Exam.fromJson(Map<String, dynamic> j) => Exam(
         id: (j['id'] ?? j['_id'] ?? '').toString(),
         name: (j['name'] ?? '').toString(),
         classroom: (j['classroom'] ?? '').toString(),
+        shift: (j['shift'] ?? 'Shift-1').toString(),
         term: (j['term'] ?? '').toString(),
         date: j['date'] != null ? DateTime.tryParse(j['date'].toString()) : null,
         subjects: (j['subjects'] as List? ?? [])
             .map((e) => ExamSubject.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
+        assignedTeacher: (j['assignedTeacher'] ?? '').toString(),
         createdByName: (j['createdByName'] ?? '').toString(),
+        createdAt: j['createdAt'] != null ? DateTime.tryParse(j['createdAt'].toString()) : null,
       );
 }
 
@@ -94,6 +117,7 @@ class ExamResult {
     required this.examId,
     required this.studentId,
     this.classroom = '',
+    this.shift = '',
     this.marks = const [],
     this.total = 0,
     this.maxTotal = 0,
@@ -106,6 +130,7 @@ class ExamResult {
   final String examId;
   final String studentId;
   final String classroom;
+  final String shift;
   final List<ExamMark> marks;
   final num total;
   final num maxTotal;
@@ -119,6 +144,7 @@ class ExamResult {
         examId: (j['examId'] ?? '').toString(),
         studentId: (j['studentId'] ?? '').toString(),
         classroom: (j['classroom'] ?? '').toString(),
+        shift: (j['shift'] ?? '').toString(),
         marks: (j['marks'] as List? ?? [])
             .map((e) => ExamMark.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
@@ -135,18 +161,23 @@ class ExamRepository {
   ExamRepository(this._dio);
   final Dio _dio;
 
-  Future<List<Exam>> getExams({String? classroom}) async {
-    final r = await _dio.get('/exams', queryParameters: {'classroom': ?classroom});
+  Future<List<Exam>> getExams({String? classroom, String? shift}) async {
+    final r = await _dio.get('/exams', queryParameters: {
+      if (classroom != null && classroom.isNotEmpty && classroom != 'All') 'classroom': classroom,
+      if (shift != null && shift.isNotEmpty && shift != 'All') 'shift': shift,
+    });
     return (r.data as List).map((e) => Exam.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   Future<PagedResult<Exam>> getExamsPage({
     String? classroom,
+    String? shift,
     required int page,
     int limit = 20,
   }) async {
     final r = await _dio.get('/exams', queryParameters: {
       if (classroom != null && classroom.isNotEmpty && classroom != 'All') 'classroom': classroom,
+      if (shift != null && shift.isNotEmpty && shift != 'All') 'shift': shift,
       'page': page,
       'limit': limit,
     });
@@ -159,17 +190,44 @@ class ExamRepository {
   Future<Exam> createExam({
     required String name,
     required String classroom,
+    String shift = 'Shift-1',
     String term = '',
     DateTime? date,
     required List<ExamSubject> subjects,
+    String assignedTeacher = '',
   }) async {
     final r = await _dio.post('/exams', data: {
       'name': name,
       'classroom': classroom,
+      'shift': shift,
       'term': term,
       if (date != null) 'date': date.toIso8601String(),
       'subjects': subjects.map((s) => s.toJson()).toList(),
+      if (assignedTeacher.isNotEmpty) 'assignedTeacher': assignedTeacher,
     });
+    return Exam.fromJson(Map<String, dynamic>.from(r.data as Map));
+  }
+
+  Future<Exam> updateExam(
+    String examId, {
+    String? name,
+    String? classroom,
+    String? shift,
+    String? term,
+    DateTime? date,
+    List<ExamSubject>? subjects,
+    String? assignedTeacher,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (name != null) payload['name'] = name;
+    if (classroom != null) payload['classroom'] = classroom;
+    if (shift != null) payload['shift'] = shift;
+    if (term != null) payload['term'] = term;
+    if (date != null) payload['date'] = date.toIso8601String();
+    if (subjects != null) payload['subjects'] = subjects.map((s) => s.toJson()).toList();
+    if (assignedTeacher != null) payload['assignedTeacher'] = assignedTeacher;
+
+    final r = await _dio.put('/exams/$examId', data: payload);
     return Exam.fromJson(Map<String, dynamic>.from(r.data as Map));
   }
 

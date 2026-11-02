@@ -5,6 +5,7 @@ class AccountSummary {
     required this.admissionNumber,
     required this.classroom,
     required this.guardianName,
+    this.parentContact = '',
     required this.currentMonth,
     required this.totalDue,
     required this.totalPaid,
@@ -18,6 +19,7 @@ class AccountSummary {
   final String admissionNumber;
   final String classroom;
   final String guardianName;
+  final String parentContact;
   final String? currentMonth;
   final double totalDue;
   final double totalPaid;
@@ -31,6 +33,7 @@ class AccountSummary {
         admissionNumber: json['admissionNumber'] as String,
         classroom: json['classroom'] as String,
         guardianName: json['guardianName'] as String? ?? 'Unknown',
+        parentContact: json['parentContact'] as String? ?? '',
         currentMonth: json['currentMonth'] as String?,
         totalDue: (json['totalDue'] as num?)?.toDouble() ?? 0,
         totalPaid: (json['totalPaid'] as num?)?.toDouble() ?? 0,
@@ -209,6 +212,9 @@ class StudentAccountDetails {
         admissionNumber: student['admissionNumber'] as String,
         classroom: student['classroom'] as String,
         guardianName: student['guardianName'] as String? ?? 'Unknown',
+        parentContact:
+            (student['guardianContact'] ?? student['parentContact'] ?? '')
+                .toString(),
         currentMonth: currentDue['monthLabel'] as String?,
         totalDue: (currentDue['totalDue'] as num?)?.toDouble() ?? 0,
         totalPaid: (currentDue['totalPaid'] as num?)?.toDouble() ?? 0,

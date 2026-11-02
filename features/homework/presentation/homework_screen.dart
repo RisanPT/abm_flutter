@@ -5,6 +5,7 @@ import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/features/homework/data/homework_repository.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
@@ -60,7 +61,7 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
     final canManage = _canManage(user?.role);
     // Students always see their own class (backend scopes it); staff can filter.
     final listKey = isStudent ? '' : _classFilter;
-    final hwQuery = HomeworkQuery(classroom: listKey, page: _page);
+    final hwQuery = HomeworkQuery(classroom: listKey, page: _page, instituteId: ref.watch(selectedInstituteProvider).id);
     final hwAsync = ref.watch(homeworkPageProvider(hwQuery));
 
     final classesAsync = ref.watch(classroomControllerProvider);
@@ -79,14 +80,14 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
             showBackButton: false,
             compact: true,
             actions: [
-              if (canManage) ...[
+              if (canManage && !context.isMobile) ...[
                 FilledButton.icon(
                   onPressed: () => _showForm(context),
                   icon: const Icon(LucideIcons.plus, size: 16),
                   label: const Text('New Homework'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: colors.primary,
-                    foregroundColor: Colors.white,
+                    backgroundColor: colors.secondary,
+                    foregroundColor: colors.primary,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -434,12 +435,20 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
         ],
       ),
       floatingActionButton: canManage
-          ? FloatingActionButton.extended(
-              onPressed: () => _showForm(context),
-              backgroundColor: colors.primary,
-              icon: const Icon(LucideIcons.plus, color: Colors.white),
-              label: const Text('Add homework', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            )
+          ? (context.isMobile
+              ? FloatingActionButton(
+                  heroTag: 'addHomeworkFab',
+                  onPressed: () => _showForm(context),
+                  backgroundColor: colors.primary,
+                  child: const Icon(LucideIcons.plus, color: Colors.white),
+                )
+              : FloatingActionButton.extended(
+                  heroTag: 'addHomeworkFab',
+                  onPressed: () => _showForm(context),
+                  backgroundColor: colors.primary,
+                  icon: const Icon(LucideIcons.plus, color: Colors.white),
+                  label: const Text('Add homework', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ))
           : null,
     );
   }
@@ -770,6 +779,7 @@ class _HomeworkFormState extends ConsumerState<_HomeworkForm> {
           description: _desc.text.trim(),
           dueDate: _dueDate,
           attachment: attachment,
+          instituteId: ref.read(selectedInstituteProvider).id,
         );
       } else {
         await repo.update(

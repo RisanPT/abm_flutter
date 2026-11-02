@@ -10,6 +10,7 @@ import 'package:gap/gap.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/user_management_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/attendance_cutoff_screen.dart';
 import 'package:abm_madrasa/features/settings/presentation/evaluation_terms_screen.dart';
+import 'package:abm_madrasa/features/settings/presentation/attendance_geofence_screen.dart';
 import 'package:abm_madrasa/features/notifications/presentation/bug_report.dart';
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
@@ -70,6 +71,17 @@ class SettingsScreen extends ConsumerWidget {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (context) => const AttendanceCutoffScreen()),
+                    );
+                  },
+                ),
+                const Gap(12),
+                _SettingsTile(
+                  icon: Icons.location_on_outlined,
+                  title: 'Attendance Location',
+                  subtitle: 'Restrict check-in to the madrasa premises',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const AttendanceGeofenceScreen()),
                     );
                   },
                 ),

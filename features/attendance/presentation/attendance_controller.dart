@@ -37,10 +37,14 @@ class AttendanceController extends _$AttendanceController {
         timetableDataProvider((shift: shift, year: year, month: month, academicYear: academicYear)).future,
       );
 
-      final targetDate = DateTime(date.year, date.month, date.day);
       final entriesOnDate = timetableData.schedule.where((e) {
-        final entryDate = DateTime(e.date.year, e.date.month, e.date.day);
-        return entryDate == targetDate && e.teacherId.isNotEmpty;
+        final aUtc = e.date.toUtc();
+        final bUtc = date.toUtc();
+        final sameUtc = aUtc.year == bUtc.year && aUtc.month == bUtc.month && aUtc.day == bUtc.day;
+        final aLoc = e.date.toLocal();
+        final bLoc = date.toLocal();
+        final sameLoc = aLoc.year == bLoc.year && aLoc.month == bLoc.month && aLoc.day == bLoc.day;
+        return (sameUtc || sameLoc) && e.teacherId.isNotEmpty;
       }).toList();
 
       if (entriesOnDate.isEmpty) {
@@ -93,7 +97,11 @@ class AttendanceController extends _$AttendanceController {
             (date: date, shift: shift, academicYear: academicYear, year: year, month: month, instituteId: instituteId),
           ).future);
 
-      if (!scheduledClassrooms.contains(classroom)) {
+      final isScheduled = scheduledClassrooms.any(
+        (c) => c.trim().toLowerCase() == classroom.trim().toLowerCase(),
+      );
+
+      if (!isScheduled) {
         // No timetable entry for this classroom on this date → attendance unavailable
         return [];
       }
@@ -103,7 +111,13 @@ class AttendanceController extends _$AttendanceController {
         ref.read(studentRepositoryProvider).getStudents(classroom: classroom, instituteId: instituteId),
         ref.read(attendanceRepositoryProvider).getAttendanceForDate(date, instituteId, type: 'Student'),
       ).wait;
-      final students = allStudents.where((s) => s.shift == shift).toList();
+      final targetShiftClean = shift.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final students = allStudents.where((s) {
+        final studentShift = s.shift;
+        if (studentShift == null || studentShift.isEmpty) return true;
+        final sClean = studentShift.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        return sClean == targetShiftClean;
+      }).toList();
 
       return students.map((student) {
         final existing =
@@ -195,11 +209,15 @@ final scheduledClassroomsForDateProvider = FutureProvider.autoDispose.family<
   final timetableData = await ref.watch(timetableDataProvider(timetableArgs).future);
 
   // Filter entries to only those on the requested date
-  final targetDate = DateTime(args.date.year, args.date.month, args.date.day);
   final classroomsOnDate = timetableData.schedule
       .where((entry) {
-        final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
-        return entryDate == targetDate;
+        final aUtc = entry.date.toUtc();
+        final bUtc = args.date.toUtc();
+        final sameUtc = aUtc.year == bUtc.year && aUtc.month == bUtc.month && aUtc.day == bUtc.day;
+        final aLoc = entry.date.toLocal();
+        final bLoc = args.date.toLocal();
+        final sameLoc = aLoc.year == bLoc.year && aLoc.month == bLoc.month && aLoc.day == bLoc.day;
+        return sameUtc || sameLoc;
       })
       .map((entry) => entry.className)
       .toSet()

@@ -13,6 +13,8 @@ class AppRoles {
   static const staff = 'Staff';
   // Student self-service login (portal only — not a staff/management role).
   static const student = 'Student';
+  // Parent login — one per family, sees all their children (portal only).
+  static const parent = 'Parent';
 
   static const coreRoles = [superAdmin, itAdmin, headMaster, teacher, treasurer, staff];
 }

@@ -8,6 +8,8 @@ import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/notifications/data/notification_repository.dart';
 import 'package:abm_madrasa/features/notifications/presentation/bug_report.dart';
+import 'package:abm_madrasa/features/assistant/presentation/erp_assistant_chat_modal.dart';
+import 'package:abm_madrasa/features/user_admin/presentation/institute_management_screen.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -70,6 +72,10 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
               onItemTap: (index) {
                 Navigator.of(context).pop();
                 _onItemTapped(index, context, navItems);
+              },
+              onAssistant: () {
+                Navigator.of(context).pop();
+                showErpAssistantModal(context);
               },
               onLogout: () async {
                 Navigator.of(context).pop();
@@ -342,7 +348,9 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
                       .toList(),
                   selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
                 ),
-              Expanded(child: widget.child),
+              // Makes all text on every admin screen selectable & copyable
+              // (long-press / click-drag → Copy) for any purpose.
+              Expanded(child: SelectionArea(child: widget.child)),
             ],
           ),
           if (!context.isDesktop)
@@ -394,6 +402,10 @@ class _MainShellScaffoldState extends ConsumerState<MainShellScaffold> {
             right: 12,
             child: const _ShellActions(),
           ),
+          // The assistant lives in the top-right actions pill (the ✨ icon) on
+          // every screen. The old desktop floating pill sat at bottom-right, over
+          // the Save/Download action bar on list screens (attendance), so it's
+          // gone — one consistent, non-overlapping entry point instead.
         ],
       ),
       bottomNavigationBar: context.isMobile && mobileNavItems.length >= 2
@@ -578,6 +590,12 @@ class _ShellActions extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             iconButton(
+              icon: LucideIcons.sparkles,
+              tooltip: 'Madrasa AI Assistant',
+              onTap: () => showErpAssistantModal(context),
+            ),
+            Container(width: 1, height: 22, color: colors.border),
+            iconButton(
               icon: LucideIcons.lifeBuoy,
               tooltip: 'Report a bug',
               onTap: () => showBugReportDialog(context, ref),
@@ -602,6 +620,7 @@ class _MobileShellDrawer extends StatelessWidget {
     required this.navItems,
     required this.currentLocation,
     required this.onItemTap,
+    required this.onAssistant,
     required this.onLogout,
   });
 
@@ -609,6 +628,7 @@ class _MobileShellDrawer extends StatelessWidget {
   final List<AppNavItem> navItems;
   final String currentLocation;
   final ValueChanged<int> onItemTap;
+  final VoidCallback onAssistant;
   final VoidCallback onLogout;
 
   @override
@@ -726,7 +746,19 @@ class _MobileShellDrawer extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onAssistant,
+                  icon: const Icon(LucideIcons.sparkles, size: 18),
+                  label: const Text('Ask the Assistant'),
+                  style: FilledButton.styleFrom(backgroundColor: colors.primary),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -884,21 +916,35 @@ class _InstitutePickerSheetSidebar extends ConsumerWidget {
                   child: Icon(LucideIcons.building2, color: colors.primary, size: 18),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Select Institute',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary),
-                    ),
-                    institutesAsync.maybeWhen(
-                      data: (list) => Text(
-                        '${list.length} institute${list.length == 1 ? '' : 's'} available',
-                        style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Select Institute',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary),
                       ),
-                      orElse: () => const SizedBox.shrink(),
-                    ),
-                  ],
+                      institutesAsync.maybeWhen(
+                        data: (list) => Text(
+                          '${list.length} institute${list.length == 1 ? '' : 's'} available',
+                          style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                        ),
+                        orElse: () => const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    showInstituteFormDialog(context, widgetRef);
+                  },
+                  icon: const Icon(LucideIcons.plus, size: 14),
+                  label: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
                 ),
               ],
             ),
@@ -1001,6 +1047,43 @@ class _InstitutePickerSheetSidebar extends ConsumerWidget {
             error: (e, _) => Padding(
               padding: const EdgeInsets.all(24),
               child: Text('Could not load institutes. ${friendlyErrorMessage(e)}'),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      context.push(RouteNames.institutes);
+                    },
+                    icon: const Icon(LucideIcons.settings, size: 15),
+                    label: const Text('Manage Campuses', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      showInstituteFormDialog(context, widgetRef);
+                    },
+                    icon: const Icon(LucideIcons.plus, size: 15),
+                    label: const Text('Add Institute', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

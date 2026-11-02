@@ -43,15 +43,17 @@ class AccountsDirectory extends _$AccountsDirectory {
 
   late String _search;
   late String _classroom;
+  late String _status;
   int _page = 1;
   int _total = 0;
   int _totalPages = 1;
   List<AccountSummary> _items = const [];
 
   @override
-  Future<AccountsListState> build(String search, String classroom) async {
+  Future<AccountsListState> build(String search, String classroom, String status) async {
     _search = search;
     _classroom = classroom;
+    _status = status;
     ref.watch(selectedInstituteProvider);
     return _loadPage(1);
   }
@@ -62,6 +64,7 @@ class AccountsDirectory extends _$AccountsDirectory {
           instituteId: instituteId,
           search: _search,
           classroom: _classroom,
+          status: _status,
           page: page,
           limit: _pageSize,
         );

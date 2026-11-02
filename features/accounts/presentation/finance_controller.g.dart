@@ -25,7 +25,7 @@ final class AccountsDirectoryProvider
   /// `goToPage()` swaps the visible page while keeping the list on screen.
   AccountsDirectoryProvider._({
     required AccountsDirectoryFamily super.from,
-    required (String, String) super.argument,
+    required (String, String, String) super.argument,
   }) : super(
          retry: null,
          name: r'accountsDirectoryProvider',
@@ -59,7 +59,7 @@ final class AccountsDirectoryProvider
   }
 }
 
-String _$accountsDirectoryHash() => r'9b987bb1595ee03158a2094396df99f18aaf4eeb';
+String _$accountsDirectoryHash() => r'c6e1d9814a36b410e8ac47b78e314954c843b58c';
 
 /// Server-paginated fee-collection directory, keyed by the (debounced) search
 /// and classroom filter. Changing either builds a fresh instance (page 1);
@@ -72,7 +72,7 @@ final class AccountsDirectoryFamily extends $Family
           AsyncValue<AccountsListState>,
           AccountsListState,
           FutureOr<AccountsListState>,
-          (String, String)
+          (String, String, String)
         > {
   AccountsDirectoryFamily._()
     : super(
@@ -87,8 +87,14 @@ final class AccountsDirectoryFamily extends $Family
   /// and classroom filter. Changing either builds a fresh instance (page 1);
   /// `goToPage()` swaps the visible page while keeping the list on screen.
 
-  AccountsDirectoryProvider call(String search, String classroom) =>
-      AccountsDirectoryProvider._(argument: (search, classroom), from: this);
+  AccountsDirectoryProvider call(
+    String search,
+    String classroom,
+    String status,
+  ) => AccountsDirectoryProvider._(
+    argument: (search, classroom, status),
+    from: this,
+  );
 
   @override
   String toString() => r'accountsDirectoryProvider';
@@ -99,11 +105,16 @@ final class AccountsDirectoryFamily extends $Family
 /// `goToPage()` swaps the visible page while keeping the list on screen.
 
 abstract class _$AccountsDirectory extends $AsyncNotifier<AccountsListState> {
-  late final _$args = ref.$arg as (String, String);
+  late final _$args = ref.$arg as (String, String, String);
   String get search => _$args.$1;
   String get classroom => _$args.$2;
+  String get status => _$args.$3;
 
-  FutureOr<AccountsListState> build(String search, String classroom);
+  FutureOr<AccountsListState> build(
+    String search,
+    String classroom,
+    String status,
+  );
   @$mustCallSuper
   @override
   void runBuild() {
@@ -117,6 +128,6 @@ abstract class _$AccountsDirectory extends $AsyncNotifier<AccountsListState> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, () => build(_$args.$1, _$args.$2));
+    element.handleCreate(ref, () => build(_$args.$1, _$args.$2, _$args.$3));
   }
 }

@@ -264,7 +264,7 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
     final weekday = DateFormat('EEEE').format(widget.date);
     bool sameWeekday = true;
     bool publish = true;
-    bool overwrite = false;
+    bool overwrite = true;
     final go = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -277,13 +277,10 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Copy $_classroom’s timetable from this day to future class days for the rest of the term. By default days that already have a timetable are kept — turn on “Update existing days” to push your changes onto them too.',
+                  'Copy $_classroom’s timetable from this day to future class days for the rest of the term.',
                   style: context.typography.bodySmall.copyWith(color: context.colors.textSecondary),
                 ),
-                const Gap(4),
-                Text('Tip: Save or Publish this day first so your latest changes are copied.',
-                    style: context.typography.bodySmall.copyWith(color: _maroon)),
-                const Gap(6),
+                const Gap(8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -303,7 +300,9 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   title: const Text('Update existing days'),
-                  subtitle: const Text('Off = only fill empty days'),
+                  subtitle: Text(overwrite
+                      ? 'On: overwrites future weeks with these changes'
+                      : 'Off: only fills empty dates'),
                   value: overwrite,
                   onChanged: (v) => setLocal(() => overwrite = v),
                 ),
@@ -323,6 +322,44 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
     );
     if (go != true) return;
     try {
+      // Validate configured rows
+      for (final r in _rows) {
+        if ((r.subjectName != null && r.teacherId == null) || (r.subjectName == null && r.teacherId != null)) {
+          setState(() => _error = 'Period ${r.period} needs both teacher and subject.');
+          return;
+        }
+      }
+      // Auto-save any configured rows first so the source day has all current edits
+      final rows = _rows.where((r) => r.subjectName != null && r.teacherId != null).toList();
+      if (rows.isNotEmpty && _classroom != null) {
+        final periods = rows
+            .map((r) => DayPeriod(
+                  period: r.period,
+                  subjectName: r.subjectName ?? '',
+                  teacherId: r.teacherId,
+                  startTime: r.start.text.trim(),
+                  endTime: r.end.text.trim(),
+                  room: r.room.text.trim(),
+                ))
+            .toList();
+        await ref.read(plannerRepositoryProvider).saveDayDraft(
+              date: widget.date,
+              instituteId: widget.instituteId,
+              academicYear: widget.academicYear,
+              shift: widget.shift,
+              classroomName: _classroom!,
+              periods: periods,
+            );
+        if (publish) {
+          await ref.read(plannerRepositoryProvider).publishDay(
+                date: widget.date,
+                instituteId: widget.instituteId,
+                academicYear: widget.academicYear,
+                shift: widget.shift,
+                classroomName: _classroom,
+              );
+        }
+      }
       final r = await ref.read(plannerRepositoryProvider).copyDayForward(
             date: widget.date, instituteId: widget.instituteId, academicYear: widget.academicYear,
             shift: widget.shift, classroomName: _classroom, sameWeekday: sameWeekday, publish: publish,
@@ -330,9 +367,18 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
           );
       if (!mounted) return;
       widget.onChanged();
-      final updatedNote = r.daysUpdated > 0 ? ' · ${r.daysUpdated} updated' : '';
+      final String snackText;
+      if (r.daysFilled > 0 && r.daysUpdated > 0) {
+        snackText = 'Copied to ${r.daysFilled} new day(s) · ${r.daysUpdated} updated · ${r.classesWritten} classes';
+      } else if (r.daysUpdated > 0) {
+        snackText = 'Updated ${r.daysUpdated} future day(s) · ${r.classesWritten} classes';
+      } else if (r.daysFilled > 0) {
+        snackText = 'Copied to ${r.daysFilled} future day(s) · ${r.classesWritten} classes';
+      } else {
+        snackText = 'No future days needed updates (${r.skippedDays} existing days kept)';
+      }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Copied to ${r.daysFilled} new day(s)$updatedNote · ${r.classesWritten} classes'),
+        content: Text(snackText),
         backgroundColor: const Color(0xFF16A34A),
       ));
     } catch (e) {
@@ -462,13 +508,60 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
         );
       }
       widget.onChanged();
+
+      // After publishing, offer to save this class's periods as the weekly
+      // PATTERN for this weekday. Unlike a one-off copy, the pattern fills every
+      // future same-weekday day AND is inherited by any month planned later — so
+      // the future stays filled without rebuilding week by week. A later hand
+      // edit of any specific day overrides the pattern and is never overwritten.
+      String successMsg = publish ? 'Timetable published' : 'Draft saved';
+      if (publish && mounted && _classroom != null) {
+        final weekday = DateFormat('EEEE').format(widget.date);
+        final repeat = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.event_repeat, color: Color(0xFF2F855A), size: 28),
+            title: Text('Repeat every $weekday?'),
+            content: Text(
+              'Make this the weekly pattern for $_classroom on $weekday. It fills '
+              'every $weekday for the rest of ${widget.academicYear} — including '
+              'months you plan later — and you can still hand-edit any single day.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Just this day'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2F855A), foregroundColor: Colors.white),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Repeat weekly'),
+              ),
+            ],
+          ),
+        );
+        if (repeat == true) {
+          final r = await repo.saveWeeklyTemplate(
+            date: widget.date,
+            instituteId: widget.instituteId,
+            academicYear: widget.academicYear,
+            shift: widget.shift,
+            classroomName: _classroom!,
+            periods: periods,
+          );
+          widget.onChanged();
+          successMsg = 'Weekly pattern saved · ${r.daysFilled} $weekday(s) filled';
+        }
+      }
+
       if (mounted) {
         // Capture the messenger before popping — after pop this State is
         // unmounted and its context is defunct.
         final messenger = ScaffoldMessenger.of(context);
         Navigator.of(context).pop();
         messenger.showSnackBar(SnackBar(
-          content: Text(publish ? 'Timetable published' : 'Draft saved'),
+          content: Text(successMsg),
           backgroundColor: const Color(0xFF2F855A),
         ));
       }
@@ -476,6 +569,57 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
       setState(() => _error = _extractError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  // Read-only view of the saved weekly pattern for this class + weekday.
+  Future<void> _viewWeeklyPattern() async {
+    if (_classroom == null) return;
+    final weekday = DateFormat('EEEE').format(widget.date);
+    try {
+      final periods = await ref.read(plannerRepositoryProvider).getWeeklyTemplate(
+            date: widget.date,
+            instituteId: widget.instituteId,
+            academicYear: widget.academicYear,
+            shift: widget.shift,
+            classroomName: _classroom!,
+          );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('$_classroom · every $weekday'),
+          content: SizedBox(
+            width: 380,
+            child: periods.isEmpty
+                ? Text(
+                    'No weekly pattern saved for $_classroom on $weekday yet. '
+                    'Publish a day and tap "Repeat weekly" to create one.',
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final p in periods)
+                        ListTile(
+                          dense: true,
+                          leading: CircleAvatar(radius: 14, child: Text('${p.period}')),
+                          title: Text(p.subjectName.isEmpty ? '—' : p.subjectName),
+                          subtitle: Text([
+                            if ((p.teacherName ?? '').isNotEmpty) p.teacherName!,
+                            if (p.startTime.isNotEmpty || p.endTime.isNotEmpty) '${p.startTime}–${p.endTime}',
+                            if (p.room.isNotEmpty) 'Room ${p.room}',
+                          ].where((s) => s.isNotEmpty).join(' · ')),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_extractError(e))));
+      }
     }
   }
 
@@ -542,9 +686,12 @@ class _DayTimetableEditorState extends ConsumerState<DayTimetableEditor> {
                 await _copyForward();
               } else if (v == 'cancelForward') {
                 await _cancelForward();
+              } else if (v == 'pattern') {
+                await _viewWeeklyPattern();
               }
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'pattern', child: Text('View weekly pattern')),
               PopupMenuItem(value: 'copy', child: Text('Copy to future weeks…')),
               PopupMenuItem(value: 'cancelForward', child: Text('Cancel future weeks…')),
               PopupMenuItem(value: 'holiday', child: Text('Mark as Holiday')),

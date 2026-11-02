@@ -1,23 +1,30 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/utils/money.dart';
+import 'package:abm_madrasa/core/whatsapp/whatsapp_service.dart';
 import 'package:abm_madrasa/features/accounts/data/finance_repository.dart';
+import 'package:abm_madrasa/features/accounts/presentation/widgets/charge_dialogs.dart';
 import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -42,6 +49,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
   String _query = '';
   String? _selectedStudentId;
   String _classroomFilter = 'All';
+  String _statusFilter = 'all'; // 'all' | 'pending' | 'paid'
   bool _processingPayment = false;
   Timer? _searchDebounce;
   List<AccountSummary> _pageItems = const [];
@@ -62,26 +70,80 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
   }
 
   void _onClassroomChanged(String c) => setState(() => _classroomFilter = c);
+  void _onStatusChanged(String s) => setState(() => _statusFilter = s);
+
+  List<String> get _chargeMonthOptions {
+    final now = DateTime.now();
+    final labels = <String>{};
+    for (int i = -3; i <= 11; i++) {
+      labels.add(DateFormat('MMMM yyyy').format(DateTime(now.year, now.month + i, 1)));
+    }
+    return labels.toList()
+      ..sort((a, b) => DateFormat('MMMM yyyy').parse(a).compareTo(DateFormat('MMMM yyyy').parse(b)));
+  }
+
+  Future<void> _openClassCharge(List<String> classOptions) async {
+    final grades = classOptions.where((c) => c != 'All').toList();
+    if (grades.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No classes available')));
+      return;
+    }
+    final now = DateTime.now();
+    final currentMonth = DateFormat('MMMM yyyy').format(DateTime(now.year, now.month, 1));
+    final res = await showDialog<ClassChargeResult>(
+      context: context,
+      builder: (_) => ClassChargeDialog(
+        classOptions: grades,
+        monthOptions: _chargeMonthOptions,
+        initialMonths: [currentMonth],
+      ),
+    );
+    if (res != null && mounted) {
+      ref.invalidate(accountsDirectoryProvider);
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Class charged'),
+          content: Text(
+            '${res.title} (SAR ${res.amount.toStringAsFixed(0)}) added to '
+            '${res.charged} of ${res.studentsInClass} students in ${res.grade}'
+            '${res.monthsCount > 1 ? ' for ${res.monthsCount} months' : ''}.',
+          ),
+          actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Done'))],
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final dirAsync = ref.watch(accountsDirectoryProvider(_query, _classroomFilter));
+    final dirAsync = ref.watch(accountsDirectoryProvider(_query, _classroomFilter, _statusFilter));
     final classOptions = ref.watch(classroomControllerProvider).maybeWhen(
           data: (classes) => ['All', ...classes.map((c) => c.name)],
           orElse: () => <String>['All'],
         );
     void goToPage(int p) =>
-        ref.read(accountsDirectoryProvider(_query, _classroomFilter).notifier).goToPage(p);
+        ref.read(accountsDirectoryProvider(_query, _classroomFilter, _statusFilter).notifier).goToPage(p);
 
     return Scaffold(
       backgroundColor: colors.background,
+      floatingActionButton: (context.isMobile && _selectedStudentId != null)
+          ? null
+          : FloatingActionButton.extended(
+              heroTag: 'chargeClass',
+              onPressed: () => _openClassCharge(classOptions),
+              icon: const Icon(LucideIcons.layers, size: 18),
+              label: const Text('Charge Class'),
+            ),
       body: dirAsync.when(
         data: (dir) {
           _pageItems = dir.items;
           final items = dir.items;
-          // Default the selection once; keep it across pages (detail loads by id).
-          _selectedStudentId ??= items.isNotEmpty ? items.first.studentId : null;
+          // Default the selection once on desktop/tablet; on mobile keep null so user sees the directory list.
+          if (!context.isMobile) {
+            _selectedStudentId ??= items.isNotEmpty ? items.first.studentId : null;
+          }
 
           if (context.isMobile) {
             return _MobileLayout(
@@ -93,7 +155,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
               onPage: goToPage,
               selectedStudentId: _selectedStudentId,
               processingPayment: _processingPayment,
-              onSelectStudent: (id) => setState(() => _selectedStudentId = id),
+              onSelectStudent: (id) => setState(() => _selectedStudentId = id.isEmpty ? null : id),
               onProcessPayment: _handlePayment,
               searchController: _searchController,
               query: _query,
@@ -101,6 +163,8 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
               classrooms: classOptions,
               classroomFilter: _classroomFilter,
               onClassroomChanged: _onClassroomChanged,
+              statusFilter: _statusFilter,
+              onStatusChanged: _onStatusChanged,
             );
           }
 
@@ -119,6 +183,8 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
                   classrooms: classOptions,
                   classroomFilter: _classroomFilter,
                   onClassroomChanged: _onClassroomChanged,
+                  statusFilter: _statusFilter,
+                  onStatusChanged: _onStatusChanged,
                   searchController: _searchController,
                   onQueryChanged: _onQueryChanged,
                   onSelectStudent: (id) => setState(() => _selectedStudentId = id),
@@ -141,7 +207,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
         error: (err, _) => AbmErrorView(
           message: friendlyErrorMessage(err),
           onRetry: () =>
-              ref.invalidate(accountsDirectoryProvider(_query, _classroomFilter)),
+              ref.invalidate(accountsDirectoryProvider(_query, _classroomFilter, _statusFilter)),
         ),
       ),
     );
@@ -233,6 +299,8 @@ class _MobileLayout extends StatelessWidget {
     required this.classrooms,
     required this.classroomFilter,
     required this.onClassroomChanged,
+    required this.statusFilter,
+    required this.onStatusChanged,
   });
 
   final List<AccountSummary> summaries;
@@ -251,10 +319,12 @@ class _MobileLayout extends StatelessWidget {
   final List<String> classrooms;
   final String classroomFilter;
   final void Function(String) onClassroomChanged;
+  final String statusFilter;
+  final void Function(String) onStatusChanged;
 
   @override
   Widget build(BuildContext context) {
-    if (selectedStudentId != null) {
+    if (selectedStudentId != null && selectedStudentId!.isNotEmpty) {
       return _AccountDetailsPanel(
         studentId: selectedStudentId!,
         processingPayment: processingPayment,
@@ -274,6 +344,8 @@ class _MobileLayout extends StatelessWidget {
       classrooms: classrooms,
       classroomFilter: classroomFilter,
       onClassroomChanged: onClassroomChanged,
+      statusFilter: statusFilter,
+      onStatusChanged: onStatusChanged,
       searchController: searchController,
       onQueryChanged: onQueryChanged,
       onSelectStudent: onSelectStudent,
@@ -296,6 +368,8 @@ class _Sidebar extends StatelessWidget {
     required this.classrooms,
     required this.classroomFilter,
     required this.onClassroomChanged,
+    required this.statusFilter,
+    required this.onStatusChanged,
     required this.searchController,
     required this.onQueryChanged,
     required this.onSelectStudent,
@@ -312,6 +386,8 @@ class _Sidebar extends StatelessWidget {
   final List<String> classrooms;
   final String classroomFilter;
   final void Function(String) onClassroomChanged;
+  final String statusFilter;
+  final void Function(String) onStatusChanged;
   final TextEditingController searchController;
   final void Function(String) onQueryChanged;
   final void Function(String id) onSelectStudent;
@@ -332,7 +408,12 @@ class _Sidebar extends StatelessWidget {
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              isMobileFullPage ? MediaQuery.of(context).padding.top + 10 : 24,
+              20,
+              16,
+            ),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [colors.primary, colors.primary.withValues(alpha: 0.85)],
@@ -343,38 +424,55 @@ class _Sidebar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text('Fee Collection', style: typography.h3.copyWith(color: Colors.white)),
-                    ),
-                    // Collect for a whole family (siblings) in one receipt.
-                    Material(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(999),
-                      child: InkWell(
-                        onTap: () => context.push(RouteNames.familyFees),
-                        borderRadius: BorderRadius.circular(999),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(LucideIcons.users, size: 15, color: Colors.white),
-                              const Gap(6),
-                              Text('Families',
-                                  style: typography.bodySmallSemiBold.copyWith(color: Colors.white)),
-                            ],
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: isMobileFullPage ? 48 : 0,
+                    right: isMobileFullPage ? 96 : 0,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Fee Collection',
+                          style: typography.h3.copyWith(
+                            color: Colors.white,
+                            fontSize: isMobileFullPage ? 20 : null,
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                      // Collect for a whole family (siblings) in one receipt.
+                      Material(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(999),
+                        child: InkWell(
+                          onTap: () => context.push(RouteNames.familyFees),
+                          borderRadius: BorderRadius.circular(999),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(LucideIcons.users, size: 14, color: Colors.white),
+                                const Gap(5),
+                                Text('Families',
+                                    style: typography.bodySmallSemiBold.copyWith(color: Colors.white, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const Gap(4),
-                Text(
-                  '$total students${totalPages > 1 ? ' • page $page of $totalPages' : ''}',
-                  style: typography.bodySmall.copyWith(color: Colors.white70),
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: isMobileFullPage ? 48 : 0,
+                    top: 4,
+                  ),
+                  child: Text(
+                    '$total students${totalPages > 1 ? ' • page $page of $totalPages' : ''}',
+                    style: typography.bodySmall.copyWith(color: Colors.white70),
+                  ),
                 ),
                 const Gap(14),
                 TextField(
@@ -382,7 +480,7 @@ class _Sidebar extends StatelessWidget {
                   onChanged: onQueryChanged,
                   style: typography.bodyMedium.copyWith(color: Colors.white),
                   decoration: InputDecoration(
-                    hintText: 'Search by name or ID...',
+                    hintText: 'Search name, ID, parent or phone...',
                     hintStyle: typography.bodySmall.copyWith(color: Colors.white60),
                     prefixIcon: const Icon(LucideIcons.search, size: 18, color: Colors.white70),
                     filled: true,
@@ -437,6 +535,55 @@ class _Sidebar extends StatelessWidget {
               ),
             ),
 
+          // Fee-status filter (All / owes money / fully paid)
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            decoration: BoxDecoration(
+              color: colors.background,
+              border: Border(bottom: BorderSide(color: colors.border)),
+            ),
+            child: Row(
+              children: [
+                Text('Fees',
+                    style: typography.bodySmallSemiBold.copyWith(color: colors.textSecondary)),
+                const Gap(10),
+                ...const [
+                  ('All', 'all'),
+                  ('Pending', 'pending'),
+                  ('Paid', 'paid'),
+                ].map((opt) {
+                  final isSelected = statusFilter == opt.$2;
+                  final accent = opt.$2 == 'pending'
+                      ? Colors.red.shade600
+                      : opt.$2 == 'paid'
+                          ? Colors.green.shade600
+                          : colors.primary;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => onStatusChanged(opt.$2),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? accent : Colors.transparent,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: isSelected ? accent : colors.border),
+                        ),
+                        child: Text(
+                          opt.$1,
+                          style: typography.bodySmallSemiBold.copyWith(
+                            color: isSelected ? Colors.white : colors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+
           // Student list
           Expanded(
             child: summaries.isEmpty
@@ -451,7 +598,7 @@ class _Sidebar extends StatelessWidget {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.fromLTRB(12, 12, 12, isMobileFullPage && totalPages <= 1 ? 96 : 12),
                     itemCount: summaries.length,
                     itemBuilder: (context, index) {
                       final s = summaries[index];
@@ -466,7 +613,7 @@ class _Sidebar extends StatelessWidget {
           ),
           if (totalPages > 1)
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              padding: EdgeInsets.fromLTRB(12, 0, 12, isMobileFullPage ? 96 : 12),
               child: AbmPaginationBar(
                 page: page,
                 totalPages: totalPages,
@@ -672,29 +819,50 @@ class _AccountDetailsPanelState extends ConsumerState<_AccountDetailsPanel> {
     final colors = context.colors;
     final typography = context.typography;
 
+    final topPadding = context.isMobile
+        ? MediaQuery.of(context).padding.top + 10
+        : 32.0;
+    final bottomPadding = context.isMobile ? 100.0 : 32.0;
+
     return SingleChildScrollView(
-      padding: EdgeInsets.all(context.isMobile ? 16 : 32),
+      padding: EdgeInsets.fromLTRB(
+        context.isMobile ? 16 : 32,
+        topPadding,
+        context.isMobile ? 16 : 32,
+        bottomPadding,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header row
           Row(
             children: [
-              if (context.isMobile)
+              if (context.isMobile) ...[
+                const SizedBox(width: 48),
                 IconButton(
                   icon: const Icon(LucideIcons.arrowLeft),
+                  tooltip: 'Back to student list',
                   onPressed: widget.onBack,
                 ),
+                const Gap(4),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Fee Collection', style: typography.h2.copyWith(color: colors.primary)),
+                    Text(
+                      'Fee Collection',
+                      style: typography.h2.copyWith(
+                        color: colors.primary,
+                        fontSize: context.isMobile ? 20 : null,
+                      ),
+                    ),
                     Text('Current month: ${details.monthLabel}',
                         style: typography.bodySmall.copyWith(color: colors.textSecondary)),
                   ],
                 ),
               ),
+              if (context.isMobile) const SizedBox(width: 96),
             ],
           ),
           const Gap(20),
@@ -860,6 +1028,17 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
   MultiMonthPreview? _monthPreview;
   bool _loadingPreview = false;
 
+  // Optional fees configured for this grade (Admission / Exam / Book / Arts /
+  // Sports …), offered as one-tap add-ons at collection time. Excludes the
+  // recurring monthly tuition and transport, which the bill handles itself.
+  List<AccountLineItem> _optionalFees = [];
+
+  // The month row holds arrears (left) + current + upcoming months (right). It
+  // starts scrolled to the far left, which clipped the current month's year and
+  // hid the upcoming months — so we auto-centre the current month on first load.
+  final ScrollController _monthScrollController = ScrollController();
+  final GlobalKey _currentMonthKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -867,7 +1046,103 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
       if (mounted) {
         widget.amountController.text = _totalCalculatedDue().toStringAsFixed(0);
       }
+      _centerCurrentMonth();
     });
+    _loadOptionalFees();
+  }
+
+  @override
+  void dispose() {
+    _monthScrollController.dispose();
+    super.dispose();
+  }
+
+  // Bring the current month into view (centred) so its full "Month YYYY" label
+  // shows and the upcoming months beside it are visible/scrollable.
+  void _centerCurrentMonth() {
+    final ctx = _currentMonthKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+    // Fallback: the current chip isn't built yet (far right after many arrears
+    // months). Estimate its offset so the row still lands near it.
+    if (!_monthScrollController.hasClients) return;
+    final idx = _monthOptions.indexOf(widget.details.monthLabel);
+    if (idx <= 0) return;
+    const estChipWidth = 150.0; // chip + separator, approximate
+    final target = (idx * estChipWidth - 120)
+        .clamp(0.0, _monthScrollController.position.maxScrollExtent);
+    _monthScrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  bool _isBaseMonthly(String t) {
+    final l = t.toLowerCase();
+    return l.contains('tuition') || l.contains('tution') || l.contains('monthly');
+  }
+
+  bool _isTransport(String t) {
+    final l = t.toLowerCase();
+    return l.contains('transport') || l.contains('bus');
+  }
+
+  // Pull the student's grade fee template and keep the non-tuition, non-transport
+  // items as optional quick-add chips. Convenience only — silently skips if the
+  // structure can't be fetched.
+  Future<void> _loadOptionalFees() async {
+    try {
+      final instId = ref.read(selectedInstituteProvider).id;
+      final structures =
+          await ref.read(accountRepositoryProvider).getFeeStructures(instituteId: instId);
+      final grade = widget.details.summary.classroom;
+      final match = structures.where((s) => s.grade == grade).toList();
+      if (match.isEmpty || !mounted) return;
+      final seen = <String>{};
+      final opts = <AccountLineItem>[];
+      for (final it in match.first.lineItems) {
+        if (_isBaseMonthly(it.title) || _isTransport(it.title)) continue;
+        if (seen.add(it.title)) opts.add(it);
+      }
+      setState(() => _optionalFees = opts);
+    } catch (_) {/* chips are optional; ignore */}
+  }
+
+  // One-tap add of a configured optional fee to the selected month(s), at its
+  // template amount. Mirrors the manual Add-Charge refresh so the new line and
+  // balance show immediately and it's pre-ticked for collection.
+  Future<void> _quickAddFee(AccountLineItem fee) async {
+    if (widget.processingPayment) return;
+    try {
+      final applied = await ref.read(accountRepositoryProvider).addCharge(
+            widget.details.summary.studentId,
+            title: fee.title,
+            amount: fee.amount,
+            monthLabels: List<String>.from(_selectedMonths),
+          );
+      if (!mounted) return;
+      _selected.add(fee.title);
+      ref.invalidate(accountsDirectoryProvider);
+      ref.invalidate(studentAccountDetailsProvider(widget.details.summary.studentId));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${fee.title} (${_sar(fee.amount)}) added to '
+            '${applied.length} month${applied.length == 1 ? '' : 's'}'),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyErrorMessage(e))),
+        );
+      }
+    }
   }
 
   List<String> get _monthOptions {
@@ -975,6 +1250,30 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
       }
       widget.amountController.text = _totalCalculatedDue().toStringAsFixed(0);
     });
+  }
+
+  Future<void> _openAddCharge() async {
+    final res = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => AddChargeDialog(
+        studentId: widget.details.summary.studentId,
+        monthOptions: _monthOptions,
+        initialMonths: List<String>.from(_selectedMonths),
+      ),
+    );
+    if (res != null && mounted) {
+      // Pre-tick the newly-added item and refresh the breakdown so the new
+      // line (and balance) show immediately and are included in the collection.
+      _selected.add(res['title'] as String);
+      ref.invalidate(accountsDirectoryProvider);
+      ref.invalidate(studentAccountDetailsProvider(widget.details.summary.studentId));
+      final count = res['count'] as int;
+      final amt = (res['amount'] as num).toStringAsFixed(0);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${res['title']} (SAR $amt) added to '
+            '$count month${count == 1 ? '' : 's'}'),
+      ));
+    }
   }
 
   bool get _isFullyPaid {
@@ -1153,7 +1452,7 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Select / Toggle Months:',
+                  'Select / Toggle Months  ·  ← arrears · upcoming → (scroll)',
                   style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),
                 ),
                 const Gap(8),
@@ -1161,6 +1460,7 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                   height: 38,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
+                    controller: _monthScrollController,
                     itemCount: _monthOptions.length,
                     separatorBuilder: (_, index) => const Gap(8),
                     itemBuilder: (ctx, idx) {
@@ -1172,6 +1472,7 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                           );
 
                       return ChoiceChip(
+                        key: isCurrent ? _currentMonthKey : null,
                         selected: isSelected,
                         onSelected: (_) => _toggleMonth(m),
                         selectedColor: colors.primary,
@@ -1185,7 +1486,7 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                             ? const Icon(LucideIcons.check, size: 14, color: Colors.white)
                             : null,
                         label: Text(
-                          m + (isCurrent ? ' (Current)' : (isPast ? ' (Arrears)' : '')),
+                          m + (isCurrent ? ' (Current)' : (isPast ? ' (Arrears)' : ' (Upcoming)')),
                           style: TextStyle(
                             color: isSelected ? Colors.white : colors.textPrimary,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -1387,6 +1688,57 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                   }),
                 ],
 
+                // Quick-add: the grade's configured optional fees (Admission /
+                // Exam / Book / Arts / Sports …) that aren't already on this
+                // month's bill, one tap to add at their set amount.
+                if (!isPaid && _optionalFees.isNotEmpty)
+                  Builder(builder: (context) {
+                    final onBill = details.lineItems.map((e) => e.title).toSet();
+                    final avail = _optionalFees.where((f) => !onBill.contains(f.title)).toList();
+                    if (avail.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 10, bottom: 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Add an optional fee',
+                            style: typography.bodySmall
+                                .copyWith(color: colors.textSecondary, fontSize: 11),
+                          ),
+                          const Gap(8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: avail
+                                .map((f) => ActionChip(
+                                      avatar: Icon(LucideIcons.plus, size: 14, color: colors.primary),
+                                      label: Text('${f.title} · ${_sar(f.amount)}'),
+                                      onPressed: processingPayment ? null : () => _quickAddFee(f),
+                                    ))
+                                .toList(),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+
+                // Manual / ad-hoc charge (a custom amount or a fee not in the
+                // template) for the selected month(s), added on top of the above.
+                if (!isPaid)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: processingPayment ? null : _openAddCharge,
+                      icon: const Icon(LucideIcons.plus, size: 16),
+                      label: const Text('Other / custom charge'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ),
+                  ),
+
                 const Gap(12),
                 // Total Balance row
                 Container(
@@ -1505,13 +1857,18 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                             else
                               const Icon(LucideIcons.creditCard, color: Colors.white, size: 20),
                             const Gap(10),
-                            Text(
-                              processingPayment
-                                  ? 'Processing Payment...'
-                                  : (_selectedMonths.length > 1
-                                      ? 'Process ${_selectedMonths.length} Months Payment & Generate Invoice'
-                                      : 'Process Payment & Generate Invoice'),
-                              style: typography.bodyMediumSemiBold.copyWith(color: Colors.white),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  processingPayment
+                                      ? 'Processing Payment...'
+                                      : (_selectedMonths.length > 1
+                                          ? 'Process ${_selectedMonths.length} Months Payment & Generate Invoice'
+                                          : 'Process Payment & Generate Invoice'),
+                                  style: typography.bodyMediumSemiBold.copyWith(color: Colors.white),
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -1543,6 +1900,22 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                       ],
                     ),
                   ),
+                  const Gap(10),
+                  // Even after a month is fully paid, allow adding a late Books /
+                  // other charge — it reopens that month owing just the new amount,
+                  // collected separately (mirrors the unpaid-state button above).
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: processingPayment ? null : _openAddCharge,
+                      icon: const Icon(LucideIcons.plus, size: 16),
+                      label: const Text('Add Books / Other Charge'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -1552,6 +1925,8 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
     );
   }
 }
+
+
 
 
 // ─── Payment History Card ──────────────────────────────────────────────────────
@@ -1728,7 +2103,8 @@ class _InvoiceDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    return Dialog(
+    return SelectionArea(
+      child: Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Container(
@@ -1774,14 +2150,28 @@ class _InvoiceDialog extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Gap(12),
+                  const Gap(10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _printInvoice(details, receipt),
+                      icon: const Icon(LucideIcons.printer, size: 16),
+                      label: const Text('Print'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                  const Gap(10),
                   Expanded(
                     flex: 2,
                     child: ElevatedButton.icon(
-                      onPressed: () => _printInvoice(details, receipt),
-                      icon: const Icon(LucideIcons.printer, size: 16),
-                      label: const Text('Print Invoice'),
+                      onPressed: () => _sendWhatsApp(context, details, receipt),
+                      icon: const Icon(LucideIcons.messageCircle, size: 16),
+                      label: const Text('WhatsApp'),
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
@@ -1793,116 +2183,250 @@ class _InvoiceDialog extends StatelessWidget {
           ],
         ),
       ),
+      ),
     );
   }
 
   Future<void> _printInvoice(StudentAccountDetails details, ReceiptHistoryItem item) async {
+    await Printing.layoutPdf(onLayout: (_) => _buildPdf(details, item).save());
+  }
+
+  String _whatsAppMessage(StudentAccountDetails details, ReceiptHistoryItem item) {
+    final s = details.summary;
+    final remaining = (item.totalDue - item.totalPaid);
+    final b = StringBuffer()
+      ..writeln('*Fee Receipt — Anas Bin Malik Madrasa*')
+      ..writeln('Receipt: #${item.receiptNumber ?? '-'}')
+      ..writeln('Student: ${s.fullName}${s.classroom.isNotEmpty ? ' (${s.classroom})' : ''}')
+      ..writeln('Guardian: ${s.guardianName}')
+      ..writeln('Month: ${item.monthLabel}')
+      ..writeln('Paid: ${_sar(item.totalPaid)}');
+    if (remaining > 0) b.writeln('Balance: ${_sar(remaining)}');
+    b
+      ..writeln('Date: ${DateFormat('dd MMM yyyy').format(item.paidOn ?? DateTime.now())}')
+      ..writeln('')
+      ..writeln('Thank you! May Allah bless you.');
+    return b.toString();
+  }
+
+  Future<void> _sendWhatsApp(BuildContext context, StudentAccountDetails details, ReceiptHistoryItem item) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final phone = details.summary.parentContact;
+    // Capture the share-sheet anchor (iPad) synchronously, before any await.
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : const Rect.fromLTWH(0, 0, 100, 100);
+    final message = _whatsAppMessage(details, item);
+    final bytes = await _buildPdf(details, item).save();
+    final fname = 'receipt-${item.receiptNumber ?? details.summary.admissionNumber}.pdf';
+
+    if (!kIsWeb) {
+      // Mobile: one share-sheet action carrying BOTH the PDF (attached) and the
+      // receipt text (as caption). Staff pick the guardian's WhatsApp chat →
+      // the PDF and message go together. wa.me links can't attach files, so the
+      // share sheet is the only way to send a real attachment without a paid API.
+      try {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$fname');
+        await file.writeAsBytes(bytes, flush: true);
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/pdf', name: fname)],
+          text: message,
+          sharePositionOrigin: origin,
+        );
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+      }
+      return;
+    }
+
+    // Web: WhatsApp Web can't be handed a file, so download the PDF (staff
+    // attach it) and open the guardian's chat prefilled with the receipt text.
+    try {
+      await Printing.sharePdf(bytes: bytes, filename: fname);
+    } catch (_) {}
+    final ok = await WhatsAppService.send(phone, message);
+    if (!ok) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(phone.trim().isEmpty
+            ? 'No guardian number on file for this student.'
+            : 'Could not open WhatsApp for $phone.'),
+      ));
+    }
+  }
+
+  pw.Document _buildPdf(StudentAccountDetails details, ReceiptHistoryItem item) {
     final pdf = pw.Document();
     final s = details.summary;
     final lineItems = item.lineItems.isNotEmpty ? item.lineItems : details.lineItems;
 
+    final green = PdfColor.fromInt(0xFF1B3D2F);
+    final gold = PdfColor.fromInt(0xFFB8860B);
+    final softBg = PdfColor.fromInt(0xFFF4F6F3);
+    final remaining = item.totalDue - item.totalPaid;
+    final monthStr =
+        '${item.monthsCount != null && item.monthsCount! > 1 ? "(${item.monthsCount} months) " : ""}${item.monthLabel}';
+    final dateStr = DateFormat('dd MMM yyyy').format(item.paidOn ?? DateTime.now());
+
+    pw.Widget cell(String label, String value, {bool right = false}) => pw.Column(
+          crossAxisAlignment: right ? pw.CrossAxisAlignment.end : pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(label.toUpperCase(),
+                style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600, letterSpacing: 0.5)),
+            pw.SizedBox(height: 2),
+            pw.Text(value, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+          ],
+        );
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a5,
-        margin: const pw.EdgeInsets.all(32),
+        margin: pw.EdgeInsets.zero,
         build: (ctx) {
           return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
-              // Header
-              pw.Center(
-                child: pw.Column(
+              // Letterhead band
+              pw.Container(
+                color: green,
+                padding: const pw.EdgeInsets.fromLTRB(28, 24, 28, 20),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text(
-                      'ANAS BIN MALIK MADRASA',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('ANAS BIN MALIK MADRASA',
+                            style: pw.TextStyle(color: PdfColors.white, fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 3),
+                        pw.Text('FEE PAYMENT RECEIPT',
+                            style: pw.TextStyle(color: gold, fontSize: 9, letterSpacing: 1.5)),
+                      ],
                     ),
-                    pw.SizedBox(height: 4),
-                    pw.Text('FEE PAYMENT INVOICE', style: pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColor.fromInt(0xFF2E7D32),
+                        borderRadius: pw.BorderRadius.circular(4),
+                      ),
+                      child: pw.Text('PAID',
+                          style: pw.TextStyle(
+                              color: PdfColors.white, fontSize: 11, fontWeight: pw.FontWeight.bold, letterSpacing: 1.5)),
+                    ),
                   ],
                 ),
               ),
-              pw.SizedBox(height: 16),
-              pw.Divider(),
-              pw.SizedBox(height: 10),
+              pw.Container(height: 3, color: gold),
 
-              // Receipt info
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('Invoice #: ${item.receiptNumber ?? "N/A"}',
-                      style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                  pw.Text(
-                    'Date: ${item.paidOn != null ? DateFormat('dd MMM yyyy').format(item.paidOn!) : "N/A"}',
-                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-              pw.Divider(),
-              pw.SizedBox(height: 10),
-
-              // Student info
-              pw.Text('Student Details', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-              pw.SizedBox(height: 6),
-              _pdfRow('Name', s.fullName),
-              _pdfRow('Admission No.', s.admissionNumber),
-              _pdfRow('Classroom', s.classroom),
-              _pdfRow('Guardian', s.guardianName),
-              _pdfRow('Fee Month(s)', '${item.monthsCount != null && item.monthsCount! > 1 ? "(${item.monthsCount} Months) " : ""}${item.monthLabel}'),
-              pw.SizedBox(height: 10),
-              pw.Divider(),
-              pw.SizedBox(height: 10),
-
-              // Line items
-              pw.Text('Fee Breakdown', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-              pw.SizedBox(height: 8),
-              ...lineItems.map((li) => pw.Padding(
-                    padding: const pw.EdgeInsets.only(bottom: 5),
-                    child: pw.Row(
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(28),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                  children: [
+                    // Receipt meta
+                    pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text(li.title, style: const pw.TextStyle(fontSize: 11)),
-                        pw.Text('SAR ${li.amount.toStringAsFixed(0)}',
-                            style: const pw.TextStyle(fontSize: 11)),
+                        cell('Receipt No.', item.receiptNumber ?? '-'),
+                        cell('Date', dateStr, right: true),
                       ],
                     ),
-                  )),
-              pw.SizedBox(height: 10),
-              pw.Divider(thickness: 1.5),
-              pw.SizedBox(height: 6),
+                    pw.SizedBox(height: 18),
 
-              // Totals
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('Total Paid', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-                  pw.Text('SAR ${item.totalPaid.toStringAsFixed(0)}',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-                ],
-              ),
-              pw.SizedBox(height: 16),
-              pw.Divider(),
-              pw.SizedBox(height: 8),
+                    // Billed-to card
+                    pw.Container(
+                      padding: const pw.EdgeInsets.all(14),
+                      decoration: pw.BoxDecoration(color: softBg, borderRadius: pw.BorderRadius.circular(8)),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text('BILLED TO',
+                              style: pw.TextStyle(fontSize: 7, color: green, letterSpacing: 0.8, fontWeight: pw.FontWeight.bold)),
+                          pw.SizedBox(height: 4),
+                          pw.Text(s.fullName,
+                              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: green)),
+                          pw.SizedBox(height: 12),
+                          pw.Row(children: [
+                            pw.Expanded(child: cell('Admission No.', s.admissionNumber)),
+                            pw.Expanded(child: cell('Class', s.classroom)),
+                          ]),
+                          pw.SizedBox(height: 10),
+                          pw.Row(children: [
+                            pw.Expanded(child: cell('Guardian', s.guardianName)),
+                            pw.Expanded(child: cell('Fee Month', monthStr)),
+                          ]),
+                        ],
+                      ),
+                    ),
+                    pw.SizedBox(height: 18),
 
-              // Status
-              pw.Center(
-                child: pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.green100,
-                    borderRadius: pw.BorderRadius.circular(20),
-                  ),
-                  child: pw.Text('✓  PAID',
-                      style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold, color: PdfColors.green800, fontSize: 13)),
-                ),
-              ),
-              pw.SizedBox(height: 14),
-              pw.Center(
-                child: pw.Text(
-                  'Thank you! May Allah bless you.',
-                  style: pw.TextStyle(fontStyle: pw.FontStyle.italic, color: PdfColors.grey600, fontSize: 10),
+                    // Fee table
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: pw.BoxDecoration(color: green, borderRadius: pw.BorderRadius.circular(4)),
+                      child: pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('DESCRIPTION',
+                              style: pw.TextStyle(color: PdfColors.white, fontSize: 8, fontWeight: pw.FontWeight.bold, letterSpacing: 0.5)),
+                          pw.Text('AMOUNT',
+                              style: pw.TextStyle(color: PdfColors.white, fontSize: 8, fontWeight: pw.FontWeight.bold, letterSpacing: 0.5)),
+                        ],
+                      ),
+                    ),
+                    ...lineItems.asMap().entries.map((e) => pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          color: e.key.isEven ? PdfColors.white : softBg,
+                          child: pw.Row(
+                            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Expanded(child: pw.Text(e.value.title, style: const pw.TextStyle(fontSize: 10))),
+                              pw.Text('SAR ${e.value.amount.toStringAsFixed(0)}', style: const pw.TextStyle(fontSize: 10)),
+                            ],
+                          ),
+                        )),
+                    pw.SizedBox(height: 14),
+
+                    // Total
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: pw.BoxDecoration(color: green, borderRadius: pw.BorderRadius.circular(8)),
+                      child: pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Text('TOTAL PAID',
+                              style: pw.TextStyle(color: PdfColors.white, fontSize: 11, fontWeight: pw.FontWeight.bold, letterSpacing: 0.5)),
+                          pw.Text('SAR ${item.totalPaid.toStringAsFixed(0)}',
+                              style: pw.TextStyle(color: PdfColors.white, fontSize: 17, fontWeight: pw.FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                    if (remaining > 0) ...[
+                      pw.SizedBox(height: 8),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('Balance remaining', style: pw.TextStyle(fontSize: 10, color: PdfColors.red700)),
+                          pw.Text('SAR ${remaining.toStringAsFixed(0)}',
+                              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.red700)),
+                        ],
+                      ),
+                    ],
+                    pw.SizedBox(height: 28),
+
+                    pw.Center(
+                      child: pw.Text('Thank you! May Allah bless you.',
+                          style: pw.TextStyle(fontStyle: pw.FontStyle.italic, color: green, fontSize: 10)),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Center(
+                      child: pw.Text('This is a computer-generated receipt and needs no signature.',
+                          style: pw.TextStyle(color: PdfColors.grey500, fontSize: 7)),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1911,25 +2435,9 @@ class _InvoiceDialog extends StatelessWidget {
       ),
     );
 
-    await Printing.layoutPdf(onLayout: (_) => pdf.save());
+    return pdf;
   }
 
-  pw.Widget _pdfRow(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 3),
-      child: pw.Row(
-        children: [
-          pw.SizedBox(
-            width: 110,
-            child: pw.Text('$label:', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-          ),
-          pw.Expanded(
-            child: pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ─── Invoice Content (Flutter UI) ─────────────────────────────────────────────

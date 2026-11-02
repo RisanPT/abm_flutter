@@ -22,6 +22,7 @@ enum AppModule {
   hifz,
   exams,
   studyMaterials,
+  books,
   studentLeave,
   transport,
   administration,
@@ -113,6 +114,12 @@ const List<AppNavItem> kAppNavItems = [
         route: RouteNames.materials,
         icon: LucideIcons.folderOpen,
         module: AppModule.studyMaterials,
+      ),
+      AppNavItem(
+        label: 'Books Management',
+        route: RouteNames.books,
+        icon: LucideIcons.book,
+        module: AppModule.books,
       ),
       AppNavItem(
         label: 'Student Leaves',
@@ -321,6 +328,7 @@ const Map<String, Set<String>> kDefaultRolePermissions = {
     'hifz',
     'exams',
     'studyMaterials',
+    'books',
     'studentLeave',
     'transport',
     'administration',
@@ -347,6 +355,7 @@ const Map<String, Set<String>> kDefaultRolePermissions = {
     'hifz',
     'exams',
     'studyMaterials',
+    'books',
     'studentLeave',
     'transport',
     'administration',
@@ -365,9 +374,12 @@ const Map<String, Set<String>> kDefaultRolePermissions = {
     'hifz',
     'exams',
     'studyMaterials',
+    'books',
     'studentLeave',
     'timetable',
     'teachers',
+    'finance',
+    'expenditure',
     'accounts',
     'outstandingDues',
     'incomeEntry',
@@ -388,9 +400,12 @@ const Map<String, Set<String>> kDefaultRolePermissions = {
     'hifz',
     'exams',
     'studyMaterials',
+    'books',
     'studentLeave',
     'timetable',
     'teachers',
+    'finance',
+    'expenditure',
     'accounts',
     'outstandingDues',
     'incomeEntry',
@@ -411,6 +426,7 @@ const Map<String, Set<String>> kDefaultRolePermissions = {
     'incomeEntry',
     'finance',
     'feeSetup',
+    'books',
     'transport',
     'administration',
     'settings',
@@ -424,6 +440,7 @@ const Map<String, Set<String>> kDefaultRolePermissions = {
     'hifz',
     'exams',
     'studyMaterials',
+    'books',
     'studentLeave',
     'timetable',
     'accounts',
@@ -443,6 +460,7 @@ const Map<String, Set<String>> kDefaultRolePermissions = {
     'hifz',
     'exams',
     'studyMaterials',
+    'books',
     'studentLeave',
     'timetable',
     'administration',
@@ -563,6 +581,13 @@ AppModule? moduleForRoute(String location) {
   for (final item in kAppNavItems) {
     if (location == item.route || location.startsWith('${item.route}/')) {
       return item.module;
+    }
+    if (item.children != null) {
+      for (final child in item.children!) {
+        if (location == child.route || location.startsWith('${child.route}/')) {
+          return child.module;
+        }
+      }
     }
   }
   if (location.startsWith(RouteNames.addStudent) ||

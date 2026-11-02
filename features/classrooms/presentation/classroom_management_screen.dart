@@ -21,6 +21,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:abm_madrasa/features/books/presentation/book_controller.dart';
 import 'package:abm_madrasa/features/students/domain/classroom_model.dart';
 import 'package:abm_madrasa/features/students/domain/student_model.dart';
 
@@ -196,6 +197,7 @@ class _ClassroomManagementScreenState extends ConsumerState<ClassroomManagementS
   }
 
   Widget _buildGrid(BuildContext context, WidgetRef ref, List<ClassroomModel> classrooms, List<StudentModel> students, bool canEdit) {
+    final booksState = ref.watch(bookControllerProvider);
     // Register order: pre-primary (incl. UKG) first, then numbered standards.
     final sorted = sortByClassName<ClassroomModel>(classrooms, (c) => c.name);
 
@@ -245,11 +247,16 @@ class _ClassroomManagementScreenState extends ConsumerState<ClassroomManagementS
                 (context, index) {
                   final classroom = sorted[index];
                   final count = counts[classroom.name] ?? 0;
+                  final classBooks = booksState.books.where((b) => b.grade.toLowerCase() == classroom.name.toLowerCase()).toList();
+                  final classBooksValue = classBooks.fold<double>(0.0, (s, b) => s + b.price);
                   return ClassroomCard(
                     title: classroom.name,
                     studentCount: count,
+                    booksCount: classBooks.length,
+                    booksTotalValue: classBooksValue,
                     shift: classroom.shift,
                     onViewStudents: () => context.push(RouteNames.students, extra: classroom.name),
+                    onViewBooks: () => context.push('${RouteNames.books}?grade=${Uri.encodeComponent(classroom.name)}'),
                     onEdit: canEdit ? () => _showRenameDialog(context, ref, classroom) : null,
                     onDelete: canEdit ? () => _confirmDelete(context, ref, classroom, count) : null,
                     onManageSubjects: canEdit

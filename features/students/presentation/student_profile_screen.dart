@@ -151,6 +151,7 @@ class _StudentProfileBody extends ConsumerWidget {
           icon: LucideIcons.user,
           children: [
             InfoRow(label: 'Admission No.', value: student.admissionNumber),
+            InfoRow(label: 'Class', value: student.classroom.isNotEmpty ? student.classroom : 'N/A'),
             InfoRow(label: 'Date of Birth', value: DateFormat('dd MMM yyyy').format(student.dateOfBirth)),
             InfoRow(label: 'Gender', value: student.gender.name.toUpperCase()),
             InfoRow(label: 'Blood Group', value: student.bloodGroup ?? 'N/A'),

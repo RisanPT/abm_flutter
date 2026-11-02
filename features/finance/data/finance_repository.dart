@@ -22,6 +22,8 @@ class MadrassaExpense {
     this.referenceId,
     this.teacherName,
     this.employeeId,
+    this.accountSegment,
+    this.instituteId,
   });
 
   final String id;
@@ -33,6 +35,8 @@ class MadrassaExpense {
   final String? referenceId;
   final String? teacherName;
   final String? employeeId;
+  final String? accountSegment;
+  final String? instituteId;
 
   factory MadrassaExpense.fromJson(Map<String, dynamic> json) {
     String? refId;
@@ -68,6 +72,8 @@ class MadrassaExpense {
       referenceId: refId,
       teacherName: tName,
       employeeId: empId,
+      accountSegment: json['accountSegment'] as String?,
+      instituteId: json['instituteId'] as String?,
     );
   }
 }
@@ -107,11 +113,12 @@ class MadrassaFinanceRepository {
 
   // ── Expenses ─────────────────────────────────────────────────────────────
 
-  Future<List<MadrassaExpense>> getExpenses({String? category, String? month}) async {
+  Future<List<MadrassaExpense>> getExpenses({String? category, String? month, String? instituteId}) async {
     try {
       final params = <String, dynamic>{};
       if (category != null) params['category'] = category;
       if (month != null) params['month'] = month;
+      if (instituteId != null && instituteId.isNotEmpty) params['instituteId'] = instituteId;
       final response = await _dio.get(
         '/finance',
         queryParameters: params.isEmpty ? null : params,
@@ -126,6 +133,7 @@ class MadrassaFinanceRepository {
   Future<PagedResult<MadrassaExpense>> getExpensesPage({
     String? category,
     String? month,
+    String? instituteId,
     required int page,
     int limit = 25,
   }) async {
@@ -136,6 +144,7 @@ class MadrassaFinanceRepository {
       };
       if (category != null && category.isNotEmpty) params['category'] = category;
       if (month != null && month.isNotEmpty) params['month'] = month;
+      if (instituteId != null && instituteId.isNotEmpty) params['instituteId'] = instituteId;
       final response = await _dio.get(
         '/finance',
         queryParameters: params,
@@ -155,6 +164,8 @@ class MadrassaFinanceRepository {
     required String description,
     required String processedBy,
     DateTime? date,
+    String? instituteId,
+    String? accountSegment,
   }) async {
     try {
       await _dio.post('/finance', data: {
@@ -163,9 +174,34 @@ class MadrassaFinanceRepository {
         'description': description,
         'processedBy': processedBy,
         if (date != null) 'date': date.toIso8601String(),
+        if (instituteId != null && instituteId.isNotEmpty) 'instituteId': instituteId,
+        if (accountSegment != null && accountSegment.isNotEmpty) 'accountSegment': accountSegment,
       });
     } catch (e) {
       throw Exception('Failed to add expense: $e');
+    }
+  }
+
+  Future<void> updateExpense({
+    required String id,
+    required String category,
+    required double amount,
+    required String description,
+    DateTime? date,
+    String? instituteId,
+    String? accountSegment,
+  }) async {
+    try {
+      await _dio.put('/finance/$id', data: {
+        'category': category,
+        'amount': amount,
+        'description': description,
+        if (date != null) 'date': date.toIso8601String(),
+        if (instituteId != null && instituteId.isNotEmpty) 'instituteId': instituteId,
+        if (accountSegment != null && accountSegment.isNotEmpty) 'accountSegment': accountSegment,
+      });
+    } catch (e) {
+      throw Exception('Failed to update expense: $e');
     }
   }
 
@@ -287,11 +323,14 @@ class MadrassaFinanceRepository {
 
   /// Returns combined income (from fees) and expense data for a given month.
   /// month format: "yyyy-MM"
-  Future<Map<String, dynamic>> getPnlReport({required String month}) async {
+  Future<Map<String, dynamic>> getPnlReport({required String month, String? instituteId}) async {
     try {
       final response = await _dio.get(
         '/finance/report',
-        queryParameters: {'month': month},
+        queryParameters: {
+          'month': month,
+          if (instituteId != null && instituteId.isNotEmpty) 'instituteId': instituteId,
+        },
       );
       return response.data as Map<String, dynamic>;
     } catch (e) {

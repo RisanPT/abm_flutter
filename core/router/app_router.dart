@@ -25,6 +25,7 @@ import 'package:abm_madrasa/features/timetable/presentation/class_timetable_view
 import 'package:abm_madrasa/features/teachers/presentation/teacher_dashboard_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/student_dashboard_screen.dart';
 import 'package:abm_madrasa/features/students/presentation/student_portal_screen.dart';
+import 'package:abm_madrasa/features/parent/presentation/parent_dashboard_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/finance_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/family_fees_screen.dart';
 import 'package:abm_madrasa/features/accounts/presentation/outstanding_dues_screen.dart';
@@ -40,6 +41,7 @@ import 'package:abm_madrasa/features/homework/presentation/homework_screen.dart'
 import 'package:abm_madrasa/features/hifz/presentation/hifz_screen.dart';
 import 'package:abm_madrasa/features/exams/presentation/exams_screen.dart';
 import 'package:abm_madrasa/features/materials/presentation/materials_screen.dart';
+import 'package:abm_madrasa/features/books/presentation/books_screen.dart';
 import 'package:abm_madrasa/features/student_leave/presentation/student_leave_screen.dart';
 import 'package:abm_madrasa/features/classrooms/presentation/classroom_management_screen.dart';
 import 'package:abm_madrasa/features/user_admin/presentation/institute_management_screen.dart';
@@ -100,6 +102,11 @@ GoRouter router(Ref ref) {
         return state.matchedLocation == RouteNames.studentPortal ? null : RouteNames.studentPortal;
       }
 
+      // Parents only ever see the parent portal (their children) — no admin shell.
+      if (user.role == AppRoles.parent) {
+        return state.matchedLocation == RouteNames.parentHome ? null : RouteNames.parentHome;
+      }
+
       final permState = ref.read(permissionControllerProvider);
       final allowedModules = ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role);
 
@@ -139,6 +146,11 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: RouteNames.studentPortal,
         builder: (context, state) => const StudentPortalScreen(),
+      ),
+      // Parent self-service portal (outside the admin shell — no sidebar).
+      GoRoute(
+        path: RouteNames.parentHome,
+        builder: (context, state) => const ParentDashboardScreen(),
       ),
       // Student-facing homework (standalone, no admin shell).
       GoRoute(
@@ -356,6 +368,12 @@ GoRouter router(Ref ref) {
           GoRoute(
             path: RouteNames.materials,
             builder: (context, state) => const MaterialsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.books,
+            builder: (context, state) => BooksScreen(
+              initialGrade: state.uri.queryParameters['grade'],
+            ),
           ),
           GoRoute(
             path: RouteNames.studentLeave,

@@ -30,8 +30,11 @@ abstract class Institute with _$Institute {
 extension InstituteX on Institute {
   IconData get icon {
     switch (iconName) {
-      case 'building': return LucideIcons.building;
+      case 'building': return LucideIcons.building2;
       case 'globe': return LucideIcons.globe;
+      case 'landmark': return LucideIcons.landmark;
+      case 'book': return LucideIcons.bookOpen;
+      case 'graduationCap': return LucideIcons.graduationCap;
       case 'school':
       default: return LucideIcons.school;
     }
@@ -92,11 +95,12 @@ class SelectedInstitute extends _$SelectedInstitute {
 
         final user = authState.asData?.value;
         if (user != null && user.instituteId != null) {
-          final matched = list.firstWhere(
-            (i) => i.id == user.instituteId,
-            orElse: () => list.first,
-          );
-          return matched;
+          final matched = list.where((i) => i.id == user.instituteId);
+          if (matched.isNotEmpty) return matched.first;
+          // The user's own institute isn't in the visible list — keep their real
+          // institute id rather than silently switching them to a different one
+          // (the backend scopes data by the JWT institute regardless).
+          return Institute(id: user.instituteId!, name: 'My Institute', location: '');
         }
 
         return list.first;

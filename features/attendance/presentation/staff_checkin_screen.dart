@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/location/location_service.dart';
 import 'package:abm_madrasa/features/attendance/data/staff_checkin_repository.dart';
 import 'package:abm_madrasa/features/attendance/domain/staff_checkin_model.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -26,8 +27,31 @@ class StaffCheckinScreen extends ConsumerWidget {
 
   Future<void> _checkIn(BuildContext context, WidgetRef ref, {String status = 'Present'}) async {
     final messenger = ScaffoldMessenger.of(context);
+    final repo = ref.read(staffCheckinRepositoryProvider);
+    final instituteId = ref.read(authControllerProvider).value?.instituteId ?? '';
+
+    // If the madrasa restricts attendance to its premises, capture the device
+    // location first; the server verifies it is inside the perimeter.
+    double? lat, lng;
+    if (instituteId.isNotEmpty) {
+      final geofence = await repo.getGeofence(instituteId);
+      if (geofence.enabled) {
+        messenger.showSnackBar(const SnackBar(content: Text('Checking your location…')));
+        final loc = await LocationService.getCurrent();
+        if (!loc.ok) {
+          messenger.showSnackBar(SnackBar(
+            content: Text(loc.error ?? 'Location unavailable'),
+            backgroundColor: _absent,
+          ));
+          return;
+        }
+        lat = loc.position!.latitude;
+        lng = loc.position!.longitude;
+      }
+    }
+
     try {
-      await ref.read(staffCheckinRepositoryProvider).checkIn(status: status);
+      await repo.checkIn(status: status, latitude: lat, longitude: lng);
       ref.invalidate(myCheckinProvider);
       messenger.showSnackBar(SnackBar(content: Text('Checked in — $status'), backgroundColor: _present));
     } catch (e) {

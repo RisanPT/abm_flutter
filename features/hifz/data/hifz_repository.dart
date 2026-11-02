@@ -27,10 +27,15 @@ class HifzRecord {
     this.sabaqFrom = '',
     this.sabaqTo = '',
     this.sabaqLines = 0,
+    this.murajaSurah = '',
+    this.murajaFrom = '',
+    this.murajaTo = '',
+    this.murajaQuality = '',
     this.sabqi = '',
     this.manzil = '',
     this.quality = '',
     this.notes = '',
+    this.lastRemarks = '',
     this.loggedByName = '',
   });
 
@@ -42,10 +47,15 @@ class HifzRecord {
   final String sabaqFrom;
   final String sabaqTo;
   final int sabaqLines;
+  final String murajaSurah;
+  final String murajaFrom;
+  final String murajaTo;
+  final String murajaQuality;
   final String sabqi;
   final String manzil;
   final String quality;
   final String notes;
+  final String lastRemarks;
   final String loggedByName;
 
   /// A readable one-line Sabaq label, e.g. "Al-Baqarah 1–20".
@@ -53,6 +63,17 @@ class HifzRecord {
     if (sabaqSurah.isEmpty && sabaqFrom.isEmpty && sabaqTo.isEmpty) return '—';
     final range = [sabaqFrom, sabaqTo].where((s) => s.isNotEmpty).join('–');
     return [sabaqSurah, range].where((s) => s.isNotEmpty).join(' ');
+  }
+
+  /// The structured Muraja'ah (revision) one-liner, e.g. "Al-Baqarah 1–20".
+  /// Falls back to the legacy free-text Sabqi/Manzil when no structured range.
+  String get murajaLabel {
+    if (murajaSurah.isEmpty && murajaFrom.isEmpty && murajaTo.isEmpty) {
+      final legacy = [sabqi, manzil].where((s) => s.isNotEmpty).join(' · ');
+      return legacy.isEmpty ? '—' : legacy;
+    }
+    final range = [murajaFrom, murajaTo].where((s) => s.isNotEmpty).join('–');
+    return [murajaSurah, range].where((s) => s.isNotEmpty).join(' ');
   }
 
   factory HifzRecord.fromJson(Map<String, dynamic> j) => HifzRecord(
@@ -64,10 +85,15 @@ class HifzRecord {
         sabaqFrom: (j['sabaqFrom'] ?? '').toString(),
         sabaqTo: (j['sabaqTo'] ?? '').toString(),
         sabaqLines: (j['sabaqLines'] as num?)?.toInt() ?? 0,
+        murajaSurah: (j['murajaSurah'] ?? '').toString(),
+        murajaFrom: (j['murajaFrom'] ?? '').toString(),
+        murajaTo: (j['murajaTo'] ?? '').toString(),
+        murajaQuality: (j['murajaQuality'] ?? '').toString(),
         sabqi: (j['sabqi'] ?? '').toString(),
         manzil: (j['manzil'] ?? '').toString(),
         quality: (j['quality'] ?? '').toString(),
         notes: (j['notes'] ?? '').toString(),
+        lastRemarks: (j['lastRemarks'] ?? '').toString(),
         loggedByName: (j['loggedByName'] ?? '').toString(),
       );
 }
@@ -121,10 +147,15 @@ class HifzRepository {
     String sabaqFrom = '',
     String sabaqTo = '',
     int sabaqLines = 0,
+    String murajaSurah = '',
+    String murajaFrom = '',
+    String murajaTo = '',
+    String murajaQuality = '',
     String sabqi = '',
     String manzil = '',
     String quality = '',
     String notes = '',
+    String lastRemarks = '',
   }) async {
     await _dio.post('/hifz', data: {
       'studentId': studentId,
@@ -133,10 +164,15 @@ class HifzRepository {
       'sabaqFrom': sabaqFrom,
       'sabaqTo': sabaqTo,
       'sabaqLines': sabaqLines,
+      'murajaSurah': murajaSurah,
+      'murajaFrom': murajaFrom,
+      'murajaTo': murajaTo,
+      'murajaQuality': murajaQuality,
       'sabqi': sabqi,
       'manzil': manzil,
       'quality': quality,
       'notes': notes,
+      'lastRemarks': lastRemarks,
     });
   }
 

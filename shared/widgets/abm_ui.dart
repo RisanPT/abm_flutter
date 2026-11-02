@@ -81,9 +81,8 @@ class AbmGradientHeader extends StatelessWidget {
               ),
               if (trailing != null) ...[
                 trailing!,
-                // Reserve space for the shell's top-right floating buttons on
-                // non-mobile layouts. On mobile the buttons overlay independently.
-                if (!context.isMobile) const Gap(88),
+                // Reserve space for the shell's top-right floating buttons.
+                Gap(context.isMobile ? 120 : 152),
               ],
             ],
           ),

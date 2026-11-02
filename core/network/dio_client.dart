@@ -14,8 +14,8 @@ part 'dio_client.g.dart';
 /// current production API when not provided.
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:5001/api', // change from production URL
-  // defaultValue: 'https://api.anasbinmalik.org/api',
+  // defaultValue: 'http://localhost:5001/api', // change from production URL
+  defaultValue: 'https://api.anasbinmalik.org/api',
 );
 
 

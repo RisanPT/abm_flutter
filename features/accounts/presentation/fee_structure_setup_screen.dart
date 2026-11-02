@@ -6,6 +6,7 @@ import 'package:abm_madrasa/features/accounts/domain/account_models.dart';
 import 'package:abm_madrasa/features/accounts/presentation/fee_structure_controller.dart';
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_page_header.dart';
+import 'package:abm_madrasa/shared/widgets/institute_banner_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -33,6 +34,7 @@ class _FeeStructureSetupScreenState extends ConsumerState<FeeStructureSetupScree
             child: ABMPageHeader(
               title: 'Fee Structure Setup',
               subtitle: 'Define default fee templates per grade/classroom',
+              instituteBanner: const InstituteBannerChip(),
               actions: [
                 Material(
                   color: Colors.transparent,
@@ -708,7 +710,7 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
     try {
       final model = FeeStructureModel(
         id: widget.existing?.id ?? '',
-        instituteId: widget.existing?.instituteId ?? '664c39f00000000000000001',
+        instituteId: widget.existing?.instituteId ?? ref.read(selectedInstituteProvider).id,
         grade: grade,
         totalAmount: totalAmount,
         lineItems: lineItems,

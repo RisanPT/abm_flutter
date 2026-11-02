@@ -1,5 +1,6 @@
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
@@ -44,6 +45,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _showParentLogin() async {
+    // The dialog only collects the number; the login + navigation happen here
+    // (like staff login) so there's no open dialog to pop once the auth change
+    // redirects to the parent portal.
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (_) => const _ParentPhoneLoginDialog(),
+    );
+    if (phone == null || !mounted) return;
+    final ok = await ref.read(authControllerProvider.notifier).parentLogin(phone);
+    if (ok && mounted) {
+      context.go(RouteNames.parentHome);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -68,6 +84,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               usernameController: _usernameController,
                               passwordController: _passwordController,
                               onSubmit: _handleLogin,
+                              onParentLogin: _showParentLogin,
                             ),
                           ),
                         ),
@@ -87,6 +104,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         usernameController: _usernameController,
                         passwordController: _passwordController,
                         onSubmit: _handleLogin,
+                        onParentLogin: _showParentLogin,
                       ),
                     ),
                   ),
@@ -168,11 +186,13 @@ class _LoginCard extends ConsumerWidget {
     required this.usernameController,
     required this.passwordController,
     required this.onSubmit,
+    required this.onParentLogin,
   });
 
   final TextEditingController usernameController;
   final TextEditingController passwordController;
   final VoidCallback onSubmit;
+  final VoidCallback onParentLogin;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -267,7 +287,27 @@ class _LoginCard extends ConsumerWidget {
                   text: 'Log In',
                   onPressed: onSubmit,
                 ),
-          const Gap(20),
+          const Gap(10),
+          Row(children: [
+            Expanded(child: Divider(color: colors.border)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text('or', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+            ),
+            Expanded(child: Divider(color: colors.border)),
+          ]),
+          const Gap(6),
+          Center(
+            child: TextButton.icon(
+              onPressed: onParentLogin,
+              icon: Icon(Icons.phone_iphone_rounded, size: 18, color: colors.primary),
+              label: Text(
+                'Parent? Sign in with your mobile number',
+                style: typography.bodyMediumSemiBold.copyWith(color: colors.primary),
+              ),
+            ),
+          ),
+          const Gap(14),
           Center(
             child: Text(
               '© 2025 Anas Bin Malik Centre',
@@ -276,6 +316,84 @@ class _LoginCard extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Passwordless parent sign-in dialog ──────────────────────────────────────
+// Collects + validates the mobile number and pops it back; the caller performs
+// the login + navigation (so no dialog is open when the router redirects).
+class _ParentPhoneLoginDialog extends StatefulWidget {
+  const _ParentPhoneLoginDialog();
+  @override
+  State<_ParentPhoneLoginDialog> createState() => _ParentPhoneLoginDialogState();
+}
+
+class _ParentPhoneLoginDialogState extends State<_ParentPhoneLoginDialog> {
+  final _phoneCtrl = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final phone = _phoneCtrl.text.trim();
+    if (phone.replaceAll(RegExp(r'\D'), '').length < 7) {
+      setState(() => _error = 'Enter a valid mobile number');
+      return;
+    }
+    Navigator.of(context).pop(phone);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final t = context.typography;
+    return AlertDialog(
+      title: const Row(
+        children: [Icon(Icons.phone_iphone_rounded, size: 20), SizedBox(width: 8), Text('Parent Sign-in')],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Enter the mobile number registered with the madrasa to view your children’s attendance and fees.',
+            style: t.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+          const Gap(16),
+          TextField(
+            controller: _phoneCtrl,
+            keyboardType: TextInputType.phone,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Mobile number',
+              prefixIcon: Icon(Icons.phone_iphone_rounded),
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(_error!, style: t.bodySmall.copyWith(color: Colors.red.shade700)),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Enter Portal'),
+        ),
+      ],
     );
   }
 }

@@ -46,12 +46,13 @@ class ABMPageHeader extends StatelessWidget {
     final typography = context.typography;
     final isMobile = context.isMobile;
     final bool hasBanner = instituteBanner != null;
+    final bool hasBottomChild = bottomChild != null;
     final effectiveHeight = height ??
         (compact
             ? (isMobile ? 115.0 : 125.0)
             : (hasBanner
-                ? (isMobile ? 295.0 : 340.0)
-                : (isMobile ? 240.0 : 280.0)));
+                ? (hasBottomChild ? (isMobile ? 350.0 : 390.0) : (isMobile ? 295.0 : 340.0))
+                : (hasBottomChild ? (isMobile ? 290.0 : 315.0) : (isMobile ? 240.0 : 280.0))));
 
     return Container(
       width: double.infinity,
@@ -88,9 +89,11 @@ class ABMPageHeader extends StatelessWidget {
                             visualDensity: VisualDensity.compact,
                           ),
                           const Gap(8),
-                        ] else if (leading != null) ...[
-                          leading!,
+                        ] else if (leading case final widget?) ...[
+                          widget,
                           const Gap(8),
+                        ] else if (isMobile) ...[
+                          const SizedBox(width: 48),
                         ],
                         Expanded(
                           child: Column(
@@ -123,6 +126,9 @@ class ABMPageHeader extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: actions!,
                           ),
+                          if (!globalActions) Gap(isMobile ? 120 : 156),
+                        ] else if (!globalActions && isMobile) ...[
+                          const SizedBox(width: 100),
                         ],
                         if (globalActions) ...[
                           const Gap(8),
@@ -140,15 +146,17 @@ class ABMPageHeader extends StatelessWidget {
                                 icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
                                 onPressed: () => Navigator.of(context).maybePop(),
                               )
+                            else if (leading == null && isMobile)
+                              const SizedBox(width: 48)
                             else
                               ?leading,
                             const Spacer(),
-                            if (actions != null) ...actions!,
+                            ...?actions,
                             if (globalActions) ...[
                               if (actions != null && actions!.isNotEmpty) const Gap(4),
                               const _HeaderGlobalActions(),
                             ] else if (actions != null && actions!.isNotEmpty) ...[
-                              if (!isMobile) const Gap(88),
+                              Gap(isMobile ? 120 : 156),
                             ],
                           ],
                         ),
@@ -157,21 +165,34 @@ class ABMPageHeader extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                title,
-                                style: typography.h2.copyWith(color: Colors.white),
-                              ),
-                              if (subtitle != null) ...[
-                                const Gap(4),
-                                Text(
-                                  subtitle!,
-                                  style: typography.bodyMedium.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.7),
-                                  ),
+                              Flexible(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: (isMobile ? typography.h3 : typography.h2)
+                                          .copyWith(color: Colors.white),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (subtitle != null) ...[
+                                      const Gap(4),
+                                      Text(
+                                        subtitle!,
+                                        style: typography.bodyMedium.copyWith(
+                                          color: Colors.white.withValues(alpha: 0.7),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                              ],
+                              ),
                               if (bottomChild != null) ...[
-                                const Gap(16),
+                                Gap(isMobile ? 12 : 16),
                                 bottomChild!,
                               ],
                             ],

@@ -7,6 +7,7 @@ import 'package:abm_madrasa/core/utils/money.dart';
 import 'package:abm_madrasa/features/auth/presentation/auth_controller.dart';
 import 'package:abm_madrasa/features/settings/presentation/permission_controller.dart';
 import 'package:abm_madrasa/features/finance/data/finance_repository.dart';
+import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/shared/widgets/abm_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -73,9 +74,10 @@ final _categoriesProvider = FutureProvider<List<FinanceCategory>>((ref) async {
   return ref.watch(madrassaFinanceRepositoryProvider).getCategories();
 });
 
-// P&L report keyed by month ('yyyy-MM')
+// P&L report keyed by month ('yyyy-MM'), scoped to the selected institute.
 final _pnlProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, String>((ref, month) {
-  return ref.watch(madrassaFinanceRepositoryProvider).getPnlReport(month: month);
+  final instituteId = ref.watch(selectedInstituteProvider).id;
+  return ref.watch(madrassaFinanceRepositoryProvider).getPnlReport(month: month, instituteId: instituteId);
 });
 
 class _ExpensesQuery {
@@ -95,9 +97,11 @@ class _ExpensesQuery {
 
 final _expensesProvider =
     FutureProvider.autoDispose.family<PagedResult<MadrassaExpense>, _ExpensesQuery>((ref, q) {
+  final instituteId = ref.watch(selectedInstituteProvider).id;
   return ref.watch(madrassaFinanceRepositoryProvider).getExpensesPage(
         category: q.category,
         month: q.month,
+        instituteId: instituteId,
         page: q.page,
         limit: 25,
       );
@@ -162,6 +166,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       final expenses = await repository.getExpenses(
         category: _selectedCategory,
         month: DateFormat('yyyy-MM').format(_selectedMonth),
+        instituteId: ref.read(selectedInstituteProvider).id,
       );
       
       final total = expenses.fold<double>(0, (sum, e) => sum + e.amount);
@@ -598,10 +603,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                         itemCount: displayItems.length,
                         itemBuilder: (context, index) {
                           final expense = displayItems[index];
+                          final isSalary = expense.category == 'Monthly Salary' || expense.category == 'Salary';
                           return _ExpenseCard(
                             expense: expense,
                             canDelete: canEdit,
                             onDelete: () => _confirmDeleteExpense(expense),
+                            onEdit: (canEdit && !isSalary) ? () => _showEditExpenseDialog(expense) : null,
                             onOpenPayroll: () => context.go(RouteNames.payroll),
                           );
                         },
@@ -1137,6 +1144,21 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     );
   }
 
+  void _showEditExpenseDialog(MadrassaExpense expense) {
+    showDialog(
+      context: context,
+      builder: (context) => _AddExpenseDialog(
+        currentMonth: _selectedMonth,
+        expense: expense,
+        onSuccess: () {
+          ref.invalidate(_expensesProvider);
+          ref.invalidate(_pnlProvider);
+          if (mounted) setState(() {});
+        },
+      ),
+    );
+  }
+
   void _showCategoryManager() {
     showDialog(
       context: context,
@@ -1155,12 +1177,14 @@ class _ExpenseCard extends StatelessWidget {
     required this.canDelete,
     required this.onDelete,
     required this.onOpenPayroll,
+    this.onEdit,
   });
 
   final MadrassaExpense expense;
   final bool canDelete;
   final VoidCallback onDelete;
   final VoidCallback onOpenPayroll;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1372,6 +1396,25 @@ class _ExpenseCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (expense.accountSegment != null && expense.accountSegment!.isNotEmpty) ...[
+                      const Gap(6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: colors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Text(
+                          expense.accountSegment!,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: colors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const Gap(4),
@@ -1402,13 +1445,28 @@ class _ExpenseCard extends StatelessWidget {
               ),
               if (canDelete) ...[
                 const Gap(6),
-                IconButton(
-                  icon: Icon(LucideIcons.trash2, size: 15, color: Colors.red.shade600),
-                  onPressed: onDelete,
-                  tooltip: 'Delete expense',
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (onEdit != null)
+                      IconButton(
+                        icon: Icon(LucideIcons.pencil, size: 15, color: colors.primary),
+                        onPressed: onEdit,
+                        tooltip: 'Edit expense',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      ),
+                    const Gap(4),
+                    IconButton(
+                      icon: Icon(LucideIcons.trash2, size: 15, color: Colors.red.shade600),
+                      onPressed: onDelete,
+                      tooltip: 'Delete expense',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    ),
+                  ],
                 ),
               ],
             ],
@@ -1422,9 +1480,10 @@ class _ExpenseCard extends StatelessWidget {
 // ─── Add Expense Dialog ────────────────────────────────────────────────────────
 
 class _AddExpenseDialog extends ConsumerStatefulWidget {
-  const _AddExpenseDialog({required this.currentMonth, required this.onSuccess});
+  const _AddExpenseDialog({required this.currentMonth, required this.onSuccess, this.expense});
   final DateTime currentMonth;
   final VoidCallback onSuccess;
+  final MadrassaExpense? expense;
 
   @override
   ConsumerState<_AddExpenseDialog> createState() => _AddExpenseDialogState();
@@ -1434,89 +1493,157 @@ class _AddExpenseDialogState extends ConsumerState<_AddExpenseDialog> {
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
   String? _selectedCategory;
+  String? _accountSegment;
+  late DateTime _selectedDate;
   bool _isSaving = false;
+
+  bool get _isEdit => widget.expense != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.expense;
+    _selectedDate = e?.date ?? widget.currentMonth;
+    if (e != null) {
+      _amountController.text = e.amount % 1 == 0 ? e.amount.toStringAsFixed(0) : e.amount.toString();
+      _descriptionController.text = e.description;
+      _selectedCategory = e.category;
+      _accountSegment = e.accountSegment;
+    } else {
+      final currentInst = ref.read(selectedInstituteProvider);
+      if (currentInst.name.toUpperCase().contains('CRE') || currentInst.id == '6a37837e5ac32f68075f0108') {
+        _accountSegment = 'CRE';
+      } else {
+        _accountSegment = 'Madrasa';
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (picked != null && mounted) setState(() => _selectedDate = picked);
+  }
 
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(_categoriesProvider);
 
     return AlertDialog(
-      title: const Text('Add Madrassa Expense'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          categoriesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Error loading categories. ${friendlyErrorMessage(e)}'),
-            data: (categories) {
-              final expenseCategories = categories.where((c) => c.type == 'Expense').toList();
-              // Default to first category if none selected
-              _selectedCategory ??= expenseCategories.isNotEmpty ? expenseCategories.first.name : null;
-              return DropdownButtonFormField<String>(
-                initialValue: _selectedCategory,
-                decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
-                items: expenseCategories
-                    .map((c) => DropdownMenuItem(value: c.name, child: Text(c.name)))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedCategory = v),
-              );
-            },
-          ),
-          if (_selectedCategory == 'Monthly Salary') ...[
-            const Gap(12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1B3D2F).withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFD6B64C).withValues(alpha: 0.4)),
+      title: Text(_isEdit ? 'Edit Expense' : 'Add Madrassa Expense'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _accountSegment ?? 'Madrasa',
+              decoration: const InputDecoration(labelText: 'Account Segment / Institute', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'Madrasa', child: Text('Madrasa')),
+                DropdownMenuItem(value: 'CRE', child: Text('CRE (Center for Religious Education)')),
+                DropdownMenuItem(value: 'Organization', child: Text('Organization')),
+              ],
+              onChanged: (v) => setState(() => _accountSegment = v),
+            ),
+            const Gap(16),
+            categoriesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Text('Error loading categories. ${friendlyErrorMessage(e)}'),
+              data: (categories) {
+                final names = categories.where((c) => c.type == 'Expense').map((c) => c.name).toList();
+                // Keep the edited expense's category selectable even if it's no longer a listed category.
+                if (_selectedCategory != null && !names.contains(_selectedCategory)) names.insert(0, _selectedCategory!);
+                _selectedCategory ??= names.isNotEmpty ? names.first : null;
+                return DropdownButtonFormField<String>(
+                  initialValue: _selectedCategory,
+                  decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+                  items: names.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(),
+                  onChanged: (v) => setState(() => _selectedCategory = v),
+                );
+              },
+            ),
+            if (_selectedCategory == 'Monthly Salary') ...[
+              const Gap(12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B3D2F).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFD6B64C).withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.lightbulb, size: 18, color: Color(0xFFD6B64C)),
+                    const Gap(10),
+                    Expanded(
+                      child: Text(
+                        'Teacher salaries can be calculated and recorded automatically in the Payroll module.',
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
+                      ),
+                    ),
+                    const Gap(8),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        context.go(RouteNames.payroll);
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: const Text('Go to Payroll', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  const Icon(LucideIcons.lightbulb, size: 18, color: Color(0xFFD6B64C)),
-                  const Gap(10),
-                  Expanded(
-                    child: Text(
-                      'Teacher salaries can be calculated and recorded automatically in the Payroll module.',
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
-                    ),
-                  ),
-                  const Gap(8),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      context.go(RouteNames.payroll);
-                    },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    child: const Text('Go to Payroll', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                ],
+            ],
+            const Gap(16),
+            ABMTextField(
+              label: 'Amount (SAR)',
+              controller: _amountController,
+              keyboardType: TextInputType.number,
+              hint: 'Enter amount',
+            ),
+            const Gap(16),
+            ABMTextField(
+              label: 'Description',
+              controller: _descriptionController,
+              hint: 'E.g. Monthly rent, Utility bills...',
+            ),
+            const Gap(16),
+            InkWell(
+              onTap: _pickDate,
+              borderRadius: BorderRadius.circular(8),
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Date',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(LucideIcons.calendar, size: 18),
+                ),
+                child: Text(DateFormat('dd MMM yyyy').format(_selectedDate)),
               ),
             ),
           ],
-          const Gap(16),
-          ABMTextField(
-            label: 'Amount (SAR)',
-            controller: _amountController,
-            keyboardType: TextInputType.number,
-            hint: 'Enter amount',
-          ),
-          const Gap(16),
-          ABMTextField(
-            label: 'Description',
-            controller: _descriptionController,
-            hint: 'E.g. Monthly rent, Utility bills...',
-          ),
-        ],
+        ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         ElevatedButton(
           onPressed: _isSaving ? null : _submit,
-          child: Text(_isSaving ? 'Saving...' : 'Save Expense'),
+          child: Text(_isSaving
+              ? (_isEdit ? 'Updating...' : 'Saving...')
+              : (_isEdit ? 'Update Expense' : 'Save Expense')),
         ),
       ],
     );
@@ -1535,15 +1662,31 @@ class _AddExpenseDialogState extends ConsumerState<_AddExpenseDialog> {
       return;
     }
 
+    final activeInstitute = ref.read(selectedInstituteProvider);
+
     setState(() => _isSaving = true);
     try {
-      await ref.read(madrassaFinanceRepositoryProvider).addExpense(
-            category: _selectedCategory!,
-            amount: amount,
-            description: _descriptionController.text,
-            processedBy: user.id,
-            date: widget.currentMonth,
-          );
+      if (_isEdit) {
+        await ref.read(madrassaFinanceRepositoryProvider).updateExpense(
+              id: widget.expense!.id,
+              category: _selectedCategory!,
+              amount: amount,
+              description: _descriptionController.text,
+              date: _selectedDate,
+              instituteId: widget.expense!.instituteId ?? activeInstitute.id,
+              accountSegment: _accountSegment,
+            );
+      } else {
+        await ref.read(madrassaFinanceRepositoryProvider).addExpense(
+              category: _selectedCategory!,
+              amount: amount,
+              description: _descriptionController.text,
+              processedBy: user.id,
+              date: _selectedDate,
+              instituteId: activeInstitute.id,
+              accountSegment: _accountSegment,
+            );
+      }
       widget.onSuccess();
       if (mounted) Navigator.pop(context);
     } catch (e) {

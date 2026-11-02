@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:abm_madrasa/core/auth/role_permissions.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
 import 'package:abm_madrasa/core/router/route_names.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
+import 'package:abm_madrasa/core/theme/color/color_palatte.dart';
 import 'package:abm_madrasa/core/utils/institute_time.dart';
-import 'package:abm_madrasa/shared/widgets/confirm_dialog.dart';
+import 'package:abm_madrasa/core/utils/web_download.dart';
 import 'package:abm_madrasa/features/attendance/domain/attendance_model.dart';
 import 'package:abm_madrasa/features/attendance/presentation/attendance_controller.dart';
 import 'package:abm_madrasa/features/auth/domain/user_model.dart';
@@ -12,21 +15,21 @@ import 'package:abm_madrasa/features/settings/presentation/permission_controller
 import 'package:abm_madrasa/shared/widgets/abm_button.dart';
 import 'package:abm_madrasa/shared/widgets/abm_pattern_painter.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
+import 'package:abm_madrasa/shared/widgets/confirm_dialog.dart';
+import 'package:excel/excel.dart' hide Border;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:excel/excel.dart' hide Border;
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:abm_madrasa/core/utils/web_download.dart';
 
 class AttendanceMarkScreen extends ConsumerStatefulWidget {
   const AttendanceMarkScreen({super.key});
@@ -43,12 +46,13 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
   String _searchQuery = '';
   String _selectedType = 'Student';
   String _selectedShift = 'Shift-1';
+  String _selectedStatusFilter = 'All'; // 'All' | 'Present' | 'Late' | 'Absent'
   bool _saving = false;
 
-  // Saves the current roster with a busy state + error handling, so a failed
-  // save surfaces a friendly message instead of failing silently, and the
-  // button can't be double-tapped mid-save.
-  Future<void> _saveRecords({required String markedBy, String? classroomName}) async {
+  Future<void> _saveRecords({
+    required String markedBy,
+    String? classroomName,
+  }) async {
     if (_saving) return;
     setState(() => _saving = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -65,16 +69,36 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
             ).notifier,
           )
           .saveAttendance(markedBy, classroomName: classroomName);
+      HapticFeedback.mediumImpact();
       messenger.showSnackBar(
         SnackBar(
-          content: Text(_selectedType == 'Teacher'
-              ? 'Teacher attendance saved successfully'
-              : 'Student attendance saved successfully'),
+          content: Row(
+            children: [
+              const Icon(LucideIcons.checkCircle2, color: Colors.white, size: 20),
+              const Gap(10),
+              Expanded(
+                child: Text(
+                  _selectedType == 'Teacher'
+                      ? 'Teacher attendance saved successfully'
+                      : 'Student attendance saved successfully',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
           backgroundColor: successColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(friendlyErrorMessage(e)),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -91,10 +115,14 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
     final isStudent = _selectedType == 'Student';
     final dateStr = DateFormat('EEE, dd MMM yyyy').format(_selectedDate);
     final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
-    final targetName = isStudent ? (_selectedClassroom ?? 'Classroom') : 'Teachers';
-    final presentCount = records.where((r) => r.status == AttendanceStatus.present).length;
-    final absentCount = records.where((r) => r.status == AttendanceStatus.absent).length;
-    final lateCount = records.where((r) => r.status == AttendanceStatus.late).length;
+    final targetName =
+        isStudent ? (_selectedClassroom ?? 'Classroom') : 'Teachers';
+    final presentCount =
+        records.where((r) => r.status == AttendanceStatus.present).length;
+    final absentCount =
+        records.where((r) => r.status == AttendanceStatus.absent).length;
+    final lateCount =
+        records.where((r) => r.status == AttendanceStatus.late).length;
 
     final box = context.findRenderObject() as RenderBox?;
     final origin = box != null
@@ -113,26 +141,40 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('Attendance Sheet — $targetName',
-                      style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(
+                    'Attendance Sheet — $targetName',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
                   pw.SizedBox(height: 3),
                   pw.Text(
                     isStudent
                         ? 'Date: $dateStr  |  Shift: $_selectedShift'
                         : 'Date: $dateStr',
-                    style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+                    style: const pw.TextStyle(
+                      fontSize: 11,
+                      color: PdfColors.grey700,
+                    ),
                   ),
                 ],
               ),
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: PdfColors.grey400),
                   borderRadius: pw.BorderRadius.circular(6),
                 ),
                 child: pw.Text(
                   'Total: ${records.length}  |  P: $presentCount  |  A: $absentCount  |  L: $lateCount',
-                  style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -140,16 +182,38 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
           pw.SizedBox(height: 14),
           pw.TableHelper.fromTextArray(
             headers: isStudent
-                ? ['#', 'Roll / Adm No', 'Student Name', 'Status', 'Remarks / Signature']
-                : ['#', 'Emp ID', 'Teacher Name', 'Status', 'Remarks / Signature'],
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+                ? [
+                    '#',
+                    'Roll / Adm No',
+                    'Student Name',
+                    'Status',
+                    'Remarks / Signature',
+                  ]
+                : [
+                    '#',
+                    'Emp ID',
+                    'Teacher Name',
+                    'Status',
+                    'Remarks / Signature',
+                  ],
+            headerStyle: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 10,
+            ),
             cellStyle: const pw.TextStyle(fontSize: 9),
-            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+            cellPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 6,
+              vertical: 5,
+            ),
             data: List.generate(records.length, (i) {
               final r = records[i];
-              final id = isStudent ? (r.admissionNumber ?? '') : (r.employeeId ?? '');
-              final name = isStudent ? (r.studentName ?? '') : (r.teacherName ?? '');
-              final statusStr = r.status.name[0].toUpperCase() + r.status.name.substring(1);
+              final id = isStudent
+                  ? (r.admissionNumber ?? '')
+                  : (r.employeeId ?? '');
+              final name =
+                  isStudent ? (r.studentName ?? '') : (r.teacherName ?? '');
+              final statusStr =
+                  r.status.name[0].toUpperCase() + r.status.name.substring(1);
               return [
                 '${i + 1}',
                 id,
@@ -172,7 +236,11 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
         await Printing.sharePdf(bytes: bytes, filename: fname, bounds: origin);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyErrorMessage(e))),
+        );
+      }
     }
   }
 
@@ -209,7 +277,8 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
       ]);
       for (int i = 0; i < records.length; i++) {
         final r = records[i];
-        final statusStr = r.status.name[0].toUpperCase() + r.status.name.substring(1);
+        final statusStr =
+            r.status.name[0].toUpperCase() + r.status.name.substring(1);
         sheet.appendRow([
           IntCellValue(i + 1),
           TextCellValue(r.admissionNumber ?? ''),
@@ -232,7 +301,8 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
       ]);
       for (int i = 0; i < records.length; i++) {
         final r = records[i];
-        final statusStr = r.status.name[0].toUpperCase() + r.status.name.substring(1);
+        final statusStr =
+            r.status.name[0].toUpperCase() + r.status.name.substring(1);
         sheet.appendRow([
           IntCellValue(i + 1),
           TextCellValue(r.employeeId ?? ''),
@@ -248,8 +318,16 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
     if (bytes == null) return;
 
     if (kIsWeb) {
-      triggerBrowserDownload(bytes, fname, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Downloaded $fname')));
+      triggerBrowserDownload(
+        bytes,
+        fname,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Downloaded $fname')),
+        );
+      }
       return;
     }
 
@@ -258,25 +336,40 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
       final file = File('${dir.path}/$fname');
       await file.writeAsBytes(bytes, flush: true);
       await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', name: fname)],
+        [
+          XFile(
+            file.path,
+            mimeType:
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            name: fname,
+          ),
+        ],
         text: 'Attendance sheet — $targetName ($dateKey)',
         sharePositionOrigin: origin,
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyErrorMessage(e))),
+        );
+      }
     }
   }
 
-  void _showDownloadOptions(BuildContext context, List<AttendanceModel> records) {
+  void _showDownloadOptions(
+    BuildContext context,
+    List<AttendanceModel> records,
+  ) {
     final colors = context.colors;
     final typography = context.typography;
     final isStudent = _selectedType == 'Student';
-    final targetName = isStudent ? (_selectedClassroom ?? 'Classroom') : 'Teachers';
+    final targetName =
+        isStudent ? (_selectedClassroom ?? 'Classroom') : 'Teachers';
     final dateStr = DateFormat('EEE, dd MMM yyyy').format(_selectedDate);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: colors.background,
+      backgroundColor: colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -306,17 +399,23 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                       color: colors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(LucideIcons.downloadCloud, color: colors.primary, size: 22),
+                    child: Icon(
+                      LucideIcons.downloadCloud,
+                      color: colors.primary,
+                      size: 22,
+                    ),
                   ),
                   const Gap(12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Download Attendance Sheet', style: typography.h4),
+                        Text('Export Attendance Sheet', style: typography.h4),
                         Text(
                           '$targetName  •  $dateStr',
-                          style: typography.caption.copyWith(color: colors.textSecondary),
+                          style: typography.caption.copyWith(
+                            color: colors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -335,7 +434,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: colors.white,
+                      color: const Color(0xFFFAFAFA),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: colors.border),
                     ),
@@ -347,21 +446,36 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                             color: Colors.red.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(LucideIcons.fileText, color: Colors.red, size: 22),
+                          child: const Icon(
+                            LucideIcons.fileText,
+                            color: Colors.red,
+                            size: 22,
+                          ),
                         ),
                         const Gap(14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Printable PDF Roster', style: typography.bodyMediumSemiBold),
+                              Text(
+                                'Printable PDF Roster',
+                                style: typography.bodyMediumSemiBold,
+                              ),
                               const Gap(2),
-                              Text('Ready to print or save for offline attendance marking',
-                                  style: typography.caption.copyWith(color: colors.textSecondary)),
+                              Text(
+                                'Ready to print or save for offline attendance records',
+                                style: typography.caption.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        const Icon(LucideIcons.chevronRight, size: 18, color: Colors.grey),
+                        const Icon(
+                          LucideIcons.chevronRight,
+                          size: 18,
+                          color: Colors.grey,
+                        ),
                       ],
                     ),
                   ),
@@ -379,7 +493,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: colors.white,
+                      color: const Color(0xFFFAFAFA),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: colors.border),
                     ),
@@ -391,21 +505,36 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                             color: Colors.green.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(LucideIcons.table, color: Colors.green, size: 22),
+                          child: const Icon(
+                            LucideIcons.table,
+                            color: Colors.green,
+                            size: 22,
+                          ),
                         ),
                         const Gap(14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Excel Spreadsheet (.xlsx)', style: typography.bodyMediumSemiBold),
+                              Text(
+                                'Excel Spreadsheet (.xlsx)',
+                                style: typography.bodyMediumSemiBold,
+                              ),
                               const Gap(2),
-                              Text('Formatted spreadsheet with all current attendance statuses',
-                                  style: typography.caption.copyWith(color: colors.textSecondary)),
+                              Text(
+                                'Formatted spreadsheet with statuses and remarks',
+                                style: typography.caption.copyWith(
+                                  color: colors.textSecondary,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        const Icon(LucideIcons.chevronRight, size: 18, color: Colors.grey),
+                        const Icon(
+                          LucideIcons.chevronRight,
+                          size: 18,
+                          color: Colors.grey,
+                        ),
                       ],
                     ),
                   ),
@@ -418,20 +547,176 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
     );
   }
 
-  /// Chooses an accurate empty-state icon + message: distinguishes "no class
-  /// scheduled on this date" from "class is scheduled but nobody is enrolled".
-  ({IconData icon, String message}) _emptyState(List<String> scheduled, String? classroom) {
+  void _showClassroomPickerSheet(
+    BuildContext context,
+    List<String> classrooms,
+    String? current,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = classrooms
+                .where((c) => c.toLowerCase().contains(query.toLowerCase()))
+                .toList();
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.65,
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const Gap(16),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: context.colors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            LucideIcons.graduationCap,
+                            color: context.colors.primary,
+                            size: 20,
+                          ),
+                        ),
+                        const Gap(12),
+                        Text('Select Class / Section', style: context.typography.h4),
+                      ],
+                    ),
+                    const Gap(14),
+                    TextField(
+                      onChanged: (val) => setSheetState(() => query = val),
+                      decoration: InputDecoration(
+                        hintText: 'Search classroom...',
+                        prefixIcon: const Icon(LucideIcons.search, size: 18),
+                        filled: true,
+                        fillColor: const Color(0xFFF3F4F6),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                    const Gap(12),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final cls = filtered[index];
+                          final isSelected = cls == current;
+                          return InkWell(
+                            onTap: () {
+                              setState(() => _selectedClassroom = cls);
+                              Navigator.of(ctx).pop();
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 13,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? context.colors.primary.withValues(alpha: 0.08)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? context.colors.primary.withValues(alpha: 0.3)
+                                      : Colors.transparent,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    cls,
+                                    style: context.typography.bodyMediumSemiBold
+                                        .copyWith(
+                                      color: isSelected
+                                          ? context.colors.primary
+                                          : const Color(0xFF163D32),
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  if (isSelected)
+                                    Icon(
+                                      LucideIcons.check,
+                                      size: 18,
+                                      color: context.colors.primary,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  ({IconData icon, String message}) _emptyState(
+    List<String> scheduled,
+    String? classroom,
+  ) {
     if (_searchQuery.trim().isNotEmpty) {
-      return (icon: LucideIcons.search, message: 'No results match your search.');
+      return (
+        icon: LucideIcons.search,
+        message: 'No students match "$_searchQuery"',
+      );
+    }
+    if (_selectedStatusFilter != 'All') {
+      return (
+        icon: LucideIcons.filter,
+        message: 'No students marked as $_selectedStatusFilter in this class.',
+      );
     }
     if (_selectedType == 'Teacher') {
-      return (icon: LucideIcons.calendarOff, message: 'No classes scheduled for this date.');
+      return (
+        icon: LucideIcons.calendarOff,
+        message: 'No classes scheduled for this date.',
+      );
     }
     final cls = classroom ?? '';
     if (cls.isNotEmpty && scheduled.contains(cls)) {
       return (
         icon: LucideIcons.userX,
-        message: 'No $_selectedShift students enrolled in $cls.\nAdd students to this class to mark attendance.',
+        message:
+            'No $_selectedShift students enrolled in $cls.\nAdd students to this class to mark attendance.',
       );
     }
     return (
@@ -444,9 +729,11 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final user = ref.watch(authControllerProvider).value;
-    final allowedModules = user != null ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role) : <String>{};
-    final canManageTeachers = user?.role.canAccess(AppModule.teachers, allowedModules) ?? false;
-    // Teachers are date-locked to today; admins / head master may backfill.
+    final allowedModules = user != null
+        ? ref.read(permissionControllerProvider.notifier).getPermissionsForRole(user.role)
+        : <String>{};
+    final canManageTeachers =
+        user?.role.canAccess(AppModule.teachers, allowedModules) ?? false;
     final canBackfill = user?.role.canBackfillAttendance ?? false;
     if (!canBackfill && _selectedDate != instituteToday()) {
       _selectedDate = instituteToday();
@@ -454,7 +741,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
     final classroomsAsync = ref.watch(attendanceClassroomsProvider);
 
     return Scaffold(
-      backgroundColor: colors.background,
+      backgroundColor: const Color(0xFFF6F8F7),
       body: classroomsAsync.when(
         data: (classrooms) {
           if (classrooms.isNotEmpty) {
@@ -464,48 +751,64 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
           if (classrooms.isEmpty && _selectedType == 'Student') {
             return Column(
               children: [
-                _AttendanceHeader(
+                _AttendanceCompactHeader(
                   selectedDate: _selectedDate,
                   selectedClassroom: null,
                   classrooms: const [],
                   user: user,
                   allowedModules: allowedModules,
-                  searchQuery: _searchQuery,
                   selectedType: _selectedType,
                   selectedShift: _selectedShift,
                   onTypeChanged: (val) => setState(() => _selectedType = val),
                   onShiftChanged: (val) => setState(() => _selectedShift = val),
-                  onSelectClassroom: (value) {},
-                  onSearchChanged: (value) => setState(() => _searchQuery = value),
+                  onOpenClassroomPicker: () {},
                   onMarkAllPresent: () {},
                   onSelectDate: () {},
                   dateLocked: !canBackfill,
                 ),
                 Expanded(
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.school, size: 48, color: colors.textSecondary),
-                        const Gap(16),
-                        Text(
-                          'No classrooms found',
-                          style: context.typography.h3.copyWith(color: colors.textSecondary),
-                        ),
-                        const Gap(8),
-                        Text(
-                          'Add classrooms to this institute to start marking attendance.',
-                          style: context.typography.bodyMedium.copyWith(color: colors.textSecondary),
-                          textAlign: TextAlign.center,
-                        ),
-                        const Gap(24),
-                        if (canManageTeachers)
-                          ABMButton(
-                            text: 'Manage Classrooms',
-                            icon: LucideIcons.layers,
-                            onPressed: () => context.go(RouteNames.classrooms),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: colors.primary.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              LucideIcons.school,
+                              size: 44,
+                              color: colors.primary,
+                            ),
                           ),
-                      ],
+                          const Gap(16),
+                          Text(
+                            'No classrooms found',
+                            style: context.typography.h3.copyWith(
+                              color: colors.textPrimary,
+                            ),
+                          ),
+                          const Gap(8),
+                          Text(
+                            'Add classrooms to this institute to start marking attendance.',
+                            style: context.typography.bodyMedium.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const Gap(24),
+                          if (canManageTeachers)
+                            ABMButton(
+                              text: 'Manage Classrooms',
+                              icon: LucideIcons.layers,
+                              onPressed: () => context.go(RouteNames.classrooms),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -513,15 +816,19 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
             );
           }
 
-          // Attendance is available for EVERY class (not just those with a
-          // timetable entry that day), so newly-created classes work too.
           final scheduledClassrooms = classrooms;
-
-          if (scheduledClassrooms.isNotEmpty && (_selectedClassroom == null || !scheduledClassrooms.contains(_selectedClassroom))) {
+          if (scheduledClassrooms.isNotEmpty &&
+              (_selectedClassroom == null ||
+                  !scheduledClassrooms.contains(_selectedClassroom))) {
             _selectedClassroom = scheduledClassrooms.first;
           }
 
-          final effectiveClassroom = _selectedType == 'Teacher' ? null : (_selectedClassroom ?? (scheduledClassrooms.isNotEmpty ? scheduledClassrooms.first : null));
+          final effectiveClassroom = _selectedType == 'Teacher'
+              ? null
+              : (_selectedClassroom ??
+                  (scheduledClassrooms.isNotEmpty
+                      ? scheduledClassrooms.first
+                      : null));
 
           final attendanceAsync = ref.watch(
             attendanceControllerProvider(
@@ -533,65 +840,69 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
             ),
           );
 
+          Future<void> handleMarkAllPresent() async {
+            final ok = await confirmActionDialog(
+              context,
+              title: 'Mark All Present',
+              message:
+                  'Set every listed person to Present? You can still adjust individuals before saving.',
+              confirmLabel: 'Mark All',
+              destructive: false,
+              icon: LucideIcons.checkCheck,
+            );
+            if (!ok) return;
+            ref
+                .read(
+                  attendanceControllerProvider(
+                    date: _selectedDate,
+                    classroom: _selectedType == 'Teacher'
+                        ? null
+                        : effectiveClassroom,
+                    type: _selectedType,
+                    shift: _selectedShift,
+                    academicYear: _academicYear,
+                  ).notifier,
+                )
+                .markAll(AttendanceStatus.present);
+            HapticFeedback.lightImpact();
+          }
+
           return Column(
             children: [
-              _AttendanceHeader(
+              _AttendanceCompactHeader(
                 selectedDate: _selectedDate,
                 selectedClassroom: effectiveClassroom ?? '',
                 classrooms: scheduledClassrooms,
                 user: user,
                 allowedModules: allowedModules,
-                searchQuery: _searchQuery,
                 selectedType: _selectedType,
                 selectedShift: _selectedShift,
-                onTypeChanged: (val) => setState(() => _selectedType = val),
+                onTypeChanged: (val) => setState(() {
+                  _selectedType = val;
+                  _selectedStatusFilter = 'All';
+                }),
                 onShiftChanged: (val) => setState(() {
                   _selectedShift = val;
                   _selectedDate = instituteToday();
                 }),
-                onSelectClassroom: (value) {
-                  setState(() => _selectedClassroom = value);
-                },
-                onSearchChanged: (value) {
-                  setState(() => _searchQuery = value);
-                },
-                onMarkAllPresent: () async {
-                  final ok = await confirmActionDialog(
-                    context,
-                    title: 'Mark All Present',
-                    message: 'Set every listed person to Present? You can still adjust individuals before saving.',
-                    confirmLabel: 'Mark All',
-                    destructive: false,
-                    icon: LucideIcons.checkCheck,
-                  );
-                  if (!ok) return;
-                  ref
-                      .read(
-                        attendanceControllerProvider(
-                          date: _selectedDate,
-                          classroom: _selectedType == 'Teacher' ? null : effectiveClassroom,
-                          type: _selectedType,
-                          shift: _selectedShift,
-                          academicYear: _academicYear,
-                        ).notifier,
-                      )
-                      .markAll(AttendanceStatus.present);
-                },
+                onOpenClassroomPicker: () => _showClassroomPickerSheet(
+                  context,
+                  scheduledClassrooms,
+                  effectiveClassroom,
+                ),
+                onMarkAllPresent: handleMarkAllPresent,
                 onSelectDate: () async {
                   final today = instituteToday();
-                  // Teachers are locked to today — they cannot view or mark any
-                  // other day. Only admins / head master may backfill.
                   if (!canBackfill) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Attendance can be marked only for today.')),
+                      const SnackBar(
+                        content: Text('Attendance can be marked only for today.'),
+                      ),
                     );
                     return;
                   }
-                  // Free calendar: pick any day up to today. Days without a
-                  // scheduled class just show the "No class scheduled" state,
-                  // so the admin can navigate freely instead of being locked
-                  // to a handful of class dates.
-                  final initial = _selectedDate.isAfter(today) ? today : _selectedDate;
+                  final initial =
+                      _selectedDate.isAfter(today) ? today : _selectedDate;
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: initial,
@@ -599,75 +910,164 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                     lastDate: today,
                   );
                   if (picked != null) {
-                    setState(() => _selectedDate = DateTime.utc(picked.year, picked.month, picked.day));
+                    setState(
+                      () => _selectedDate = DateTime.utc(
+                        picked.year,
+                        picked.month,
+                        picked.day,
+                      ),
+                    );
                   }
                 },
                 dateLocked: !canBackfill,
-                onDownload: () => _showDownloadOptions(context, attendanceAsync.value ?? const []),
+                onDownload: () => _showDownloadOptions(
+                  context,
+                  attendanceAsync.value ?? const [],
+                ),
               ),
               Expanded(
                 child: attendanceAsync.when(
                   data: (records) {
-                    final filteredRecords = records.where((record) {
-                      final query = _searchQuery.trim().toLowerCase();
-                      if (query.isEmpty) {
-                        return true;
-                      }
-                      final name = (record.studentName ?? record.teacherName ?? '').toLowerCase();
-                      final id = (record.studentId ?? record.teacherId ?? '').toLowerCase();
+                    final query = _searchQuery.trim().toLowerCase();
+                    final searchedRecords = records.where((record) {
+                      if (query.isEmpty) return true;
+                      final name = (record.studentName ??
+                              record.teacherName ??
+                              '')
+                          .toLowerCase();
+                      final id = (record.studentId ??
+                              record.teacherId ??
+                              record.admissionNumber ??
+                              record.employeeId ??
+                              '')
+                          .toLowerCase();
                       return name.contains(query) || id.contains(query);
                     }).toList();
 
-                    final presentCount = filteredRecords
-                        .where((record) => record.status == AttendanceStatus.present)
+                    final presentCount = records
+                        .where((r) => r.status == AttendanceStatus.present)
                         .length;
-                    final lateCount = filteredRecords
-                        .where((record) => record.status == AttendanceStatus.late)
+                    final lateCount = records
+                        .where((r) => r.status == AttendanceStatus.late)
                         .length;
-                    final absentCount = filteredRecords
-                        .where((record) => record.status == AttendanceStatus.absent)
+                    final absentCount = records
+                        .where((r) => r.status == AttendanceStatus.absent)
                         .length;
+                    final totalCount = records.length;
 
-                    final empty = _emptyState(scheduledClassrooms, effectiveClassroom);
+                    final filteredRecords = searchedRecords.where((record) {
+                      if (_selectedStatusFilter == 'Present') {
+                        return record.status == AttendanceStatus.present;
+                      }
+                      if (_selectedStatusFilter == 'Late') {
+                        return record.status == AttendanceStatus.late;
+                      }
+                      if (_selectedStatusFilter == 'Absent') {
+                        return record.status == AttendanceStatus.absent;
+                      }
+                      return true;
+                    }).toList();
+
+                    final empty =
+                        _emptyState(scheduledClassrooms, effectiveClassroom);
 
                     return Column(
                       children: [
+                        // Live Filter & Search Control Row
+                        _AttendanceControlBar(
+                          searchQuery: _searchQuery,
+                          onSearchChanged: (val) =>
+                              setState(() => _searchQuery = val),
+                          totalCount: totalCount,
+                          presentCount: presentCount,
+                          lateCount: lateCount,
+                          absentCount: absentCount,
+                          selectedFilter: _selectedStatusFilter,
+                          onFilterSelected: (filter) =>
+                              setState(() => _selectedStatusFilter = filter),
+                          onMarkAllPresent: handleMarkAllPresent,
+                        ),
+
+                        // Student List
                         Expanded(
                           child: filteredRecords.isEmpty
                               ? Center(
                                   child: SingleChildScrollView(
-                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                      horizontal: 24,
+                                    ),
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(
-                                          empty.icon,
-                                          size: 42,
-                                          color: colors.textSecondary.withValues(alpha: 0.5),
+                                        Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.04,
+                                                ),
+                                                blurRadius: 10,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            empty.icon,
+                                            size: 38,
+                                            color: colors.textSecondary
+                                                .withValues(alpha: 0.7),
+                                          ),
                                         ),
-                                        const Gap(12),
+                                        const Gap(14),
                                         Text(
                                           empty.message,
-                                          style: context.typography.bodyMedium.copyWith(
+                                          style: context.typography.bodyMedium
+                                              .copyWith(
                                             color: colors.textSecondary,
+                                            height: 1.4,
                                           ),
                                           textAlign: TextAlign.center,
                                         ),
+                                        if (_searchQuery.isNotEmpty ||
+                                            _selectedStatusFilter != 'All') ...[
+                                          const Gap(14),
+                                          TextButton.icon(
+                                            onPressed: () {
+                                              setState(() {
+                                                _searchQuery = '';
+                                                _selectedStatusFilter = 'All';
+                                              });
+                                            },
+                                            icon: const Icon(
+                                              LucideIcons.xCircle,
+                                              size: 16,
+                                            ),
+                                            label: const Text('Clear Filters'),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
                                 )
                               : ListView.builder(
                                   padding: EdgeInsets.fromLTRB(
-                                    context.isMobile ? 14 : 20,
-                                    12,
-                                    context.isMobile ? 14 : 20,
-                                    16,
+                                    context.isMobile ? 12 : 20,
+                                    10,
+                                    context.isMobile ? 12 : 20,
+                                    100, // Keep bottom list items clear of floating save bar
                                   ),
                                   itemCount: filteredRecords.length,
                                   itemBuilder: (context, index) {
                                     final record = filteredRecords[index];
-                                    return _AttendanceRow(
+                                    return _AttendanceCard(
+                                      key: ValueKey(
+                                        record.studentId ??
+                                            record.teacherId ??
+                                            '$index',
+                                      ),
                                       record: record,
                                       classroom: _selectedClassroom,
                                       date: _selectedDate,
@@ -677,138 +1077,43 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                                   },
                                 ),
                         ),
-                        Container(
-                          padding: EdgeInsets.fromLTRB(
-                            context.isMobile ? 14 : 20,
-                            12,
-                            context.isMobile ? 14 : 20,
-                            context.isMobile ? 14 : 20,
+
+                        // Floating Bottom Action Bar
+                        _AttendanceBottomBar(
+                          presentCount: presentCount,
+                          lateCount: lateCount,
+                          absentCount: absentCount,
+                          totalCount: totalCount,
+                          saving: _saving,
+                          onDownload: () => _showDownloadOptions(
+                            context,
+                            filteredRecords,
                           ),
-                          decoration: BoxDecoration(
-                            color: colors.white,
-                            border: Border(top: BorderSide(color: colors.border)),
+                          onSave: () => _saveRecords(
+                            markedBy: user?.username ?? 'Admin',
+                            classroomName: _selectedType == 'Student'
+                                ? effectiveClassroom
+                                : null,
                           ),
-                          child: context.isMobile
-                              ? Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          '$presentCount Present',
-                                          style: context.typography.bodyMediumSemiBold.copyWith(
-                                            color: Colors.green.shade700,
-                                          ),
-                                        ),
-                                        const Gap(14),
-                                        if (lateCount > 0)
-                                          Text(
-                                            '$lateCount Late',
-                                            style: context.typography.bodyMediumSemiBold.copyWith(
-                                              color: Colors.orange.shade700,
-                                            ),
-                                          ),
-                                        if (lateCount > 0) const Gap(14),
-                                        Text(
-                                          '$absentCount Absent',
-                                          style: context.typography.bodyMediumSemiBold.copyWith(
-                                            color: Colors.red.shade700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const Gap(12),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: OutlinedButton.icon(
-                                            onPressed: () => _showDownloadOptions(context, filteredRecords),
-                                            icon: const Icon(LucideIcons.download, size: 16),
-                                            label: const Text('Download'),
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: context.colors.primary,
-                                              side: BorderSide(color: context.colors.primary.withValues(alpha: 0.35)),
-                                              padding: const EdgeInsets.symmetric(vertical: 13),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const Gap(10),
-                                        Expanded(
-                                          flex: 2,
-                                          child: ABMButton(
-                                            text: 'Save Records',
-                                            isLoading: _saving,
-                                            onPressed: () => _saveRecords(
-                                              markedBy: user?.username ?? 'Admin',
-                                              classroomName: _selectedType == 'Student' ? effectiveClassroom : null,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                )
-                              : Row(
-                                  children: [
-                                    Text(
-                                      '$presentCount Present',
-                                      style: context.typography.bodyMediumSemiBold.copyWith(
-                                        color: Colors.green.shade700,
-                                      ),
-                                    ),
-                                    const Gap(18),
-                                    if (lateCount > 0)
-                                      Text(
-                                        '$lateCount Late',
-                                        style: context.typography.bodyMediumSemiBold.copyWith(
-                                          color: Colors.orange.shade700,
-                                        ),
-                                      ),
-                                    if (lateCount > 0) const Gap(18),
-                                    Text(
-                                      '$absentCount Absent',
-                                      style: context.typography.bodyMediumSemiBold.copyWith(
-                                        color: Colors.red.shade700,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    OutlinedButton.icon(
-                                      onPressed: () => _showDownloadOptions(context, filteredRecords),
-                                      icon: const Icon(LucideIcons.download, size: 16),
-                                      label: const Text('Download Sheet'),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: context.colors.primary,
-                                        side: BorderSide(color: context.colors.primary.withValues(alpha: 0.35)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                      ),
-                                    ),
-                                    const Gap(12),
-                                    SizedBox(
-                                      width: 170,
-                                      child: ABMButton(
-                                        text: 'Save Records',
-                                        isLoading: _saving,
-                                        onPressed: () => _saveRecords(
-                                          markedBy: user?.username ?? 'Admin',
-                                          classroomName: _selectedType == 'Student' ? effectiveClassroom : null,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
                         ),
                       ],
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, _) => Center(child: Text(friendlyErrorMessage(err))),
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                  error: (err, _) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        friendlyErrorMessage(err),
+                        textAlign: TextAlign.center,
+                        style: context.typography.bodyMedium.copyWith(
+                          color: colors.red,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -821,23 +1126,22 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
   }
 }
 
-class _AttendanceHeader extends StatelessWidget {
-  const _AttendanceHeader({
+/// Compact, ultra-clean header for Attendance
+class _AttendanceCompactHeader extends StatelessWidget {
+  const _AttendanceCompactHeader({
     required this.selectedDate,
     required this.selectedClassroom,
     required this.classrooms,
     required this.user,
     required this.allowedModules,
-    required this.searchQuery,
     required this.selectedType,
     required this.selectedShift,
     required this.onTypeChanged,
     required this.onShiftChanged,
-    required this.onSelectClassroom,
-    required this.onSearchChanged,
+    required this.onOpenClassroomPicker,
     required this.onMarkAllPresent,
     required this.onSelectDate,
-    this.dateLocked = false,
+    required this.dateLocked,
     this.onDownload,
   });
 
@@ -846,13 +1150,11 @@ class _AttendanceHeader extends StatelessWidget {
   final List<String> classrooms;
   final UserModel? user;
   final Set<String> allowedModules;
-  final String searchQuery;
   final String selectedType;
   final String selectedShift;
   final ValueChanged<String> onTypeChanged;
   final ValueChanged<String> onShiftChanged;
-  final ValueChanged<String> onSelectClassroom;
-  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onOpenClassroomPicker;
   final VoidCallback onMarkAllPresent;
   final VoidCallback onSelectDate;
   final bool dateLocked;
@@ -860,408 +1162,669 @@ class _AttendanceHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     final typography = context.typography;
     final isMobile = context.isMobile;
-    final filterCardPadding = isMobile ? 10.0 : 12.0;
-    final sectionGap = isMobile ? 8.0 : 12.0;
-    final canManageTeachers = user?.role.canAccess(AppModule.teachers, allowedModules) ?? false;
+    final canManageTeachers =
+        user?.role.canAccess(AppModule.teachers, allowedModules) ?? false;
+
+    // Formatting date cleanly
+    final dateFormatted = DateFormat(isMobile ? 'd MMM' : 'EEE, d MMM')
+        .format(selectedDate);
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: abmGreenGradient(context),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: ColorPalette.primary.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Stack(
         children: [
           Positioned.fill(
             child: CustomPaint(
               painter: AbmPatternPainter(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: Colors.white.withValues(alpha: 0.04),
               ),
             ),
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              isMobile ? 14 : 20,
-              MediaQuery.of(context).padding.top + (isMobile ? 6 : 12),
-              isMobile ? 14 : 20,
-              isMobile ? 10 : 20,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: abmGold(context),
-                        borderRadius: BorderRadius.circular(7),
-                      ),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: isMobile ? 8 : 12,
+                bottom: isMobile ? 12 : 16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Top Title & Quick Action (scoped horizontal clearance for shell overlay buttons)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: isMobile ? 64 : 20,
+                      right: isMobile ? 116 : 20,
                     ),
-                    const Gap(12),
-                    Text(
-                      'Attendance',
-                      style: typography.h3.copyWith(
-                        color: Colors.white,
-                        fontSize: isMobile ? 20 : 24,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (onDownload != null)
-                      IconButton(
-                        onPressed: onDownload,
-                        icon: const Icon(LucideIcons.download, color: Colors.white),
-                        tooltip: 'Download Attendance Sheet',
-                      ),
-                    IconButton(
-                      onPressed: () => context.push(
-                        selectedType == 'Teacher'
-                            ? RouteNames.teacherAttendanceReport
-                            : RouteNames.studentAttendanceReport,
-                      ),
-                      icon: const Icon(LucideIcons.barChart2, color: Colors.white70),
-                      tooltip: 'View Reports',
-                    ),
-                    const SizedBox(width: 84),
-                    if (user != null && isMobile)
-                      Text(
-                        user!.role.label,
-                        style: typography.bodySmall.copyWith(
-                          color: Colors.white.withValues(alpha: 0.75),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Attendance',
+                                style: typography.h3.copyWith(
+                                  color: Colors.white,
+                                  fontSize: isMobile ? 21 : 25,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const Gap(2),
+                              Text(
+                                selectedType == 'Student'
+                                    ? 'Student Roster • $selectedShift'
+                                    : 'Teacher Roster • $selectedShift',
+                                style: typography.caption.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  fontSize: isMobile ? 12 : 13,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                  ],
-                ),
-                Gap(sectionGap),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(isMobile ? 12 : 14),
-                  ),
-                  child: TextField(
-                    onChanged: onSearchChanged,
-                    style: typography.bodyMedium.copyWith(
-                      color: const Color(0xFF163D32),
-                    ),
-                    decoration: InputDecoration(
-                      hintText: selectedType == 'Teacher' ? 'Search teacher...' : 'Search student...',
-                      hintStyle: typography.bodyMedium.copyWith(
-                        color: const Color(0xFF8B928F),
-                      ),
-                      prefixIcon: const Icon(
-                        Icons.search_rounded,
-                        color: Color(0xFF7D857F),
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: isMobile ? 10 : 14,
-                      ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => context.push(
+                            selectedType == 'Teacher'
+                                ? RouteNames.teacherAttendanceReport
+                                : RouteNames.studentAttendanceReport,
+                          ),
+                          icon: Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              LucideIcons.barChart3,
+                              color: Colors.white,
+                              size: 17,
+                            ),
+                          ),
+                          tooltip: 'View Reports',
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                Gap(sectionGap),
-                Container(
-                  padding: EdgeInsets.all(filterCardPadding),
-                  decoration: BoxDecoration(
-                    color: colors.white,
-                    borderRadius: BorderRadius.circular(isMobile ? 18 : 22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
+
+                  // Mode Toggle (Students / Teachers) - only shown if permitted
+                  if (canManageTeachers) ...[
+                    const Gap(10),
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 14 : 20,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      if (canManageTeachers)
-                        Row(
+                      child: Container(
+                        height: 38,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
                           children: [
                             Expanded(
-                              child: _TypeToggleTab(
+                              child: _SegmentPill(
                                 title: 'Students',
+                                icon: LucideIcons.graduationCap,
                                 isSelected: selectedType == 'Student',
                                 onTap: () => onTypeChanged('Student'),
                               ),
                             ),
-                            const Gap(8),
+                            const Gap(4),
                             Expanded(
-                              child: _TypeToggleTab(
+                              child: _SegmentPill(
                                 title: 'Teachers',
+                                icon: LucideIcons.briefcase,
                                 isSelected: selectedType == 'Teacher',
                                 onTap: () => onTypeChanged('Teacher'),
                               ),
                             ),
                           ],
                         ),
-                      if (canManageTeachers)
-                        Gap(isMobile ? 12 : 18),
-                      if (selectedType == 'Student') ...[
-                        _HeaderTile(
-                          title: 'CLASS / SECTION',
-                          child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedClassroom,
-                            isExpanded: true,
-                            dropdownColor: Colors.white,
-                            iconEnabledColor: const Color(0xFF7A837E),
-                            style: typography.bodyMediumSemiBold.copyWith(
-                              color: const Color(0xFF163D32),
-                            ),
-                            items: classrooms
-                                .map(
-                                    (classroom) => DropdownMenuItem(
-                                      value: classroom,
-                                      child: Text(
-                                        classroom,
-                                        style: typography.bodyMediumSemiBold.copyWith(
-                                          color: const Color(0xFF163D32),
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  onSelectClassroom(value);
-                                }
-                              },
+                      ),
+                    ),
+                  ],
+
+                  const Gap(10),
+
+                  // 100% visible, non-scrolling filter row across full device width
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 14 : 20,
+                    ),
+                    child: Row(
+                      children: [
+                        // Class Selector (Only for students)
+                        if (selectedType == 'Student') ...[
+                          Expanded(
+                            flex: 11,
+                            child: _HeaderFilterChip(
+                              icon: LucideIcons.school,
+                              label: selectedClassroom?.isNotEmpty == true
+                                  ? selectedClassroom!
+                                  : 'Select Class',
+                              tooltip: 'Change Classroom',
+                              onTap: onOpenClassroomPicker,
                             ),
                           ),
-                        ),
-                        Gap(isMobile ? 8 : 14),
-                      ],
-                      _HeaderTile(
-                        title: 'SHIFT',
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedShift,
-                            isExpanded: true,
-                            dropdownColor: Colors.white,
-                            iconEnabledColor: const Color(0xFF7A837E),
-                            style: typography.bodyMediumSemiBold.copyWith(
-                              color: const Color(0xFF163D32),
-                            ),
-                            items: ['Shift-1', 'Shift-2']
-                                .map(
-                                  (shift) => DropdownMenuItem(
-                                    value: shift,
-                                    child: Text(
-                                      shift,
-                                      style: typography.bodyMediumSemiBold.copyWith(
-                                        color: const Color(0xFF163D32),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                onShiftChanged(value);
-                              }
+                          const Gap(8),
+                        ],
+
+                        // Shift Selector Pill
+                        Expanded(
+                          flex: 9,
+                          child: _HeaderFilterChip(
+                            icon: LucideIcons.clock,
+                            label: selectedShift,
+                            tooltip: 'Switch Shift',
+                            onTap: () {
+                              onShiftChanged(
+                                selectedShift == 'Shift-1' ? 'Shift-2' : 'Shift-1',
+                              );
                             },
                           ),
                         ),
-                      ),
-                      Gap(isMobile ? 8 : 14),
-                      _HeaderTile(
-                        title: 'DATE',
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
+                        const Gap(8),
+
+                        // Date Selector Pill - Prominent, Highlighted, Always Visible!
+                        Expanded(
+                          flex: 12,
+                          child: _HeaderFilterChip(
+                            icon: LucideIcons.calendar,
+                            label: dateFormatted,
+                            trailingIcon: dateLocked
+                                ? LucideIcons.lock
+                                : LucideIcons.chevronDown,
+                            tooltip: dateLocked
+                                ? 'Locked to Today'
+                                : 'Select Attendance Date',
+                            highlight: true,
                             onTap: onSelectDate,
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFD6B64C).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: const Color(0xFFD6B64C).withValues(alpha: 0.2),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    LucideIcons.calendar,
-                                    size: 16,
-                                    color: const Color(0xFF163D32),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      DateFormat('EEE, dd MMM yyyy').format(selectedDate),
-                                      style: typography.bodyMediumSemiBold.copyWith(
-                                        color: const Color(0xFF163D32),
-                                      ),
-                                    ),
-                                  ),
-                                  Icon(
-                                    dateLocked ? LucideIcons.lock : LucideIcons.chevronDown,
-                                    size: 16,
-                                    color: const Color(0xFF163D32),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Segment pill tab for Students / Teachers mode
+class _SegmentPill extends StatelessWidget {
+  const _SegmentPill({
+    required this.title,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String title;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isSelected
+                  ? ColorPalette.primary
+                  : Colors.white.withValues(alpha: 0.85),
+            ),
+            const Gap(6),
+            Text(
+              title,
+              style: context.typography.bodySmallSemiBold.copyWith(
+                color: isSelected
+                    ? ColorPalette.primary
+                    : Colors.white.withValues(alpha: 0.85),
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact header filter chip
+class _HeaderFilterChip extends StatelessWidget {
+  const _HeaderFilterChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.trailingIcon = LucideIcons.chevronDown,
+    this.tooltip,
+    this.highlight = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final IconData? trailingIcon;
+  final String? tooltip;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final chip = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7.5),
+          decoration: BoxDecoration(
+            color: highlight
+                ? ColorPalette.secondary.withValues(alpha: 0.35)
+                : Colors.white.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: highlight
+                  ? ColorPalette.secondary.withValues(alpha: 0.7)
+                  : Colors.white.withValues(alpha: 0.28),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: Colors.white),
+              const Gap(5),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.typography.bodySmallSemiBold.copyWith(
+                    color: Colors.white,
+                    fontWeight: highlight ? FontWeight.w700 : FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              if (trailingIcon != null) ...[
+                const Gap(3),
+                Icon(
+                  trailingIcon,
+                  size: 12,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return tooltip != null ? Tooltip(message: tooltip!, child: chip) : chip;
+  }
+}
+
+/// Control bar with Search input, interactive status tabs, and attendance progress
+class _AttendanceControlBar extends StatelessWidget {
+  const _AttendanceControlBar({
+    required this.searchQuery,
+    required this.onSearchChanged,
+    required this.totalCount,
+    required this.presentCount,
+    required this.lateCount,
+    required this.absentCount,
+    required this.selectedFilter,
+    required this.onFilterSelected,
+    this.onMarkAllPresent,
+  });
+
+  final String searchQuery;
+  final ValueChanged<String> onSearchChanged;
+  final int totalCount;
+  final int presentCount;
+  final int lateCount;
+  final int absentCount;
+  final String selectedFilter;
+  final ValueChanged<String> onFilterSelected;
+  final VoidCallback? onMarkAllPresent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final isMobile = context.isMobile;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        isMobile ? 12 : 20,
+        10,
+        isMobile ? 12 : 20,
+        4,
+      ),
+      child: Column(
+        children: [
+          // Search Bar
+          Container(
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              onChanged: onSearchChanged,
+              controller: TextEditingController.fromValue(
+                TextEditingValue(
+                  text: searchQuery,
+                  selection: TextSelection.collapsed(offset: searchQuery.length),
+                ),
+              ),
+              style: context.typography.bodySmallMedium.copyWith(
+                color: const Color(0xFF163D32),
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search by student name or roll number...',
+                hintStyle: context.typography.bodySmall.copyWith(
+                  color: colors.textSecondary.withValues(alpha: 0.7),
+                ),
+                prefixIcon: Icon(
+                  LucideIcons.search,
+                  size: 18,
+                  color: colors.textSecondary,
+                ),
+                suffixIcon: searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(LucideIcons.x, size: 16),
+                        onPressed: () => onSearchChanged(''),
+                        visualDensity: VisualDensity.compact,
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 11,
+                ),
+              ),
+            ),
+          ),
+
+          const Gap(10),
+
+          // Interactive Filter Chips Row & All Present Action
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      _StatusFilterTab(
+                        label: 'All',
+                        count: totalCount,
+                        color: ColorPalette.primary,
+                        isSelected: selectedFilter == 'All',
+                        onTap: () => onFilterSelected('All'),
+                      ),
+                      const Gap(6),
+                      _StatusFilterTab(
+                        label: 'Present',
+                        count: presentCount,
+                        color: const Color(0xFF16A34A),
+                        isSelected: selectedFilter == 'Present',
+                        onTap: () => onFilterSelected('Present'),
+                      ),
+                      const Gap(6),
+                      _StatusFilterTab(
+                        label: 'Late',
+                        count: lateCount,
+                        color: const Color(0xFFD97706),
+                        isSelected: selectedFilter == 'Late',
+                        onTap: () => onFilterSelected('Late'),
+                      ),
+                      const Gap(6),
+                      _StatusFilterTab(
+                        label: 'Absent',
+                        count: absentCount,
+                        color: const Color(0xFFDC2626),
+                        isSelected: selectedFilter == 'Absent',
+                        onTap: () => onFilterSelected('Absent'),
                       ),
                     ],
                   ),
                 ),
-                Gap(sectionGap),
-                Row(
-                  children: [
-                    Text(
-                      selectedType == 'Teacher' ? 'Teachers Attendance' : 'Students Attendance',
-                      style: typography.bodyLargeSemiBold.copyWith(
-                        color: Colors.white,
-                        fontSize: isMobile ? 18 : 22,
+              ),
+              if (onMarkAllPresent != null) ...[
+                const Gap(8),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      onMarkAllPresent!();
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6.5,
                       ),
-                    ),
-                    const Spacer(),
-                    if (onDownload != null) ...[
-                      InkWell(
-                        onTap: onDownload,
-                        borderRadius: BorderRadius.circular(999),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 10 : 14,
-                            vertical: isMobile ? 7 : 10,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFF16A34A).withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            LucideIcons.checkCheck,
+                            size: 14,
+                            color: Color(0xFF16A34A),
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
+                          const Gap(4),
+                          Text(
+                            'All Present',
+                            style: context.typography.caption.copyWith(
+                              color: const Color(0xFF16A34A),
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                LucideIcons.download,
-                                size: 15,
-                                color: Colors.white,
-                              ),
-                              if (!isMobile) ...[
-                                const Gap(6),
-                                Text(
-                                  'Download',
-                                  style: typography.bodyMediumSemiBold.copyWith(
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Gap(10),
-                    ],
-                    InkWell(
-                      onTap: onMarkAllPresent,
-                      borderRadius: BorderRadius.circular(999),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isMobile ? 8 : 14,
-                          vertical: isMobile ? 7 : 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD6B64C).withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: const Color(0xFFD6B64C).withValues(alpha: 0.35),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.done_all,
-                              size: 16,
-                              color: Color(0xFFD6B64C),
-                            ),
-                            if (!isMobile) ...[
-                              const Gap(8),
-                              Text(
-                                'Mark All Present',
-                                style: typography.bodyMediumSemiBold.copyWith(
-                                  color: const Color(0xFFD6B64C),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ],
-            ),
+            ],
           ),
+
+          // Segmented Progress Bar (visual breakdown)
+          if (totalCount > 0) ...[
+            const Gap(8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: SizedBox(
+                height: 4,
+                child: Row(
+                  children: [
+                    if (presentCount > 0)
+                      Expanded(
+                        flex: presentCount,
+                        child: Container(color: const Color(0xFF16A34A)),
+                      ),
+                    if (lateCount > 0)
+                      Expanded(
+                        flex: lateCount,
+                        child: Container(color: const Color(0xFFD97706)),
+                      ),
+                    if (absentCount > 0)
+                      Expanded(
+                        flex: absentCount,
+                        child: Container(color: const Color(0xFFDC2626)),
+                      ),
+                    if (totalCount - presentCount - lateCount - absentCount > 0)
+                      Expanded(
+                        flex: totalCount - presentCount - lateCount - absentCount,
+                        child: Container(color: Colors.grey.shade300),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _HeaderTile extends StatelessWidget {
-  const _HeaderTile({required this.title, required this.child});
+/// Filter tab chip with badge count
+class _StatusFilterTab extends StatelessWidget {
+  const _StatusFilterTab({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.isSelected,
+    required this.onTap,
+  });
 
-  final String title;
-  final Widget child;
+  final String label;
+  final int count;
+  final Color color;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final typography = context.typography;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: context.isMobile ? 12 : 14,
-        vertical: context.isMobile ? 8 : 12,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F7F2),
-        borderRadius: BorderRadius.circular(context.isMobile ? 14 : 16),
-        border: Border.all(color: const Color(0xFFE7E3D7)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: typography.caption.copyWith(
-              letterSpacing: 1,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF8A8A81),
+    final colors = context.colors;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? color : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? color : colors.border,
             ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.25),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
-          Gap(context.isMobile ? 4 : 8),
-          DefaultTextStyle(
-            style: typography.bodyMediumSemiBold.copyWith(
-              color: const Color(0xFF163D32),
-              fontSize: context.isMobile ? 14 : null,
-            ),
-            child: IconTheme(
-              data: const IconThemeData(color: Color(0xFF7A837E)),
-              child: child,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: context.typography.bodySmallSemiBold.copyWith(
+                  color: isSelected ? Colors.white : const Color(0xFF374151),
+                  fontSize: 12,
+                ),
+              ),
+              const Gap(6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.25)
+                      : color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$count',
+                  style: context.typography.caption.copyWith(
+                    color: isSelected ? Colors.white : color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _AttendanceRow extends ConsumerWidget {
-  const _AttendanceRow({
+/// Redesigned Student / Teacher attendance card
+class _AttendanceCard extends ConsumerWidget {
+  const _AttendanceCard({
+    super.key,
     required this.record,
     required this.classroom,
     required this.date,
@@ -1275,160 +1838,241 @@ class _AttendanceRow extends ConsumerWidget {
   final String shift;
   final String academicYear;
 
+  Color _getStatusAccentColor(AttendanceStatus status) {
+    switch (status) {
+      case AttendanceStatus.present:
+        return const Color(0xFF16A34A);
+      case AttendanceStatus.late:
+        return const Color(0xFFD97706);
+      case AttendanceStatus.absent:
+        return const Color(0xFFDC2626);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
-    const rowTitleColor = Color(0xFF163D32);
-    const rowSubtleColor = Color(0xFF6F7A75);
+    final isMobile = context.isMobile;
+    final isTeacher =
+        record.teacherId != null && record.teacherId!.isNotEmpty;
+    final name = isTeacher
+        ? (record.teacherName ?? 'Unknown Teacher')
+        : (record.studentName ?? 'Unknown Student');
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final statusColor = _getStatusAccentColor(record.status);
+
+    // Extracted so it can sit inline (desktop) or on its own row (mobile),
+    // which frees the name column to show the full name.
+    final statusSwitch = _StatusSwitch(
+      status: record.status,
+      onChanged: (newStatus) {
+        final targetId = isTeacher ? record.teacherId! : record.studentId!;
+        ref
+            .read(
+              attendanceControllerProvider(
+                date: date,
+                classroom: isTeacher ? null : classroom,
+                type: isTeacher ? 'Teacher' : 'Student',
+                shift: shift,
+                academicYear: academicYear,
+              ).notifier,
+            )
+            .updateStatus(
+              targetId,
+              newStatus,
+              type: isTeacher ? 'Teacher' : 'Student',
+            );
+      },
+    );
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: EdgeInsets.all(context.isMobile ? 9 : 12),
+      margin: const EdgeInsets.only(bottom: 9),
       decoration: BoxDecoration(
-        color: colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: context.isMobile ? 22 : 24,
-            backgroundColor: const Color(0xFFE8EFEA),
-            child: Text(
-              ((record.teacherId != null && record.teacherId!.isNotEmpty)
-                  ? record.teacherName
-                  : record.studentName)?.isNotEmpty == true
-                  ? ((record.teacherId != null && record.teacherId!.isNotEmpty)
-                      ? record.teacherName!
-                      : record.studentName!)[0].toUpperCase()
-                  : '?',
-              style: context.typography.bodyMediumSemiBold.copyWith(
-                color: colors.primary,
-              ),
-            ),
-          ),
-          const Gap(12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  (record.teacherId != null && record.teacherId!.isNotEmpty)
-                      ? (record.teacherName ?? 'Unknown Teacher')
-                      : (record.studentName ?? 'Unknown Student'),
-                  style: context.typography.bodyMediumSemiBold.copyWith(
-                    color: rowTitleColor,
-                    fontSize: context.isMobile ? 14 : null,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const Gap(3),
-                Builder(builder: (context) {
-                  final isTeacher = record.teacherId != null && record.teacherId!.isNotEmpty;
-                  if (!isTeacher) {
-                    return Text(
-                      'Adm: ${record.admissionNumber?.isNotEmpty == true ? record.admissionNumber : record.studentId ?? 'N/A'}',
-                      style: context.typography.bodySmall.copyWith(color: rowSubtleColor, fontSize: context.isMobile ? 12 : null),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    );
-                  }
-                  final emp = record.employeeId?.isNotEmpty == true ? record.employeeId! : '—';
-                  // createdAt is stored UTC; show it in institute (Saudi, UTC+3) time.
-                  final ct = record.createdAt;
-                  final timeStr = ct != null ? ' · marked ${DateFormat('h:mm a').format(ct.add(const Duration(hours: 3)))}' : '';
-                  final notMarked = record.id == null || record.id!.isEmpty;
-                  return Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'ID: $emp$timeStr',
-                          style: context.typography.bodySmall.copyWith(color: rowSubtleColor, fontSize: context.isMobile ? 12 : null),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (notMarked) ...[
-                        const Gap(6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFDEEDE),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            'Not marked',
-                            style: context.typography.bodySmall.copyWith(
-                              color: const Color(0xFFC77B0A),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-                }),
-              ],
-            ),
-          ),
-          _StatusSwitch(
-            status: record.status,
-            onChanged: (status) {
-              final isTeacher = record.teacherId != null && record.teacherId!.isNotEmpty;
-              final targetId = isTeacher ? record.teacherId! : record.studentId!;
-              
-              ref
-                  .read(
-                    attendanceControllerProvider(
-                      date: date,
-                      classroom: isTeacher ? null : classroom,
-                      type: isTeacher ? 'Teacher' : 'Student',
-                      shift: shift,
-                      academicYear: academicYear,
-                    ).notifier,
-                  )
-                  .updateStatus(targetId, status, type: isTeacher ? 'Teacher' : 'Student');
-            },
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-    );
-  }
-}
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Dynamic status indicator strip on the left edge
+              Container(
+                width: 5,
+                color: statusColor,
+              ),
 
-class _TypeToggleTab extends StatelessWidget {
-  const _TypeToggleTab({
-    required this.title,
-    required this.isSelected,
-    required this.onTap,
-  });
+              // Card Content
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 12 : 14,
+                    vertical: isMobile ? 10 : 12,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                      // Avatar with Initial & mini badge
+                      Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: isMobile ? 20 : 22,
+                            backgroundColor:
+                                statusColor.withValues(alpha: 0.12),
+                            child: Text(
+                              initial,
+                              style: context.typography.bodyMediumSemiBold
+                                  .copyWith(
+                                color: statusColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 13,
+                              height: 13,
+                              decoration: BoxDecoration(
+                                color: statusColor,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
 
-  final String title;
-  final bool isSelected;
-  final VoidCallback onTap;
+                      const Gap(12),
 
-  @override
-  Widget build(BuildContext context) {
-    final typography = context.typography;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFD6B64C) : const Color(0xFFF8F7F2),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? const Color(0xFFD6B64C) : const Color(0xFFE7E3D7),
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          title,
-          style: typography.bodyMediumSemiBold.copyWith(
-            color: isSelected ? Colors.white : const Color(0xFF8A8A81),
+                      // Student / Teacher Details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              name,
+                              style: context.typography.bodyMediumSemiBold
+                                  .copyWith(
+                                color: const Color(0xFF163D32),
+                                fontSize: isMobile ? 14.5 : 15.5,
+                              ),
+                              // Show the full name — wrap to a second line rather
+                              // than clipping long names at ~13 chars. On mobile the
+                              // status switch drops below (see layout) so the name
+                              // gets the full card width.
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const Gap(3),
+                            if (!isTeacher) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1.5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3F4F6),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Adm: ${record.admissionNumber?.isNotEmpty == true ? record.admissionNumber : record.studentId ?? 'N/A'}',
+                                  style: context.typography.caption.copyWith(
+                                    color: const Color(0xFF6B7280),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ] else ...[
+                              Builder(
+                                builder: (context) {
+                                  final emp =
+                                      record.employeeId?.isNotEmpty == true
+                                          ? record.employeeId!
+                                          : '—';
+                                  final ct = record.createdAt;
+                                  final timeStr = ct != null
+                                      ? ' · ${DateFormat('h:mm a').format(ct.add(const Duration(hours: 3)))}'
+                                      : '';
+                                  final notMarked = record.id == null ||
+                                      record.id!.isEmpty;
+
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'ID: $emp$timeStr',
+                                        style: context.typography.caption
+                                            .copyWith(
+                                          color: const Color(0xFF6B7280),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                      if (notMarked) ...[
+                                        const Gap(6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF3C7),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            'Pending',
+                                            style: context.typography.caption
+                                                .copyWith(
+                                              color: const Color(0xFFB45309),
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      // Desktop: status switch sits inline to the right.
+                      if (!isMobile) const Gap(10),
+                      if (!isMobile) statusSwitch,
+                        ],
+                      ),
+                      // Mobile: drop the status switch to its own row so the name
+                      // above can use the full card width and show in full.
+                      if (isMobile) const Gap(10),
+                      if (isMobile)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: statusSwitch,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1436,6 +2080,7 @@ class _TypeToggleTab extends StatelessWidget {
   }
 }
 
+/// Segmented Status Switcher with P, L, A buttons
 class _StatusSwitch extends StatelessWidget {
   const _StatusSwitch({required this.status, required this.onChanged});
 
@@ -1444,42 +2089,50 @@ class _StatusSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.border),
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _SwitchChip(
-            color: colors.green,
-            icon: LucideIcons.check,
+          _StatusButton(
             label: 'P',
             tooltip: 'Present',
-            selected: status == AttendanceStatus.present,
-            onTap: () => onChanged(AttendanceStatus.present),
+            icon: LucideIcons.check,
+            activeColor: const Color(0xFF16A34A),
+            isSelected: status == AttendanceStatus.present,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onChanged(AttendanceStatus.present);
+            },
           ),
-          const Gap(6),
-          _SwitchChip(
-            color: colors.warning,
-            icon: LucideIcons.clock,
+          const Gap(4),
+          _StatusButton(
             label: 'L',
             tooltip: 'Late',
-            selected: status == AttendanceStatus.late,
-            onTap: () => onChanged(AttendanceStatus.late),
+            icon: LucideIcons.clock,
+            activeColor: const Color(0xFFD97706),
+            isSelected: status == AttendanceStatus.late,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onChanged(AttendanceStatus.late);
+            },
           ),
-          const Gap(6),
-          _SwitchChip(
-            color: colors.red,
-            icon: LucideIcons.x,
+          const Gap(4),
+          _StatusButton(
             label: 'A',
             tooltip: 'Absent',
-            selected: status == AttendanceStatus.absent,
-            onTap: () => onChanged(AttendanceStatus.absent),
+            icon: LucideIcons.x,
+            activeColor: const Color(0xFFDC2626),
+            isSelected: status == AttendanceStatus.absent,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onChanged(AttendanceStatus.absent);
+            },
           ),
         ],
       ),
@@ -1487,53 +2140,249 @@ class _StatusSwitch extends StatelessWidget {
   }
 }
 
-class _SwitchChip extends StatelessWidget {
-  const _SwitchChip({
-    required this.color,
-    required this.icon,
+class _StatusButton extends StatelessWidget {
+  const _StatusButton({
     required this.label,
     required this.tooltip,
-    required this.selected,
+    required this.icon,
+    required this.activeColor,
+    required this.isSelected,
     required this.onTap,
   });
 
-  final Color color;
-  final IconData icon;
   final String label;
   final String tooltip;
-  final bool selected;
+  final IconData icon;
+  final Color activeColor;
+  final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? Colors.white : color;
     return Tooltip(
       message: tooltip,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          height: 44,
-          constraints: const BoxConstraints(minWidth: 46),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          curve: Curves.easeInOut,
+          height: 38,
+          constraints: const BoxConstraints(minWidth: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: selected ? color : color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: selected ? color : color.withValues(alpha: 0.35)),
+            color: isSelected ? activeColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: activeColor.withValues(alpha: 0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 15, color: fg),
-              const Gap(4),
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? Colors.white : const Color(0xFF6B7280),
+              ),
+              const Gap(3),
               Text(
                 label,
-                style: context.typography.bodySmallSemiBold.copyWith(color: fg),
+                style: context.typography.bodySmallSemiBold.copyWith(
+                  color: isSelected ? Colors.white : const Color(0xFF4B5563),
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  fontSize: 12.5,
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Floating / Docked Bottom Action & Summary Bar
+class _AttendanceBottomBar extends StatelessWidget {
+  const _AttendanceBottomBar({
+    required this.presentCount,
+    required this.lateCount,
+    required this.absentCount,
+    required this.totalCount,
+    required this.saving,
+    required this.onDownload,
+    required this.onSave,
+  });
+
+  final int presentCount;
+  final int lateCount;
+  final int absentCount;
+  final int totalCount;
+  final bool saving;
+  final VoidCallback onDownload;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final isMobile = context.isMobile;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        isMobile ? 14 : 20,
+        10,
+        isMobile ? 14 : 20,
+        // Ensure proper bottom padding above device navigation area
+        MediaQuery.of(context).padding.bottom > 0
+            ? MediaQuery.of(context).padding.bottom + 4
+            : 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: colors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Metrics Summary Pill
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '$totalCount',
+                      style: context.typography.bodyLargeSemiBold.copyWith(
+                        color: const Color(0xFF163D32),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      ' Listed',
+                      style: context.typography.bodySmall.copyWith(
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const Gap(2),
+                Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF16A34A),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const Gap(4),
+                    Text(
+                      '$presentCount P',
+                      style: context.typography.caption.copyWith(
+                        color: const Color(0xFF16A34A),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (lateCount > 0) ...[
+                      const Gap(8),
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFD97706),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const Gap(4),
+                      Text(
+                        '$lateCount L',
+                        style: context.typography.caption.copyWith(
+                          color: const Color(0xFFD97706),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    const Gap(8),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFDC2626),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const Gap(4),
+                    Text(
+                      '$absentCount A',
+                      style: context.typography.caption.copyWith(
+                        color: const Color(0xFFDC2626),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const Gap(10),
+
+          // Download / Export Icon Button
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onDownload,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: const Icon(
+                  LucideIcons.download,
+                  size: 19,
+                  color: Color(0xFF374151),
+                ),
+              ),
+            ),
+          ),
+
+          const Gap(10),
+
+          // Primary Save Records Button
+          SizedBox(
+            width: isMobile ? 155 : 185,
+            child: ABMButton(
+              text: 'Save Records',
+              icon: LucideIcons.checkCheck,
+              height: 46,
+              fontSize: 14,
+              iconSize: 17,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              isLoading: saving,
+              onPressed: onSave,
+            ),
+          ),
+        ],
       ),
     );
   }

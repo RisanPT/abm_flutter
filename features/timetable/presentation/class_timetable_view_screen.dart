@@ -169,7 +169,15 @@ class _ClassTimetableViewScreenState extends ConsumerState<ClassTimetableViewScr
     final selected = _shift == shift;
     return InkWell(
       onTap: () {
-        setState(() => _shift = shift);
+        if (_shift == shift) return;
+        // Reset the classroom list + selection so _load() repopulates the
+        // dropdown with THIS shift's classrooms (the old guard kept it stuck
+        // on the first shift's list, hiding the other shift's classes).
+        setState(() {
+          _shift = shift;
+          _classrooms = const [];
+          _class = null;
+        });
         _load();
       },
       child: Container(

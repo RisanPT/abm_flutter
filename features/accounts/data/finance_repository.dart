@@ -35,6 +35,7 @@ class AccountRepository {
     String? instituteId,
     String? search,
     String? classroom,
+    String? status, // 'pending' | 'paid' | null/'all'
     required int page,
     int limit = 25,
   }) async {
@@ -43,6 +44,7 @@ class AccountRepository {
         'instituteId': instituteId,
         'search': search,
         'classroom': classroom,
+        if (status != null && status != 'all') 'status': status,
         'page': page,
         'limit': limit,
       }..removeWhere((_, v) => v == null || v == '' || v == 'All'));
@@ -150,6 +152,7 @@ class AccountRepository {
     String? instituteId,
     String? search,
     String? classroom,
+    String? status,
     required int page,
     int limit = 20,
   }) async {
@@ -158,6 +161,7 @@ class AccountRepository {
         'instituteId': instituteId,
         'search': search,
         'classroom': classroom,
+        if (status != null && status != 'all') 'status': status,
         'page': page,
         'limit': limit,
       }..removeWhere((_, v) => v == null || v == '' || v == 'All'));
@@ -202,6 +206,65 @@ class AccountRepository {
     }
   }
 
+  /// Parent-login (one per family) management. `key` is the family key.
+  Future<FamilyLoginStatus> getFamilyLogin(String key) async {
+    try {
+      final r = await _dio.get('/accounts/family/login', queryParameters: {'key': key});
+      return FamilyLoginStatus.fromJson(Map<String, dynamic>.from(r.data));
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map
+          ? (e.response?.data['message'] ?? 'Failed to load parent login')
+          : 'Failed to load parent login');
+    }
+  }
+
+  Future<FamilyLoginStatus> setFamilyLogin(
+    String key, {
+    String? username,
+    String? password,
+    bool enabled = true,
+    bool? phoneLogin,
+  }) async {
+    try {
+      final r = await _dio.post('/accounts/family/login', data: {
+        'key': key,
+        if (username != null && username.isNotEmpty) 'username': username,
+        if (password != null && password.isNotEmpty) 'password': password,
+        'enabled': enabled,
+        'phoneLogin': ?phoneLogin,
+      });
+      return FamilyLoginStatus.fromJson(Map<String, dynamic>.from(r.data));
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map
+          ? (e.response?.data['message'] ?? 'Failed to save parent login')
+          : 'Failed to save parent login');
+    }
+  }
+
+  Future<void> deleteFamilyLogin(String key) async {
+    try {
+      await _dio.delete('/accounts/family/login', queryParameters: {'key': key});
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map
+          ? (e.response?.data['message'] ?? 'Failed to remove parent login')
+          : 'Failed to remove parent login');
+    }
+  }
+
+  /// Bulk-enable (or disable) passwordless phone login for every family in the
+  /// institute at once.
+  Future<BulkPhoneLoginResult> enablePhoneLoginForAll({bool disable = false}) async {
+    try {
+      final r = await _dio.post('/accounts/families/enable-phone-login',
+          data: {if (disable) 'disable': true});
+      return BulkPhoneLoginResult.fromJson(Map<String, dynamic>.from(r.data));
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map
+          ? (e.response?.data['message'] ?? 'Failed to update phone logins')
+          : 'Failed to update phone logins');
+    }
+  }
+
   Future<void> recalculateFees(String studentId) async {
     try {
       await _dio.post('/accounts/student/$studentId/recalculate');
@@ -210,9 +273,58 @@ class AccountRepository {
     }
   }
 
-  Future<List<FeeStructureModel>> getFeeStructures() async {
+  /// Add a manual/ad-hoc charge (e.g. a Books Fee) as a line item on the given
+  /// month(s). It raises each month's due and is then collected via the normal
+  /// pay flow. Returns the list of month labels the charge was applied to.
+  Future<List<String>> addCharge(
+    String studentId, {
+    required String title,
+    required double amount,
+    required List<String> monthLabels,
+  }) async {
     try {
-      final response = await _dio.get('/fee-structures');
+      final response = await _dio.post(
+        '/accounts/student/$studentId/add-charge',
+        data: {'title': title, 'amount': amount, 'monthLabels': monthLabels},
+      );
+      final applied = (response.data['applied'] as List?)?.cast<String>() ?? const [];
+      return applied;
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map
+          ? (e.response?.data['message'] ?? 'Failed to add charge')
+          : 'Failed to add charge');
+    }
+  }
+
+  /// Add a charge (e.g. a Books Fee) to EVERY active student in a class/grade,
+  /// across the given months.
+  Future<ClassChargeResult> chargeClass({
+    required String grade,
+    required String title,
+    required double amount,
+    required List<String> monthLabels,
+  }) async {
+    try {
+      final r = await _dio.post('/accounts/class/charge', data: {
+        'grade': grade,
+        'title': title,
+        'amount': amount,
+        'monthLabels': monthLabels,
+      });
+      return ClassChargeResult.fromJson(Map<String, dynamic>.from(r.data));
+    } on DioException catch (e) {
+      throw Exception(e.response?.data is Map
+          ? (e.response?.data['message'] ?? 'Failed to charge class')
+          : 'Failed to charge class');
+    }
+  }
+
+  Future<List<FeeStructureModel>> getFeeStructures({String? instituteId}) async {
+    try {
+      final response = await _dio.get(
+        '/fee-structures',
+        queryParameters: instituteId != null ? {'instituteId': instituteId} : null,
+      );
       final data = response.data as List<dynamic>;
       return data.map((item) => FeeStructureModel.fromJson(item as Map<String, dynamic>)).toList();
     } catch (e) {
@@ -361,10 +473,16 @@ class LedgerMonth {
     required this.waived,
     required this.isCurrent,
     required this.isPast,
+    this.receiptNumber,
+    this.paidOn,
+    this.lineItems = const [],
   });
   final String monthLabel, status;
   final num totalDue, totalPaid, balance;
   final bool waived, isCurrent, isPast;
+  final String? receiptNumber;
+  final DateTime? paidOn;
+  final List<dynamic> lineItems;
 
   factory LedgerMonth.fromJson(Map<String, dynamic> j) => LedgerMonth(
         monthLabel: (j['monthLabel'] ?? '').toString(),
@@ -375,6 +493,9 @@ class LedgerMonth {
         waived: j['waived'] == true,
         isCurrent: j['isCurrent'] == true,
         isPast: j['isPast'] == true,
+        receiptNumber: j['receiptNumber'] as String?,
+        paidOn: j['paidOn'] != null ? DateTime.tryParse(j['paidOn'].toString()) : null,
+        lineItems: (j['lineItems'] as List?) ?? (j['payments'] as List?) ?? const [],
       );
 }
 
@@ -397,5 +518,69 @@ class FeeLedger {
         currentDue: (j['currentDue'] ?? 0) as num,
         advanceBalance: (j['advanceBalance'] ?? 0) as num,
         totalOutstanding: (j['totalOutstanding'] ?? 0) as num,
+      );
+}
+
+class FamilyLoginStatus {
+  const FamilyLoginStatus({
+    required this.hasLogin,
+    this.username,
+    required this.enabled,
+    this.phoneLoginEnabled = false,
+  });
+  final bool hasLogin;
+  final String? username;
+  final bool enabled;
+  final bool phoneLoginEnabled;
+
+  factory FamilyLoginStatus.fromJson(Map<String, dynamic> j) => FamilyLoginStatus(
+        hasLogin: j['hasLogin'] == true,
+        username: j['username'] as String?,
+        enabled: j['enabled'] == true,
+        phoneLoginEnabled: j['phoneLoginEnabled'] == true,
+      );
+}
+
+class BulkPhoneLoginResult {
+  const BulkPhoneLoginResult({
+    this.totalFamilies = 0,
+    this.created = 0,
+    this.enabled = 0,
+    this.activeTotal = 0,
+    this.skippedCount = 0,
+    this.disabled = 0,
+  });
+  final int totalFamilies, created, enabled, activeTotal, skippedCount, disabled;
+
+  factory BulkPhoneLoginResult.fromJson(Map<String, dynamic> j) => BulkPhoneLoginResult(
+        totalFamilies: (j['totalFamilies'] as num?)?.toInt() ?? 0,
+        created: (j['created'] as num?)?.toInt() ?? 0,
+        enabled: (j['enabled'] as num?)?.toInt() ?? 0,
+        activeTotal: (j['activeTotal'] as num?)?.toInt() ?? 0,
+        skippedCount: (j['skippedCount'] as num?)?.toInt() ?? 0,
+        disabled: (j['disabled'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class ClassChargeResult {
+  const ClassChargeResult({
+    this.grade = '',
+    this.title = '',
+    this.amount = 0,
+    this.studentsInClass = 0,
+    this.charged = 0,
+    this.monthsCount = 0,
+  });
+  final String grade, title;
+  final num amount;
+  final int studentsInClass, charged, monthsCount;
+
+  factory ClassChargeResult.fromJson(Map<String, dynamic> j) => ClassChargeResult(
+        grade: (j['grade'] ?? '') as String,
+        title: (j['title'] ?? '') as String,
+        amount: (j['amount'] ?? 0) as num,
+        studentsInClass: (j['studentsInClass'] as num?)?.toInt() ?? 0,
+        charged: (j['charged'] as num?)?.toInt() ?? 0,
+        monthsCount: (j['monthsCount'] as num?)?.toInt() ?? 0,
       );
 }

@@ -55,6 +55,33 @@ class AuthRepository {
     }
   }
 
+  /// Passwordless parent sign-in with the mobile number only. The family must
+  /// have phone login enabled by the office. Returns the parent session.
+  Future<UserModel> parentPhoneLogin(String phone) async {
+    try {
+      final response = await _dio.post('/auth/parent-login', data: {'phone': phone});
+      final String token = response.data['token'];
+      final userData = Map<String, dynamic>.from(response.data['user'] as Map);
+      await _store.saveToken(token);
+      await _store.saveUser(jsonEncode(userData));
+      return UserModel.fromJson(userData);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        throw Exception('No parent portal is enabled for this number. Please contact the madrasa office.');
+      }
+      if (e.response?.statusCode == 429) {
+        throw Exception('Too many attempts. Please try again in a few minutes.');
+      }
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        throw Exception('Network connection error. Please check your internet connection.');
+      }
+      final msg = e.response?.data is Map ? e.response?.data['message'] : null;
+      throw Exception(msg ?? e.message ?? 'Failed to sign in');
+    }
+  }
+
   Future<void> logout() async {
     try {
       await _dio.post('/auth/logout');

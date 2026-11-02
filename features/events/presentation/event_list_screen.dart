@@ -42,7 +42,7 @@ class EventListScreen extends ConsumerWidget {
         actions: [
           if (isAdmin)
             Padding(
-              padding: const EdgeInsets.only(right: 96.0),
+              padding: const EdgeInsets.only(right: 152.0),
               child: ElevatedButton.icon(
                 onPressed: () => _showEventDialog(context, ref),
                 icon: const Icon(Icons.add, size: 18),
