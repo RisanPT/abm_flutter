@@ -35,6 +35,7 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
   String _searchQuery = '';
   String? _selectedGrade;
   String? _selectedTerm;
+  String _selectedShift = 'All'; // 'All', 'Shift-1', 'Shift-2'
   String _selectedStatus = 'All'; // 'All', 'Passed', 'Failed'
   int _page = 1;
   static const int _pageSize = 8;
@@ -116,6 +117,8 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                 final termsSet = <String>{};
                 int passedCount = 0;
                 int failedCount = 0;
+                int shift1Count = 0;
+                int shift2Count = 0;
 
                 for (final item in allReports) {
                   final r = item as Map<String, dynamic>;
@@ -126,6 +129,14 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                   }
                   if (r['term'] != null && r['term'].toString().trim().isNotEmpty) {
                     termsSet.add(r['term'].toString().trim());
+                  }
+
+                  final shiftRaw = (studentData is Map ? studentData['shift'] : null)?.toString() ?? (r['shift']?.toString() ?? '');
+                  final normalizedShift = shiftRaw.replaceAll(' ', '-').toLowerCase();
+                  if (normalizedShift.contains('1')) {
+                    shift1Count++;
+                  } else if (normalizedShift.contains('2')) {
+                    shift2Count++;
                   }
 
                   // Determine status
@@ -162,6 +173,12 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                   // Grade filter
                   final matchesGrade = _selectedGrade == null || grade.toLowerCase() == _selectedGrade!.toLowerCase();
 
+                  // Shift filter
+                  final studentShift = (studentData is Map ? studentData['shift'] : null)?.toString() ?? (r['shift']?.toString() ?? '');
+                  final matchesShift = _selectedShift == 'All' ||
+                      studentShift.toLowerCase() == _selectedShift.toLowerCase() ||
+                      studentShift.replaceAll(' ', '-').toLowerCase() == _selectedShift.replaceAll(' ', '-').toLowerCase();
+
                   // Term filter
                   final matchesTerm = _selectedTerm == null || term.toLowerCase() == _selectedTerm!.toLowerCase();
 
@@ -171,7 +188,7 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                       (_selectedStatus == 'Passed' && status == 'passed') ||
                       (_selectedStatus == 'Failed' && status != 'passed');
 
-                  return matchesSearch && matchesGrade && matchesTerm && matchesStatus;
+                  return matchesSearch && matchesGrade && matchesShift && matchesTerm && matchesStatus;
                 }).toList();
 
                 final passRate = allReports.isNotEmpty ? ((passedCount / allReports.length) * 100).toInt() : 0;
@@ -203,7 +220,7 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                               subtext: '${distinctGrades.length} classes evaluated',
                               icon: LucideIcons.fileText,
                               color: const Color(0xFF2563EB),
-                              badge: 'All Terms',
+                              badge: 'Shift-1: $shift1Count · Shift-2: $shift2Count',
                             ),
                             _ProgressKpiCard(
                               title: 'Passed Evaluations',
@@ -283,13 +300,14 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                                     ),
                                   ),
                                 ),
-                                if (_searchQuery.isNotEmpty || _selectedGrade != null || _selectedTerm != null || _selectedStatus != 'All') ...[
+                                if (_searchQuery.isNotEmpty || _selectedGrade != null || _selectedShift != 'All' || _selectedTerm != null || _selectedStatus != 'All') ...[
                                   const Gap(8),
                                   TextButton.icon(
                                     onPressed: () {
                                       setState(() {
                                         _searchQuery = '';
                                         _selectedGrade = null;
+                                        _selectedShift = 'All';
                                         _selectedTerm = null;
                                         _selectedStatus = 'All';
                                         _page = 1;
@@ -336,6 +354,39 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                                     ],
                                     onChanged: (val) => setState(() {
                                       _selectedGrade = val;
+                                      _page = 1;
+                                    }),
+                                  ),
+                                ),
+
+                                // Shift filter
+                                SizedBox(
+                                  width: 155,
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedShift,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      labelText: 'Shift',
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      prefixIcon: const Icon(LucideIcons.clock, size: 16),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(color: colors.border),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(color: colors.border),
+                                      ),
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(value: 'All', child: Text('All Shifts', style: TextStyle(fontSize: 12))),
+                                      DropdownMenuItem(value: 'Shift-1', child: Text('Shift-1 (Morning)', style: TextStyle(fontSize: 12))),
+                                      DropdownMenuItem(value: 'Shift-2', child: Text('Shift-2 (Evening)', style: TextStyle(fontSize: 12))),
+                                    ],
+                                    onChanged: (val) => setState(() {
+                                      _selectedShift = val ?? 'All';
                                       _page = 1;
                                     }),
                                   ),
@@ -408,18 +459,35 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                                 : 'Progress Records ($totalCount) · Showing ${startIndex + 1}–$endIndex',
                             style: typography.bodyMediumSemiBold,
                           ),
-                          if (_selectedGrade != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: _madrasaGreen.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'Filtered by $_selectedGrade',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _madrasaGreen),
-                              ),
-                            ),
+                          Wrap(
+                            spacing: 6,
+                            children: [
+                              if (_selectedGrade != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _madrasaGreen.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'Class: $_selectedGrade',
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _madrasaGreen),
+                                  ),
+                                ),
+                              if (_selectedShift != 'All')
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD97706).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _selectedShift == 'Shift-1' ? 'Shift-1 (Morning)' : 'Shift-2 (Evening)',
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
 
@@ -526,11 +594,16 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
     String studentName = 'Student';
     String studentGrade = 'No Class';
     String studentAdm = '';
+    String studentShift = '';
 
     if (studentData is Map) {
       studentName = studentData['fullName']?.toString() ?? 'Student';
       studentGrade = studentData['grade']?.toString() ?? 'Class';
       studentAdm = studentData['studentId']?.toString() ?? '';
+      studentShift = studentData['shift']?.toString() ?? '';
+    }
+    if (studentShift.isEmpty && report['shift'] != null) {
+      studentShift = report['shift'].toString();
     }
 
     final term = (report['term'] ?? 'Term').toString();
@@ -612,6 +685,45 @@ class _ProgressReportListScreenState extends ConsumerState<ProgressReportListScr
                                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
                                 ),
                               ),
+                              // Shift badge
+                              if (studentShift.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: studentShift.toLowerCase().contains('1')
+                                        ? const Color(0xFFFEF3C7)
+                                        : const Color(0xFFF3E8FF),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: studentShift.toLowerCase().contains('1')
+                                          ? const Color(0xFFFDE68A)
+                                          : const Color(0xFFE9D5FF),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        LucideIcons.clock,
+                                        size: 10,
+                                        color: studentShift.toLowerCase().contains('1')
+                                            ? const Color(0xFFB45309)
+                                            : const Color(0xFF7E22CE),
+                                      ),
+                                      const Gap(3),
+                                      Text(
+                                        studentShift,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: studentShift.toLowerCase().contains('1')
+                                              ? const Color(0xFFB45309)
+                                              : const Color(0xFF7E22CE),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               if (studentAdm.isNotEmpty)
                                 Text('Adm: $studentAdm', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
                               if (academicYear.isNotEmpty)

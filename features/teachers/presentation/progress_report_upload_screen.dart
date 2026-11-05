@@ -31,6 +31,7 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
   List<StudentModel> _allStudents = [];
   StudentModel? _selectedStudent;
   String? _selectedClass;
+  String _selectedShift = 'All'; // 'All', 'Shift-1', 'Shift-2'
   bool _isLoadingStudents = false;
 
   // Evaluation term
@@ -134,6 +135,11 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
           try {
             _selectedStudent = list.firstWhere((s) => s.id == idToMatch);
             _selectedClass = _selectedStudent?.classroom;
+            if (_selectedStudent?.shift != null && _selectedStudent!.shift!.isNotEmpty) {
+              _selectedShift = _selectedStudent!.shift!;
+            } else if (widget.existingReport!['shift'] != null) {
+              _selectedShift = widget.existingReport!['shift'].toString();
+            }
           } catch (_) {
             // Not found
           }
@@ -215,12 +221,18 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
     }).toList();
 
     try {
+      final studentShift = _selectedStudent!.shift?.isNotEmpty == true
+          ? _selectedStudent!.shift!
+          : (_selectedShift != 'All' ? _selectedShift : 'Shift-1');
+
       await dio.post('/progress-reports', data: {
         'studentId': _selectedStudent!.id,
         'term': _selectedTerm,
         'grades': formattedGrades,
         'remarks': _remarksController.text.trim(),
         'evaluationStatus': evaluationStatus,
+        'shift': studentShift,
+        'classroom': _selectedStudent!.classroom,
       });
 
       if (mounted) {
@@ -267,10 +279,17 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
         .toList()
       ..sort();
 
-    // Filter students by selected class
-    final filteredStudents = _selectedClass == null
-        ? _allStudents
-        : _allStudents.where((s) => s.classroom.trim() == _selectedClass).toList();
+    // Filter students by selected class and shift
+    final filteredStudents = _allStudents.where((s) {
+      if (_selectedClass != null && s.classroom.trim() != _selectedClass) {
+        return false;
+      }
+      if (_selectedShift != 'All') {
+        final sShift = s.shift?.trim();
+        if (sShift != _selectedShift) return false;
+      }
+      return true;
+    }).toList();
 
     final avgScore = _calculateAverage();
     final overallStatus = _calculateStatus();
@@ -294,11 +313,11 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ── STEP 1: CLASSROOM SELECTION ──────────────────────────────
+                          // ── STEP 1: CLASSROOM & SHIFT SELECTION ──────────────────────
                           _buildSectionHeader(
                             stepNumber: '1',
-                            title: 'Select Class / Grade',
-                            subtitle: 'Filter students by their enrolled madrasa class',
+                            title: 'Select Class & Shift',
+                            subtitle: 'Filter students by their enrolled madrasa class and shift schedule',
                           ),
                           const Gap(10),
 
@@ -314,7 +333,9 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                               children: [
                                 Row(
                                   children: [
+                                    // Target Class
                                     Expanded(
+                                      flex: 6,
                                       child: DropdownButtonFormField<String?>(
                                         initialValue: _selectedClass,
                                         decoration: InputDecoration(
@@ -326,19 +347,18 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                         ),
                                         items: [
-                                          const DropdownMenuItem(value: null, child: Text('All Classes (Show All Students)')),
+                                          const DropdownMenuItem(value: null, child: Text('All Classes')),
                                           ...classes.map((c) {
                                             final count = _allStudents.where((s) => s.classroom.trim() == c).length;
                                             return DropdownMenuItem(
                                               value: c,
-                                              child: Text('$c ($count students)'),
+                                              child: Text('$c ($count)'),
                                             );
                                           }),
                                         ],
                                         onChanged: (val) {
                                           setState(() {
                                             _selectedClass = val;
-                                            // Reset selected student if they aren't in this class
                                             if (_selectedStudent != null && val != null && _selectedStudent!.classroom.trim() != val) {
                                               _selectedStudent = null;
                                             }
@@ -346,20 +366,65 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                                         },
                                       ),
                                     ),
-                                    if (_selectedClass != null) ...[
+                                    const Gap(12),
+                                    // Target Shift
+                                    Expanded(
+                                      flex: 5,
+                                      child: DropdownButtonFormField<String>(
+                                        value: _selectedShift,
+                                        decoration: InputDecoration(
+                                          labelText: 'Target Shift',
+                                          prefixIcon: const Icon(LucideIcons.clock, size: 18),
+                                          filled: true,
+                                          fillColor: const Color(0xFFF8FAFC),
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        ),
+                                        items: const [
+                                          DropdownMenuItem(value: 'All', child: Text('All Shifts')),
+                                          DropdownMenuItem(value: 'Shift-1', child: Text('Shift 1 (Morning)')),
+                                          DropdownMenuItem(value: 'Shift-2', child: Text('Shift 2 (Afternoon)')),
+                                        ],
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setState(() {
+                                              _selectedShift = val;
+                                              if (_selectedStudent != null && val != 'All' && _selectedStudent!.shift != val) {
+                                                _selectedStudent = null;
+                                              }
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    if (_selectedClass != null || _selectedShift != 'All') ...[
                                       const Gap(10),
                                       OutlinedButton.icon(
                                         onPressed: () => setState(() {
                                           _selectedClass = null;
+                                          _selectedShift = 'All';
                                         }),
                                         icon: const Icon(LucideIcons.x, size: 14),
-                                        label: const Text('Clear'),
+                                        label: const Text('Reset'),
                                         style: OutlinedButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         ),
                                       ),
                                     ],
+                                  ],
+                                ),
+                                const Gap(12),
+                                // Quick Shift pills
+                                Row(
+                                  children: [
+                                    const Text('Shift: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                                    const Gap(6),
+                                    _buildShiftChip('All', 'All Shifts'),
+                                    const Gap(6),
+                                    _buildShiftChip('Shift-1', 'Shift 1'),
+                                    const Gap(6),
+                                    _buildShiftChip('Shift-2', 'Shift 2'),
                                   ],
                                 ),
                                 if (classes.isNotEmpty) ...[
@@ -402,8 +467,8 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                           _buildSectionHeader(
                             stepNumber: '2',
                             title: 'Select Student',
-                            subtitle: _selectedClass != null
-                                ? 'Showing students in class $_selectedClass (${filteredStudents.length} enrolled)'
+                            subtitle: (_selectedClass != null || _selectedShift != 'All')
+                                ? 'Showing students in ${_selectedClass ?? 'All Classes'}${_selectedShift != 'All' ? ' • $_selectedShift' : ''} (${filteredStudents.length} available)'
                                 : 'Choose a student (${_allStudents.length} total students enrolled)',
                           ),
                           const Gap(10),
@@ -659,6 +724,33 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
     );
   }
 
+  Widget _buildShiftChip(String shiftValue, String label) {
+    final isSel = _selectedShift == shiftValue;
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+          color: isSel ? Colors.white : Colors.black87,
+        ),
+      ),
+      selected: isSel,
+      selectedColor: shiftValue == 'Shift-2'
+          ? const Color(0xFF0F766E)
+          : (shiftValue == 'Shift-1' ? const Color(0xFFB45309) : _madrasaGreen),
+      backgroundColor: const Color(0xFFF1F5F9),
+      onSelected: (_) {
+        setState(() {
+          _selectedShift = shiftValue;
+          if (_selectedStudent != null && shiftValue != 'All' && _selectedStudent!.shift != shiftValue) {
+            _selectedStudent = null;
+          }
+        });
+      },
+    );
+  }
+
   Widget _buildSectionHeader({
     required String stepNumber,
     required String title,
@@ -727,9 +819,10 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
             items: students.map((s) {
+              final shiftLabel = s.shift?.isNotEmpty == true ? s.shift! : 'No Shift';
               return DropdownMenuItem<StudentModel?>(
                 value: s,
-                child: Text('${s.fullName} · Adm: ${s.admissionNumber} (${s.classroom})', overflow: TextOverflow.ellipsis),
+                child: Text('${s.fullName} · Adm: ${s.admissionNumber} (${s.classroom} • $shiftLabel)', overflow: TextOverflow.ellipsis),
               );
             }).toList(),
             onChanged: (val) {
@@ -776,7 +869,7 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: const Color(0xFF86EFAC)),
                       ),
-                      child: Text('Class: ${s.classroom}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: _madrasaGreen)),
+                      child: Text('Class: ${s.classroom}${s.shift?.isNotEmpty == true ? ' • ${s.shift}' : ''}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: _madrasaGreen)),
                     ),
                     const Gap(8),
                     Text('Admission No: ${s.admissionNumber}', style: const TextStyle(fontSize: 12, color: Colors.black87)),
@@ -948,12 +1041,15 @@ class _ProgressReportUploadScreenState extends ConsumerState<ProgressReportUploa
                                   child: Text(st.fullName.isNotEmpty ? st.fullName[0] : 'S', style: const TextStyle(color: _madrasaGreen)),
                                 ),
                                 title: Text(st.fullName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                subtitle: Text('Adm: ${st.admissionNumber} · Class: ${st.classroom}', style: const TextStyle(fontSize: 11)),
+                                subtitle: Text('Adm: ${st.admissionNumber} · Class: ${st.classroom} • Shift: ${st.shift ?? 'No Shift'}', style: const TextStyle(fontSize: 11)),
                                 trailing: const Icon(LucideIcons.chevronRight, size: 16),
                                 onTap: () {
                                   setState(() {
                                     _selectedStudent = st;
                                     _selectedClass = st.classroom;
+                                    if (st.shift != null && st.shift!.isNotEmpty) {
+                                      _selectedShift = st.shift!;
+                                    }
                                   });
                                   Navigator.pop(ctx);
                                 },
