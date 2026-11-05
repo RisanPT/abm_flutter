@@ -215,9 +215,14 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
 
     try {
       final institute = ref.read(selectedInstituteProvider);
+      final instituteName = institute.name.trim().isNotEmpty
+          ? institute.name.trim().toUpperCase()
+          : 'ANAS BIN MALIK MADRASA';
       final isStudentTab = _reportType == 'student';
       final type = isStudentTab ? 'student' : 'teacher';
       final isDayWise = _viewMode == 'day';
+      final shiftLabel = _selectedShift == 'All' ? 'All Shifts' : _selectedShift;
+      final generatedAt = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
       final params = _ReportParams(
         month: _monthKey,
         date: isDayWise ? _dayKey : null,
@@ -247,20 +252,73 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             }
             return;
           }
+
+          int pCount = 0;
+          int lCount = 0;
+          int aCount = 0;
+          int lvCount = 0;
+          for (final row in teachers) {
+            final st = (row['status']?.toString() ?? '').toLowerCase();
+            if (st == 'present') {
+              pCount++;
+            } else if (st == 'late') {
+              lCount++;
+            } else if (st == 'leave' || row['leaveDetails'] != null) {
+              lvCount++;
+            } else {
+              aCount++;
+            }
+          }
+          final staffRate = teachers.isNotEmpty ? (((pCount + lCount) / teachers.length) * 100).round() : 0;
+
           final pdf = pw.Document();
           pdf.addPage(
             pw.MultiPage(
               pageFormat: PdfPageFormat.a4,
               build: (context) => [
-                pw.Text(
-                  'Teacher Daily Attendance Report',
-                  style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(12),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.grey100,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                    border: pw.Border.all(color: PdfColors.grey300),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        instituteName,
+                        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'TEACHER DAILY ATTENDANCE REPORT',
+                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                      ),
+                      pw.SizedBox(height: 6),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('Date: $_dayLabel', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text('Shift: $shiftLabel', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text('Generated: $generatedAt', style: const pw.TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                      pw.SizedBox(height: 6),
+                      pw.Divider(color: PdfColors.grey300),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Total Staff: ${teachers.length}   |   Present: $pCount   |   Late: $lCount   |   Absent: $aCount   |   Leave: $lvCount   |   Rate: $staffRate%',
+                        style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+                      ),
+                    ],
+                  ),
                 ),
-                pw.SizedBox(height: 8),
-                pw.Text('Date: $_dayLabel'),
-                pw.Text('Shift: ${_selectedShift == 'All' ? 'All Shifts' : _selectedShift}'),
-                pw.SizedBox(height: 16),
+                pw.SizedBox(height: 14),
                 pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+                  cellStyle: const pw.TextStyle(fontSize: 8.5),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
                   headers: ['Emp ID', 'Teacher Name', 'Shift', 'Status', 'Check-in Time', 'Method', 'Remarks / Leave'],
                   data: teachers.map((row) {
                     final r = row as Map<String, dynamic>;
@@ -313,19 +371,61 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             }
             return;
           }
+
+          int totalPres = 0;
+          int totalAbs = 0;
+          int totalStudents = 0;
+          for (final c in summary) {
+            totalPres += (c['present'] as num?)?.toInt() ?? 0;
+            totalAbs += (c['absent'] as num?)?.toInt() ?? 0;
+            totalStudents += ((c['students'] as List?)?.length ?? 0);
+          }
+          final dailyRate = (totalPres + totalAbs) > 0 ? ((totalPres / (totalPres + totalAbs)) * 100).round() : 0;
+
           final pdf = pw.Document();
           pdf.addPage(
             pw.MultiPage(
               pageFormat: PdfPageFormat.a4,
               build: (context) => [
-                pw.Text(
-                  'Student Daily Attendance Report',
-                  style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(12),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.grey100,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                    border: pw.Border.all(color: PdfColors.grey300),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        instituteName,
+                        style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'STUDENT DAILY ATTENDANCE REPORT',
+                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                      ),
+                      pw.SizedBox(height: 6),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('Date: $_dayLabel', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text('Shift: $shiftLabel', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text('Generated: $generatedAt', style: const pw.TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                      pw.SizedBox(height: 6),
+                      pw.Divider(color: PdfColors.grey300),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Total Classes: ${summary.length}   |   Total Students: $totalStudents   |   Present: $totalPres   |   Absent: $totalAbs   |   Rate: $dailyRate%',
+                        style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+                      ),
+                    ],
+                  ),
                 ),
-                pw.SizedBox(height: 8),
-                pw.Text('Date: $_dayLabel'),
-                pw.Text('Shift: ${_selectedShift == 'All' ? 'All Shifts' : _selectedShift}'),
-                pw.SizedBox(height: 16),
+                pw.SizedBox(height: 14),
                 ...summary.expand((cRow) {
                   final c = cRow as Map<String, dynamic>;
                   final cName = c['classroom']?.toString() ?? 'Unknown';
@@ -337,9 +437,12 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                   return [
                     pw.SizedBox(height: 14),
                     pw.Text('Classroom: $cName${cShift.isNotEmpty ? ' · $cShift' : ''} (Present: ${c['present'] ?? 0}, Absent: ${c['absent'] ?? 0}, Rate: ${c['rate'] ?? 0}%)',
-                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                        style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
                     pw.SizedBox(height: 6),
                     pw.TableHelper.fromTextArray(
+                      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+                      cellStyle: const pw.TextStyle(fontSize: 8.5),
+                      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
                       headers: ['Admission No', 'Student Name', 'Status', 'Remarks', 'Parent Contact'],
                       data: students.map((sRow) {
                         final s = sRow as Map<String, dynamic>;
@@ -380,22 +483,65 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         return;
       }
 
-      final pdf = pw.Document();
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          build: (context) => [
-            pw.Text(
-              isStudentTab
-                  ? 'Student Monthly Attendance Report'
-                  : 'Teacher Monthly Attendance Report',
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 8),
-            pw.Text('Date: ${DateFormat('MMMM yyyy').format(_selectedDate)}'),
-            pw.Text('Shift: ${_selectedShift == 'All' ? 'All Shifts' : _selectedShift}'),
-            pw.SizedBox(height: 16),
-            if (isStudentTab)
+      if (isStudentTab) {
+        // Student Monthly PDF
+        int totalPres = 0;
+        int totalAbs = 0;
+        int totalLate = 0;
+        int totalDays = 0;
+        final studentRows = studentSummary.isNotEmpty ? studentSummary : summary;
+        for (final r in studentRows) {
+          totalPres += (r['present'] as num?)?.toInt() ?? 0;
+          totalAbs += (r['absent'] as num?)?.toInt() ?? 0;
+          totalLate += (r['late'] as num?)?.toInt() ?? 0;
+          totalDays += (r['total'] as num?)?.toInt() ?? 0;
+        }
+        final avgRate = totalDays > 0 ? ((totalPres / totalDays) * 100).round() : 0;
+
+        final pdf = pw.Document();
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            build: (context) => [
+              pw.Container(
+                padding: const pw.EdgeInsets.all(12),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                  border: pw.Border.all(color: PdfColors.grey300),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      instituteName,
+                      style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'STUDENT MONTHLY ATTENDANCE REPORT',
+                      style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('Evaluation Period: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text('Shift: $shiftLabel', style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text('Generated: $generatedAt', style: const pw.TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Divider(color: PdfColors.grey300),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'Total Students: ${studentRows.length}   |   Present Days: $totalPres   |   Absent Days: $totalAbs   |   Late Days: $totalLate   |   Overall Rate: $avgRate%',
+                      style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 14),
               if (studentSummary.isNotEmpty)
                 ...() {
                   final Map<String, List<Map<String, dynamic>>> byClass = {};
@@ -406,17 +552,20 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
 
                   final List<pw.Widget> widgets = [];
                   for (final c in byClass.keys.toList()..sort()) {
-                    widgets.add(pw.SizedBox(height: 16));
+                    widgets.add(pw.SizedBox(height: 14));
                     widgets.add(
-                      pw.Text('Classroom: $c', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold))
+                      pw.Text('Classroom: $c', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold))
                     );
-                    widgets.add(pw.SizedBox(height: 8));
+                    widgets.add(pw.SizedBox(height: 6));
 
                     final students = byClass[c]!..sort((a, b) =>
                       (a['fullName']?.toString() ?? '').compareTo(b['fullName']?.toString() ?? ''));
 
                     widgets.add(
                       pw.TableHelper.fromTextArray(
+                        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+                        cellStyle: const pw.TextStyle(fontSize: 8.5),
+                        headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
                         headers: ['Admn No', 'Student Name', 'Shift', 'Present Days', 'Absent Days', 'Late Days', 'Total Days', 'Rate'],
                         data: students.map((r) {
                           final studentShift = (r['shift']?.toString().isNotEmpty == true)
@@ -440,6 +589,9 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                 }()
               else
                 pw.TableHelper.fromTextArray(
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+                  cellStyle: const pw.TextStyle(fontSize: 8.5),
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
                   headers: ['Classroom', 'Shift', 'Present Days', 'Absent Days', 'Late Days', 'Total Days', 'Attendance Rate'],
                   data: summary.map((row) {
                     final r = row as Map<String, dynamic>;
@@ -457,27 +609,116 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                     ];
                   }).toList(),
                 )
-            else
-              pw.TableHelper.fromTextArray(
-                headers: ['Employee ID', 'Full Name', 'Shift', 'Present Days', 'Absent Days', 'Late Days', 'Total Days', 'Attendance Rate'],
-                data: summary.map((row) {
-                  final r = row as Map<String, dynamic>;
-                  final sl = r['shifts'];
-                  final rowShift = (sl is List && sl.isNotEmpty)
-                      ? sl.join(', ')
-                      : (_selectedShift != 'All' ? _selectedShift : '—');
-                  return [
-                    r['employeeId']?.toString() ?? '',
-                    r['fullName']?.toString() ?? '',
-                    rowShift,
-                    r['present']?.toString() ?? '0',
-                    r['absent']?.toString() ?? '0',
-                    r['late']?.toString() ?? '0',
-                    r['total']?.toString() ?? '0',
-                    '${r['rate'] ?? 0}%',
-                  ];
-                }).toList(),
+            ],
+          ),
+        );
+        final bytes = await pdf.save();
+        final fname = 'student_monthly_attendance_$_monthKey.pdf';
+        if (kIsWeb) {
+          await Printing.layoutPdf(onLayout: (_) => bytes, name: fname);
+        } else {
+          await Printing.sharePdf(bytes: bytes, filename: fname, bounds: origin);
+        }
+        return;
+      }
+
+      // Teacher Monthly PDF (Landscape for optimal column layout)
+      final pdf = pw.Document();
+      int totalTeachers = summary.length;
+      int totalScheduled = 0;
+      int totalPresent = 0;
+      int totalAbsent = 0;
+      int totalLeave = 0;
+      int totalLate = 0;
+      int totalDays = 0;
+      for (final row in summary) {
+        final r = row as Map<String, dynamic>;
+        totalScheduled += (r['scheduledDays'] as num?)?.toInt() ?? 0;
+        totalPresent += (r['present'] as num?)?.toInt() ?? 0;
+        totalAbsent += (r['absent'] as num?)?.toInt() ?? 0;
+        totalLeave += (r['leave'] as num?)?.toInt() ?? 0;
+        totalLate += (r['late'] as num?)?.toInt() ?? 0;
+        totalDays += (r['total'] as num?)?.toInt() ?? 0;
+      }
+      final overallRate = totalDays > 0 ? ((totalPresent / totalDays) * 100).round() : 0;
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          build: (context) => [
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                border: pw.Border.all(color: PdfColors.grey300),
               ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    instituteName,
+                    style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey800),
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'TEACHER MONTHLY ATTENDANCE REPORT',
+                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('Evaluation Period: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text('Shift: $shiftLabel', style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text('Generated: $generatedAt', style: const pw.TextStyle(fontSize: 10)),
+                    ],
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Divider(color: PdfColors.grey300),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'Total Teachers: $totalTeachers   |   Scheduled Days: $totalScheduled   |   Present Days: $totalPresent   |   Absent Days: $totalAbsent   |   On Leave: $totalLeave   |   Late Days: $totalLate   |   Overall Attendance Rate: $overallRate%',
+                    style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 14),
+            pw.TableHelper.fromTextArray(
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8.5),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              headers: ['Emp ID', 'Teacher Name', 'Shift', 'Assigned Classes', 'Scheduled', 'Present', 'Absent', 'Leave', 'Late', 'Total Days', 'Rate %'],
+              data: summary.map((row) {
+                final r = row as Map<String, dynamic>;
+                final sl = r['shifts'];
+                final rowShift = (sl is List && sl.isNotEmpty)
+                    ? sl.join(', ')
+                    : (_selectedShift != 'All' ? _selectedShift : '—');
+                final classes = (r['classes'] as List?)?.map((e) => e.toString()).join(', ') ?? '—';
+                final scheduled = (r['scheduledDays'] as num?)?.toInt() ?? (r['total'] as num?)?.toInt() ?? 0;
+                final pres = (r['present'] as num?)?.toInt() ?? 0;
+                final abs = (r['absent'] as num?)?.toInt() ?? 0;
+                final leave = (r['leave'] as num?)?.toInt() ?? 0;
+                final late = (r['late'] as num?)?.toInt() ?? 0;
+                final tot = (r['total'] as num?)?.toInt() ?? scheduled;
+                final rate = (r['rate'] as num?)?.toInt() ?? (tot > 0 ? ((pres / tot) * 100).round() : 0);
+                return [
+                  r['employeeId']?.toString() ?? '',
+                  r['fullName']?.toString() ?? '',
+                  rowShift,
+                  classes.isNotEmpty ? classes : '—',
+                  '$scheduled',
+                  '$pres',
+                  '$abs',
+                  '$leave',
+                  '$late',
+                  '$tot',
+                  '$rate%',
+                ];
+              }).toList(),
+            ),
           ],
         ),
       );
@@ -505,9 +746,16 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
 
     try {
       final institute = ref.read(selectedInstituteProvider);
+      final instituteName = institute.name.trim().isNotEmpty
+          ? institute.name.trim().toUpperCase()
+          : 'ANAS BIN MALIK MADRASA';
       final isStudentTab = _reportType == 'student';
       final type = isStudentTab ? 'student' : 'teacher';
       final isDayWise = _viewMode == 'day';
+      final shiftLabel = _selectedShift == 'All' ? 'All Shifts' : _selectedShift;
+      final periodLabel = isDayWise ? _dayLabel : DateFormat('MMMM yyyy').format(_selectedDate);
+      final generatedAt = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
+
       final params = _ReportParams(
         month: _monthKey,
         date: isDayWise ? _dayKey : null,
@@ -526,15 +774,8 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
       }
 
       final excel = Excel.createExcel();
-      final sheet = excel[excel.getDefaultSheet() ?? 'Sheet1'];
-
-      // Title row so the export states which shift (and date) it covers.
-      final shiftLabel = _selectedShift == 'All' ? 'All Shifts' : _selectedShift;
-      final periodLabel = isDayWise ? _dayLabel : DateFormat('MMMM yyyy').format(_selectedDate);
-      sheet.appendRow([
-        TextCellValue('${isStudentTab ? 'Student' : 'Teacher'} Attendance — Shift: $shiftLabel — $periodLabel'),
-      ]);
-      sheet.appendRow([TextCellValue('')]);
+      final sheetName = excel.getDefaultSheet() ?? 'Sheet1';
+      final sheet = excel[sheetName];
 
       if (isDayWise) {
         if (!isStudentTab) {
@@ -548,8 +789,50 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             }
             return;
           }
-          sheet.appendRow(['Employee ID', 'Name', 'Shift', 'Status', 'Check-in Time', 'Method', 'Remarks']
-              .map((e) => TextCellValue(e)).toList());
+
+          int pCount = 0;
+          int lCount = 0;
+          int aCount = 0;
+          int lvCount = 0;
+          for (final r in rows) {
+            final st = (r['status']?.toString() ?? '').toLowerCase();
+            if (st == 'present') {
+              pCount++;
+            } else if (st == 'late') {
+              lCount++;
+            } else if (st == 'leave' || r['leaveDetails'] != null) {
+              lvCount++;
+            } else {
+              aCount++;
+            }
+          }
+          final staffRate = rows.isNotEmpty ? (((pCount + lCount) / rows.length) * 100).round() : 0;
+
+          // Institutional Header Block
+          sheet.appendRow([TextCellValue(instituteName)]);
+          sheet.appendRow([TextCellValue('TEACHER DAILY ATTENDANCE REPORT')]);
+          sheet.appendRow([
+            TextCellValue('Date: $periodLabel'),
+            TextCellValue(''),
+            TextCellValue('Shift: $shiftLabel'),
+            TextCellValue(''),
+            TextCellValue('Generated: $generatedAt'),
+          ]);
+          sheet.appendRow([
+            TextCellValue('Total Staff: ${rows.length}   |   Present: $pCount   |   Late: $lCount   |   Absent: $aCount   |   Leave: $lvCount   |   Rate: $staffRate%'),
+          ]);
+          sheet.appendRow([TextCellValue('')]);
+
+          sheet.appendRow([
+            'Employee ID',
+            'Teacher Name',
+            'Shift',
+            'Status',
+            'Check-in Time',
+            'Method',
+            'Remarks / Leave Details'
+          ].map((e) => TextCellValue(e)).toList());
+
           for (final r0 in rows) {
             final r = r0 as Map<String, dynamic>;
             String checkIn = '—';
@@ -589,8 +872,42 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             }
             return;
           }
-          sheet.appendRow(['Classroom', 'Shift', 'Admission No', 'Student Name', 'Status', 'Remarks', 'Parent Contact']
-              .map((e) => TextCellValue(e)).toList());
+
+          int totalPres = 0;
+          int totalAbs = 0;
+          int totalStudents = 0;
+          for (final c in summary) {
+            totalPres += (c['present'] as num?)?.toInt() ?? 0;
+            totalAbs += (c['absent'] as num?)?.toInt() ?? 0;
+            totalStudents += ((c['students'] as List?)?.length ?? 0);
+          }
+          final dailyRate = (totalPres + totalAbs) > 0 ? ((totalPres / (totalPres + totalAbs)) * 100).round() : 0;
+
+          // Institutional Header Block
+          sheet.appendRow([TextCellValue(instituteName)]);
+          sheet.appendRow([TextCellValue('STUDENT DAILY ATTENDANCE REPORT')]);
+          sheet.appendRow([
+            TextCellValue('Date: $periodLabel'),
+            TextCellValue(''),
+            TextCellValue('Shift: $shiftLabel'),
+            TextCellValue(''),
+            TextCellValue('Generated: $generatedAt'),
+          ]);
+          sheet.appendRow([
+            TextCellValue('Total Classes: ${summary.length}   |   Students Recorded: $totalStudents   |   Present: $totalPres   |   Absent: $totalAbs   |   Rate: $dailyRate%'),
+          ]);
+          sheet.appendRow([TextCellValue('')]);
+
+          sheet.appendRow([
+            'Classroom',
+            'Shift',
+            'Admission No',
+            'Student Name',
+            'Status',
+            'Remarks',
+            'Parent Contact'
+          ].map((e) => TextCellValue(e)).toList());
+
           for (final cRow in summary) {
             final c = cRow as Map<String, dynamic>;
             final cName = c['classroom']?.toString() ?? '';
@@ -636,6 +953,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
       }
 
       if (isStudentTab) {
+        // Student Monthly Excel
         final rows = (data['studentSummary'] as List?) ?? [];
         if (rows.isEmpty) {
           if (mounted) {
@@ -645,10 +963,54 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           }
           return;
         }
-        sheet.appendRow(['Admission No', 'Name', 'Classroom', 'Shift', 'Present', 'Absent', 'Late', 'Total', 'Rate %']
-            .map((e) => TextCellValue(e)).toList());
+
+        int totalPres = 0;
+        int totalAbs = 0;
+        int totalLate = 0;
+        int totalDays = 0;
+        for (final r in rows) {
+          totalPres += (r['present'] as num?)?.toInt() ?? 0;
+          totalAbs += (r['absent'] as num?)?.toInt() ?? 0;
+          totalLate += (r['late'] as num?)?.toInt() ?? 0;
+          totalDays += (r['total'] as num?)?.toInt() ?? 0;
+        }
+        final avgRate = totalDays > 0 ? ((totalPres / totalDays) * 100).round() : 0;
+
+        // Institutional Header Block
+        sheet.appendRow([TextCellValue(instituteName)]);
+        sheet.appendRow([TextCellValue('STUDENT MONTHLY ATTENDANCE REPORT')]);
+        sheet.appendRow([
+          TextCellValue('Evaluation Period: $periodLabel'),
+          TextCellValue(''),
+          TextCellValue('Shift: $shiftLabel'),
+          TextCellValue(''),
+          TextCellValue('Generated: $generatedAt'),
+        ]);
+        sheet.appendRow([
+          TextCellValue('Total Students: ${rows.length}   |   Present Days: $totalPres   |   Absent Days: $totalAbs   |   Late Days: $totalLate   |   Overall Attendance Rate: $avgRate%'),
+        ]);
+        sheet.appendRow([TextCellValue('')]);
+
+        sheet.appendRow([
+          'Admission No',
+          'Student Name',
+          'Classroom',
+          'Shift',
+          'Present Days',
+          'Absent Days',
+          'Late Days',
+          'Total Days',
+          'Attendance Rate %'
+        ].map((e) => TextCellValue(e)).toList());
+
         for (final r0 in rows) {
           final r = r0 as Map<String, dynamic>;
+          final pres = (r['present'] as num?)?.toInt() ?? 0;
+          final abs = (r['absent'] as num?)?.toInt() ?? 0;
+          final late = (r['late'] as num?)?.toInt() ?? 0;
+          final tot = (r['total'] as num?)?.toInt() ?? 0;
+          final rate = (r['rate'] as num?)?.toInt() ?? (tot > 0 ? ((pres / tot) * 100).round() : 0);
+
           sheet.appendRow([
             TextCellValue(r['admissionNumber']?.toString() ?? ''),
             TextCellValue(r['fullName']?.toString() ?? ''),
@@ -656,14 +1018,15 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             TextCellValue((r['shift']?.toString().isNotEmpty == true)
                 ? r['shift'].toString()
                 : (_selectedShift != 'All' ? _selectedShift : '—')),
-            IntCellValue((r['present'] as num?)?.toInt() ?? 0),
-            IntCellValue((r['absent'] as num?)?.toInt() ?? 0),
-            IntCellValue((r['late'] as num?)?.toInt() ?? 0),
-            IntCellValue((r['total'] as num?)?.toInt() ?? 0),
-            IntCellValue((r['rate'] as num?)?.toInt() ?? 0),
+            IntCellValue(pres),
+            IntCellValue(abs),
+            IntCellValue(late),
+            IntCellValue(tot),
+            TextCellValue('$rate%'),
           ]);
         }
       } else {
+        // Teacher Monthly Excel
         final rows = (data['summary'] as List?) ?? [];
         if (rows.isEmpty) {
           if (mounted) {
@@ -673,23 +1036,81 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           }
           return;
         }
-        sheet.appendRow(['Employee ID', 'Name', 'Shift', 'Present', 'Absent', 'Late', 'Total', 'Rate %']
-            .map((e) => TextCellValue(e)).toList());
+
+        int totalTeachers = rows.length;
+        int totalScheduled = 0;
+        int totalPresent = 0;
+        int totalAbsent = 0;
+        int totalLeave = 0;
+        int totalLate = 0;
+        int totalDays = 0;
+        for (final r in rows) {
+          totalScheduled += (r['scheduledDays'] as num?)?.toInt() ?? 0;
+          totalPresent += (r['present'] as num?)?.toInt() ?? 0;
+          totalAbsent += (r['absent'] as num?)?.toInt() ?? 0;
+          totalLeave += (r['leave'] as num?)?.toInt() ?? 0;
+          totalLate += (r['late'] as num?)?.toInt() ?? 0;
+          totalDays += (r['total'] as num?)?.toInt() ?? 0;
+        }
+        final overallRate = totalDays > 0 ? ((totalPresent / totalDays) * 100).round() : 0;
+
+        // Institutional Header Block
+        sheet.appendRow([TextCellValue(instituteName)]);
+        sheet.appendRow([TextCellValue('TEACHER MONTHLY ATTENDANCE REPORT')]);
+        sheet.appendRow([
+          TextCellValue('Evaluation Period: $periodLabel'),
+          TextCellValue(''),
+          TextCellValue('Shift: $shiftLabel'),
+          TextCellValue(''),
+          TextCellValue('Generated: $generatedAt'),
+        ]);
+        sheet.appendRow([
+          TextCellValue('Total Teachers: $totalTeachers   |   Scheduled Days: $totalScheduled   |   Present Days: $totalPresent   |   Absent Days: $totalAbsent   |   On Leave: $totalLeave   |   Late Days: $totalLate   |   Overall Attendance Rate: $overallRate%'),
+        ]);
+        sheet.appendRow([TextCellValue('')]);
+
+        // Column Headers
+        sheet.appendRow([
+          'Employee ID',
+          'Teacher Name',
+          'Shift',
+          'Assigned Classes',
+          'Scheduled Days',
+          'Present Days',
+          'Absent Days',
+          'On Leave',
+          'Late Days',
+          'Total Working Days',
+          'Attendance Rate %'
+        ].map((e) => TextCellValue(e)).toList());
+
         for (final r0 in rows) {
           final r = r0 as Map<String, dynamic>;
           final sl = r['shifts'];
           final rowShift = (sl is List && sl.isNotEmpty)
               ? sl.join(', ')
               : (_selectedShift != 'All' ? _selectedShift : '—');
+          final classes = (r['classes'] as List?)?.map((e) => e.toString()).join(', ') ?? '—';
+          final scheduled = (r['scheduledDays'] as num?)?.toInt() ?? (r['total'] as num?)?.toInt() ?? 0;
+          final pres = (r['present'] as num?)?.toInt() ?? 0;
+          final abs = (r['absent'] as num?)?.toInt() ?? 0;
+          final leave = (r['leave'] as num?)?.toInt() ?? 0;
+          final late = (r['late'] as num?)?.toInt() ?? 0;
+          final tot = (r['total'] as num?)?.toInt() ?? scheduled;
+          final rate = (r['rate'] as num?)?.toInt() ?? (tot > 0 ? ((pres / tot) * 100).round() : 0);
+
           sheet.appendRow([
             TextCellValue(r['employeeId']?.toString() ?? ''),
             TextCellValue(r['fullName']?.toString() ?? ''),
             TextCellValue(rowShift),
-            IntCellValue((r['present'] as num?)?.toInt() ?? 0),
-            IntCellValue((r['absent'] as num?)?.toInt() ?? 0),
-            IntCellValue((r['late'] as num?)?.toInt() ?? 0),
-            IntCellValue((r['total'] as num?)?.toInt() ?? 0),
-            IntCellValue((r['rate'] as num?)?.toInt() ?? 0),
+            TextCellValue(classes.isNotEmpty ? classes : '—'),
+            IntCellValue(scheduled),
+            IntCellValue(pres),
+            IntCellValue(abs),
+            IntCellValue(leave),
+            IntCellValue(late),
+            IntCellValue(tot),
+            TextCellValue('$rate%'),
           ]);
         }
       }
@@ -4676,7 +5097,9 @@ class _TeacherReportRow extends StatelessWidget {
     final present = row['present'] as int? ?? 0;
     final absent = row['absent'] as int? ?? 0;
     final late = row['late'] as int? ?? 0;
-    final total = row['total'] as int? ?? 0;
+    final leave = (row['leave'] as num?)?.toInt() ?? 0;
+    final scheduledDays = (row['scheduledDays'] as num?)?.toInt() ?? (row['total'] as int? ?? 0);
+    final total = row['total'] as int? ?? scheduledDays;
     final rate = row['rate'] as int? ?? 0;
     final classes = (row['classes'] as List?)?.map((e) => e.toString()).toList() ?? [];
     final subjects = (row['subjects'] as List?)?.map((e) => e.toString()).toList() ?? [];
@@ -4804,8 +5227,10 @@ class _TeacherReportRow extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 4,
                   children: [
+                    if (scheduledDays > 0) _StatChip(label: 'Scheduled', value: scheduledDays, color: const Color(0xFF0284C7)),
                     _StatChip(label: 'Present', value: present, color: Colors.green),
                     if (late > 0) _StatChip(label: 'Late', value: late, color: Colors.orange),
+                    if (leave > 0) _StatChip(label: 'Leave', value: leave, color: Colors.purple),
                     _StatChip(label: 'Absent', value: absent, color: Colors.red),
                     _StatChip(label: 'Total', value: total, color: const Color(0xFF4B5563)),
                   ],
