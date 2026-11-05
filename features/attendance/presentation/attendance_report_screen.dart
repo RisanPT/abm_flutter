@@ -777,6 +777,49 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
       final sheetName = excel.getDefaultSheet() ?? 'Sheet1';
       final sheet = excel[sheetName];
 
+      // Reusable Cell Styles for Professional Excel Output
+      final titleStyle = CellStyle(
+        bold: true,
+        fontSize: 14,
+        fontColorHex: ExcelColor.fromHexString('#1E3A8A'),
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      final subTitleStyle = CellStyle(
+        bold: true,
+        fontSize: 11,
+        fontColorHex: ExcelColor.fromHexString('#1F2937'),
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      final bannerStyle = CellStyle(
+        fontSize: 10,
+        fontColorHex: ExcelColor.fromHexString('#4B5563'),
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      final headerStyle = CellStyle(
+        bold: true,
+        fontSize: 10,
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+        backgroundColorHex: ExcelColor.fromHexString('#1E3A8A'),
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      final centerStyle = CellStyle(
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+      );
+
+      final leftStyle = CellStyle(
+        horizontalAlign: HorizontalAlign.Left,
+        verticalAlign: VerticalAlign.Center,
+      );
+
       if (isDayWise) {
         if (!isStudentTab) {
           // Teacher daily excel
@@ -808,22 +851,47 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           }
           final staffRate = rows.isNotEmpty ? (((pCount + lCount) / rows.length) * 100).round() : 0;
 
-          // Institutional Header Block
-          sheet.appendRow([TextCellValue(instituteName)]);
-          sheet.appendRow([TextCellValue('TEACHER DAILY ATTENDANCE REPORT')]);
-          sheet.appendRow([
-            TextCellValue('Date: $periodLabel'),
-            TextCellValue(''),
-            TextCellValue('Shift: $shiftLabel'),
-            TextCellValue(''),
-            TextCellValue('Generated: $generatedAt'),
-          ]);
-          sheet.appendRow([
-            TextCellValue('Total Staff: ${rows.length}   |   Present: $pCount   |   Late: $lCount   |   Absent: $aCount   |   Leave: $lvCount   |   Rate: $staffRate%'),
-          ]);
-          sheet.appendRow([TextCellValue('')]);
+          // Set explicit generous column widths (7 columns: 0 to 6)
+          sheet.setColumnWidth(0, 16.0); // Employee ID
+          sheet.setColumnWidth(1, 32.0); // Teacher Name
+          sheet.setColumnWidth(2, 20.0); // Shift
+          sheet.setColumnWidth(3, 16.0); // Status
+          sheet.setColumnWidth(4, 18.0); // Check-in Time
+          sheet.setColumnWidth(5, 20.0); // Method
+          sheet.setColumnWidth(6, 32.0); // Remarks / Leave Details
 
-          sheet.appendRow([
+          // Merged Institutional Header Rows
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0),
+            customValue: TextCellValue(instituteName),
+          );
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).cellStyle = titleStyle;
+
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 1),
+            customValue: TextCellValue('TEACHER DAILY ATTENDANCE REPORT'),
+          );
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).cellStyle = subTitleStyle;
+
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 2),
+            customValue: TextCellValue('Date: $periodLabel   |   Shift: $shiftLabel   |   Generated: $generatedAt'),
+          );
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).cellStyle = bannerStyle;
+
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 3),
+            customValue: TextCellValue('Total Staff: ${rows.length}   |   Present: $pCount   |   Late: $lCount   |   Absent: $aCount   |   Leave: $lvCount   |   Rate: $staffRate%'),
+          );
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3)).cellStyle = bannerStyle;
+
+          // Row 5 (rowIndex 4) is blank spacer
+          // Row 6 (rowIndex 5): Column Headers
+          final headers = [
             'Employee ID',
             'Teacher Name',
             'Shift',
@@ -831,10 +899,16 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             'Check-in Time',
             'Method',
             'Remarks / Leave Details'
-          ].map((e) => TextCellValue(e)).toList());
+          ];
+          for (int c = 0; c < headers.length; c++) {
+            final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 5));
+            cell.value = TextCellValue(headers[c]);
+            cell.cellStyle = headerStyle;
+          }
 
-          for (final r0 in rows) {
-            final r = r0 as Map<String, dynamic>;
+          for (int rIdx = 0; rIdx < rows.length; rIdx++) {
+            final r = rows[rIdx] as Map<String, dynamic>;
+            final currentRow = 6 + rIdx;
             String checkIn = '—';
             final rawCheckIn = r['checkInAt'];
             if (rawCheckIn != null) {
@@ -850,15 +924,39 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             final rowShift = (sl is List && sl.isNotEmpty)
                 ? sl.join(', ')
                 : (_selectedShift != 'All' ? _selectedShift : '—');
-            sheet.appendRow([
-              TextCellValue(r['employeeId']?.toString() ?? ''),
-              TextCellValue(r['fullName']?.toString() ?? ''),
-              TextCellValue(rowShift),
-              TextCellValue(r['status']?.toString() ?? ''),
-              TextCellValue(checkIn),
-              TextCellValue(r['verificationMethod']?.toString() ?? '—'),
-              TextCellValue((r['remarks']?.toString().isNotEmpty == true) ? r['remarks'] : (leaveInfo.isNotEmpty ? leaveInfo : '—')),
-            ]);
+
+            String rawId = r['employeeId']?.toString().trim() ?? '';
+            if (rawId.isNotEmpty && int.tryParse(rawId) != null) {
+              rawId = rawId.padLeft(4, '0');
+            }
+
+            final c0 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow));
+            c0.value = TextCellValue(rawId);
+            c0.cellStyle = centerStyle;
+
+            final c1 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow));
+            c1.value = TextCellValue(r['fullName']?.toString() ?? '');
+            c1.cellStyle = leftStyle;
+
+            final c2 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow));
+            c2.value = TextCellValue(rowShift);
+            c2.cellStyle = centerStyle;
+
+            final c3 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentRow));
+            c3.value = TextCellValue(r['status']?.toString() ?? '');
+            c3.cellStyle = centerStyle;
+
+            final c4 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentRow));
+            c4.value = TextCellValue(checkIn);
+            c4.cellStyle = centerStyle;
+
+            final c5 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: currentRow));
+            c5.value = TextCellValue(r['verificationMethod']?.toString() ?? '—');
+            c5.cellStyle = centerStyle;
+
+            final c6 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: currentRow));
+            c6.value = TextCellValue((r['remarks']?.toString().isNotEmpty == true) ? r['remarks'] : (leaveInfo.isNotEmpty ? leaveInfo : '—'));
+            c6.cellStyle = leftStyle;
           }
         } else {
           // Student daily excel
@@ -883,22 +981,46 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           }
           final dailyRate = (totalPres + totalAbs) > 0 ? ((totalPres / (totalPres + totalAbs)) * 100).round() : 0;
 
-          // Institutional Header Block
-          sheet.appendRow([TextCellValue(instituteName)]);
-          sheet.appendRow([TextCellValue('STUDENT DAILY ATTENDANCE REPORT')]);
-          sheet.appendRow([
-            TextCellValue('Date: $periodLabel'),
-            TextCellValue(''),
-            TextCellValue('Shift: $shiftLabel'),
-            TextCellValue(''),
-            TextCellValue('Generated: $generatedAt'),
-          ]);
-          sheet.appendRow([
-            TextCellValue('Total Classes: ${summary.length}   |   Students Recorded: $totalStudents   |   Present: $totalPres   |   Absent: $totalAbs   |   Rate: $dailyRate%'),
-          ]);
-          sheet.appendRow([TextCellValue('')]);
+          // Set column widths (7 columns: 0 to 6)
+          sheet.setColumnWidth(0, 18.0); // Classroom
+          sheet.setColumnWidth(1, 18.0); // Shift
+          sheet.setColumnWidth(2, 18.0); // Admission No
+          sheet.setColumnWidth(3, 30.0); // Student Name
+          sheet.setColumnWidth(4, 16.0); // Status
+          sheet.setColumnWidth(5, 24.0); // Remarks
+          sheet.setColumnWidth(6, 22.0); // Parent Contact
 
-          sheet.appendRow([
+          // Merged Institutional Header Rows
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0),
+            customValue: TextCellValue(instituteName),
+          );
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).cellStyle = titleStyle;
+
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 1),
+            customValue: TextCellValue('STUDENT DAILY ATTENDANCE REPORT'),
+          );
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).cellStyle = subTitleStyle;
+
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 2),
+            customValue: TextCellValue('Date: $periodLabel   |   Shift: $shiftLabel   |   Generated: $generatedAt'),
+          );
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).cellStyle = bannerStyle;
+
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 3),
+            customValue: TextCellValue('Total Classes: ${summary.length}   |   Students Recorded: $totalStudents   |   Present: $totalPres   |   Absent: $totalAbs   |   Rate: $dailyRate%'),
+          );
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3)).cellStyle = bannerStyle;
+
+          // Column Headers
+          final headers = [
             'Classroom',
             'Shift',
             'Admission No',
@@ -906,8 +1028,14 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             'Status',
             'Remarks',
             'Parent Contact'
-          ].map((e) => TextCellValue(e)).toList());
+          ];
+          for (int c = 0; c < headers.length; c++) {
+            final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 5));
+            cell.value = TextCellValue(headers[c]);
+            cell.cellStyle = headerStyle;
+          }
 
+          int currentRow = 6;
           for (final cRow in summary) {
             final c = cRow as Map<String, dynamic>;
             final cName = c['classroom']?.toString() ?? '';
@@ -917,15 +1045,36 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             final students = (c['students'] as List?) ?? [];
             for (final sRow in students) {
               final s = sRow as Map<String, dynamic>;
-              sheet.appendRow([
-                TextCellValue(cName),
-                TextCellValue(cShift),
-                TextCellValue(s['admissionNumber']?.toString() ?? ''),
-                TextCellValue(s['fullName']?.toString() ?? ''),
-                TextCellValue(s['status']?.toString() ?? ''),
-                TextCellValue(s['remarks']?.toString() ?? ''),
-                TextCellValue(s['parentContact']?.toString() ?? ''),
-              ]);
+
+              final c0 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow));
+              c0.value = TextCellValue(cName);
+              c0.cellStyle = centerStyle;
+
+              final c1 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow));
+              c1.value = TextCellValue(cShift);
+              c1.cellStyle = centerStyle;
+
+              final c2 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow));
+              c2.value = TextCellValue(s['admissionNumber']?.toString() ?? '');
+              c2.cellStyle = centerStyle;
+
+              final c3 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentRow));
+              c3.value = TextCellValue(s['fullName']?.toString() ?? '');
+              c3.cellStyle = leftStyle;
+
+              final c4 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentRow));
+              c4.value = TextCellValue(s['status']?.toString() ?? '');
+              c4.cellStyle = centerStyle;
+
+              final c5 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: currentRow));
+              c5.value = TextCellValue(s['remarks']?.toString() ?? '—');
+              c5.cellStyle = leftStyle;
+
+              final c6 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: currentRow));
+              c6.value = TextCellValue(s['parentContact']?.toString() ?? '—');
+              c6.cellStyle = centerStyle;
+
+              currentRow++;
             }
           }
         }
@@ -976,22 +1125,48 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         }
         final avgRate = totalDays > 0 ? ((totalPres / totalDays) * 100).round() : 0;
 
-        // Institutional Header Block
-        sheet.appendRow([TextCellValue(instituteName)]);
-        sheet.appendRow([TextCellValue('STUDENT MONTHLY ATTENDANCE REPORT')]);
-        sheet.appendRow([
-          TextCellValue('Evaluation Period: $periodLabel'),
-          TextCellValue(''),
-          TextCellValue('Shift: $shiftLabel'),
-          TextCellValue(''),
-          TextCellValue('Generated: $generatedAt'),
-        ]);
-        sheet.appendRow([
-          TextCellValue('Total Students: ${rows.length}   |   Present Days: $totalPres   |   Absent Days: $totalAbs   |   Late Days: $totalLate   |   Overall Attendance Rate: $avgRate%'),
-        ]);
-        sheet.appendRow([TextCellValue('')]);
+        // Set column widths (9 columns: 0 to 8)
+        sheet.setColumnWidth(0, 18.0); // Admission No
+        sheet.setColumnWidth(1, 30.0); // Student Name
+        sheet.setColumnWidth(2, 18.0); // Classroom
+        sheet.setColumnWidth(3, 18.0); // Shift
+        sheet.setColumnWidth(4, 16.0); // Present Days
+        sheet.setColumnWidth(5, 16.0); // Absent Days
+        sheet.setColumnWidth(6, 14.0); // Late Days
+        sheet.setColumnWidth(7, 16.0); // Total Days
+        sheet.setColumnWidth(8, 18.0); // Attendance Rate %
 
-        sheet.appendRow([
+        // Merged Institutional Header Rows
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+          CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: 0),
+          customValue: TextCellValue(instituteName),
+        );
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).cellStyle = titleStyle;
+
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1),
+          CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: 1),
+          customValue: TextCellValue('STUDENT MONTHLY ATTENDANCE REPORT'),
+        );
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).cellStyle = subTitleStyle;
+
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2),
+          CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: 2),
+          customValue: TextCellValue('Evaluation Period: $periodLabel   |   Shift: $shiftLabel   |   Generated: $generatedAt'),
+        );
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).cellStyle = bannerStyle;
+
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3),
+          CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: 3),
+          customValue: TextCellValue('Total Students: ${rows.length}   |   Present Days: $totalPres   |   Absent Days: $totalAbs   |   Late Days: $totalLate   |   Overall Attendance Rate: $avgRate%'),
+        );
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3)).cellStyle = bannerStyle;
+
+        // Column Headers
+        final headers = [
           'Admission No',
           'Student Name',
           'Classroom',
@@ -1001,29 +1176,59 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           'Late Days',
           'Total Days',
           'Attendance Rate %'
-        ].map((e) => TextCellValue(e)).toList());
+        ];
+        for (int c = 0; c < headers.length; c++) {
+          final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 5));
+          cell.value = TextCellValue(headers[c]);
+          cell.cellStyle = headerStyle;
+        }
 
-        for (final r0 in rows) {
-          final r = r0 as Map<String, dynamic>;
+        for (int rIdx = 0; rIdx < rows.length; rIdx++) {
+          final r = rows[rIdx] as Map<String, dynamic>;
+          final currentRow = 6 + rIdx;
           final pres = (r['present'] as num?)?.toInt() ?? 0;
           final abs = (r['absent'] as num?)?.toInt() ?? 0;
           final late = (r['late'] as num?)?.toInt() ?? 0;
           final tot = (r['total'] as num?)?.toInt() ?? 0;
           final rate = (r['rate'] as num?)?.toInt() ?? (tot > 0 ? ((pres / tot) * 100).round() : 0);
 
-          sheet.appendRow([
-            TextCellValue(r['admissionNumber']?.toString() ?? ''),
-            TextCellValue(r['fullName']?.toString() ?? ''),
-            TextCellValue(r['classroom']?.toString() ?? ''),
-            TextCellValue((r['shift']?.toString().isNotEmpty == true)
-                ? r['shift'].toString()
-                : (_selectedShift != 'All' ? _selectedShift : '—')),
-            IntCellValue(pres),
-            IntCellValue(abs),
-            IntCellValue(late),
-            IntCellValue(tot),
-            TextCellValue('$rate%'),
-          ]);
+          final c0 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow));
+          c0.value = TextCellValue(r['admissionNumber']?.toString() ?? '');
+          c0.cellStyle = centerStyle;
+
+          final c1 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow));
+          c1.value = TextCellValue(r['fullName']?.toString() ?? '');
+          c1.cellStyle = leftStyle;
+
+          final c2 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow));
+          c2.value = TextCellValue(r['classroom']?.toString() ?? '');
+          c2.cellStyle = centerStyle;
+
+          final c3 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentRow));
+          c3.value = TextCellValue((r['shift']?.toString().isNotEmpty == true)
+              ? r['shift'].toString()
+              : (_selectedShift != 'All' ? _selectedShift : '—'));
+          c3.cellStyle = centerStyle;
+
+          final c4 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentRow));
+          c4.value = IntCellValue(pres);
+          c4.cellStyle = centerStyle;
+
+          final c5 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: currentRow));
+          c5.value = IntCellValue(abs);
+          c5.cellStyle = centerStyle;
+
+          final c6 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: currentRow));
+          c6.value = IntCellValue(late);
+          c6.cellStyle = centerStyle;
+
+          final c7 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: currentRow));
+          c7.value = IntCellValue(tot);
+          c7.cellStyle = centerStyle;
+
+          final c8 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: currentRow));
+          c8.value = TextCellValue('$rate%');
+          c8.cellStyle = centerStyle;
         }
       } else {
         // Teacher Monthly Excel
@@ -1054,23 +1259,51 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         }
         final overallRate = totalDays > 0 ? ((totalPresent / totalDays) * 100).round() : 0;
 
-        // Institutional Header Block
-        sheet.appendRow([TextCellValue(instituteName)]);
-        sheet.appendRow([TextCellValue('TEACHER MONTHLY ATTENDANCE REPORT')]);
-        sheet.appendRow([
-          TextCellValue('Evaluation Period: $periodLabel'),
-          TextCellValue(''),
-          TextCellValue('Shift: $shiftLabel'),
-          TextCellValue(''),
-          TextCellValue('Generated: $generatedAt'),
-        ]);
-        sheet.appendRow([
-          TextCellValue('Total Teachers: $totalTeachers   |   Scheduled Days: $totalScheduled   |   Present Days: $totalPresent   |   Absent Days: $totalAbsent   |   On Leave: $totalLeave   |   Late Days: $totalLate   |   Overall Attendance Rate: $overallRate%'),
-        ]);
-        sheet.appendRow([TextCellValue('')]);
+        // Set generous column widths (11 columns: 0 to 10)
+        sheet.setColumnWidth(0, 16.0); // Employee ID
+        sheet.setColumnWidth(1, 32.0); // Teacher Name
+        sheet.setColumnWidth(2, 22.0); // Shift
+        sheet.setColumnWidth(3, 24.0); // Assigned Classes
+        sheet.setColumnWidth(4, 18.0); // Scheduled Days
+        sheet.setColumnWidth(5, 16.0); // Present Days
+        sheet.setColumnWidth(6, 16.0); // Absent Days
+        sheet.setColumnWidth(7, 14.0); // On Leave
+        sheet.setColumnWidth(8, 14.0); // Late Days
+        sheet.setColumnWidth(9, 20.0); // Total Working Days
+        sheet.setColumnWidth(10, 20.0); // Attendance Rate %
 
-        // Column Headers
-        sheet.appendRow([
+        // Merged Institutional Header Rows (Merged A to K)
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0),
+          CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: 0),
+          customValue: TextCellValue(instituteName),
+        );
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).cellStyle = titleStyle;
+
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1),
+          CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: 1),
+          customValue: TextCellValue('TEACHER MONTHLY ATTENDANCE REPORT'),
+        );
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).cellStyle = subTitleStyle;
+
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2),
+          CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: 2),
+          customValue: TextCellValue('Evaluation Period: $periodLabel   |   Shift: $shiftLabel   |   Generated: $generatedAt'),
+        );
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).cellStyle = bannerStyle;
+
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3),
+          CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: 3),
+          customValue: TextCellValue('Total Teachers: $totalTeachers   |   Scheduled Days: $totalScheduled   |   Present Days: $totalPresent   |   Absent Days: $totalAbsent   |   On Leave: $totalLeave   |   Late Days: $totalLate   |   Overall Attendance Rate: $overallRate%'),
+        );
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3)).cellStyle = bannerStyle;
+
+        // Row 5 (rowIndex 4) is blank spacer
+        // Row 6 (rowIndex 5): Column Headers with dark navy background & bold white text
+        final headers = [
           'Employee ID',
           'Teacher Name',
           'Shift',
@@ -1082,10 +1315,18 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           'Late Days',
           'Total Working Days',
           'Attendance Rate %'
-        ].map((e) => TextCellValue(e)).toList());
+        ];
+        for (int c = 0; c < headers.length; c++) {
+          final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 5));
+          cell.value = TextCellValue(headers[c]);
+          cell.cellStyle = headerStyle;
+        }
 
-        for (final r0 in rows) {
-          final r = r0 as Map<String, dynamic>;
+        // Data Rows starting from rowIndex 6
+        for (int rIdx = 0; rIdx < rows.length; rIdx++) {
+          final r = rows[rIdx] as Map<String, dynamic>;
+          final currentRow = 6 + rIdx;
+
           final sl = r['shifts'];
           final rowShift = (sl is List && sl.isNotEmpty)
               ? sl.join(', ')
@@ -1099,19 +1340,65 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           final tot = (r['total'] as num?)?.toInt() ?? scheduled;
           final rate = (r['rate'] as num?)?.toInt() ?? (tot > 0 ? ((pres / tot) * 100).round() : 0);
 
-          sheet.appendRow([
-            TextCellValue(r['employeeId']?.toString() ?? ''),
-            TextCellValue(r['fullName']?.toString() ?? ''),
-            TextCellValue(rowShift),
-            TextCellValue(classes.isNotEmpty ? classes : '—'),
-            IntCellValue(scheduled),
-            IntCellValue(pres),
-            IntCellValue(abs),
-            IntCellValue(leave),
-            IntCellValue(late),
-            IntCellValue(tot),
-            TextCellValue('$rate%'),
-          ]);
+          String rawId = r['employeeId']?.toString().trim() ?? '';
+          if (rawId.isNotEmpty && int.tryParse(rawId) != null) {
+            rawId = rawId.padLeft(4, '0');
+          }
+
+          // Col 0: Employee ID (Center)
+          final c0 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow));
+          c0.value = TextCellValue(rawId);
+          c0.cellStyle = centerStyle;
+
+          // Col 1: Teacher Name (Left, generously wide)
+          final c1 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: currentRow));
+          c1.value = TextCellValue(r['fullName']?.toString() ?? '');
+          c1.cellStyle = leftStyle;
+
+          // Col 2: Shift (Center)
+          final c2 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: currentRow));
+          c2.value = TextCellValue(rowShift);
+          c2.cellStyle = centerStyle;
+
+          // Col 3: Assigned Classes (Center)
+          final c3 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentRow));
+          c3.value = TextCellValue(classes.isNotEmpty ? classes : '—');
+          c3.cellStyle = centerStyle;
+
+          // Col 4: Scheduled Days (Center)
+          final c4 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentRow));
+          c4.value = IntCellValue(scheduled);
+          c4.cellStyle = centerStyle;
+
+          // Col 5: Present Days (Center)
+          final c5 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: currentRow));
+          c5.value = IntCellValue(pres);
+          c5.cellStyle = centerStyle;
+
+          // Col 6: Absent Days (Center)
+          final c6 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: currentRow));
+          c6.value = IntCellValue(abs);
+          c6.cellStyle = centerStyle;
+
+          // Col 7: On Leave (Center)
+          final c7 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: currentRow));
+          c7.value = IntCellValue(leave);
+          c7.cellStyle = centerStyle;
+
+          // Col 8: Late Days (Center)
+          final c8 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: currentRow));
+          c8.value = IntCellValue(late);
+          c8.cellStyle = centerStyle;
+
+          // Col 9: Total Working Days (Center)
+          final c9 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: currentRow));
+          c9.value = IntCellValue(tot);
+          c9.cellStyle = centerStyle;
+
+          // Col 10: Attendance Rate % (Center)
+          final c10 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: currentRow));
+          c10.value = TextCellValue('$rate%');
+          c10.cellStyle = centerStyle;
         }
       }
 
