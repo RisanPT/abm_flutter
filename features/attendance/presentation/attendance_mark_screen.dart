@@ -708,7 +708,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
     if (_selectedType == 'Teacher') {
       return (
         icon: LucideIcons.calendarOff,
-        message: 'No classes scheduled for this date.',
+        message: 'No teachers found for $_selectedShift on this date.',
       );
     }
     final cls = classroom ?? '';
@@ -975,6 +975,7 @@ class _AttendanceMarkScreenState extends ConsumerState<AttendanceMarkScreen> {
                       children: [
                         // Live Filter & Search Control Row
                         _AttendanceControlBar(
+                          isTeacher: _selectedType == 'Teacher',
                           searchQuery: _searchQuery,
                           onSearchChanged: (val) =>
                               setState(() => _searchQuery = val),
@@ -1229,7 +1230,7 @@ class _AttendanceCompactHeader extends StatelessWidget {
                               Text(
                                 selectedType == 'Student'
                                     ? 'Student Roster • $selectedShift'
-                                    : 'Teacher Roster • $selectedShift',
+                                    : 'Teacher Attendance • $selectedShift • $dateFormatted',
                                 style: typography.caption.copyWith(
                                   color: Colors.white.withValues(alpha: 0.8),
                                   fontSize: isMobile ? 12 : 13,
@@ -1517,6 +1518,7 @@ class _HeaderFilterChip extends StatelessWidget {
 /// Control bar with Search input, interactive status tabs, and attendance progress
 class _AttendanceControlBar extends StatelessWidget {
   const _AttendanceControlBar({
+    this.isTeacher = false,
     required this.searchQuery,
     required this.onSearchChanged,
     required this.totalCount,
@@ -1528,6 +1530,7 @@ class _AttendanceControlBar extends StatelessWidget {
     this.onMarkAllPresent,
   });
 
+  final bool isTeacher;
   final String searchQuery;
   final ValueChanged<String> onSearchChanged;
   final int totalCount;
@@ -1580,7 +1583,9 @@ class _AttendanceControlBar extends StatelessWidget {
               ),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: 'Search by student name or roll number...',
+                hintText: isTeacher
+                    ? 'Search by teacher name or employee ID...'
+                    : 'Search by student name or roll number...',
                 hintStyle: context.typography.bodySmall.copyWith(
                   color: colors.textSecondary.withValues(alpha: 0.7),
                 ),
@@ -1617,7 +1622,7 @@ class _AttendanceControlBar extends StatelessWidget {
                   child: Row(
                     children: [
                       _StatusFilterTab(
-                        label: 'All',
+                        label: isTeacher ? 'All Staff' : 'All',
                         count: totalCount,
                         color: ColorPalette.primary,
                         isSelected: selectedFilter == 'All',

@@ -448,7 +448,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                   maxCrossAxisExtent: 420,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  mainAxisExtent: 80,
+                  mainAxisExtent: 86,
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) => StudentCard(student: students[index]),

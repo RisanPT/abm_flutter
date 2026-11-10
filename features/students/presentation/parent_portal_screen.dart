@@ -304,6 +304,13 @@ class _StudentCard extends StatelessWidget {
     final admNo = student['studentId'] as String? ?? '';
     final guardian = student['guardianName'] as String? ?? '';
 
+    final shift = student['shift'] as String? ?? '';
+    final gradeShift = [
+      if (grade.isNotEmpty) grade,
+      if (shift.isNotEmpty) shift,
+      if (admNo.isNotEmpty) '#$admNo',
+    ].join(' • ');
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -327,7 +334,7 @@ class _StudentCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name, style: typography.h4),
-                Text('$grade • $admNo', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+                Text(gradeShift, style: typography.bodySmall.copyWith(color: colors.textSecondary)),
                 if (guardian.isNotEmpty)
                   Text('Guardian: $guardian', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
               ],

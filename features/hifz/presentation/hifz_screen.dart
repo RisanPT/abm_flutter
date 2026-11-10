@@ -232,6 +232,7 @@ class _TeacherHifzView extends ConsumerStatefulWidget {
 class _TeacherHifzViewState extends ConsumerState<_TeacherHifzView> {
   final ScrollController _scrollController = ScrollController();
   String _class = 'All';
+  String _shift = 'All'; // 'All', 'Shift-1', 'Shift-2' — split two-batch classes
   String _searchQuery = '';
   String _statusFilter = 'All'; // 'All', 'Logged', 'Pending'
   int _page = 1;
@@ -292,12 +293,14 @@ class _TeacherHifzViewState extends ConsumerState<_TeacherHifzView> {
                       s.fullName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                       s.admissionNumber.toLowerCase().contains(_searchQuery.toLowerCase());
 
+                  final matchesShift = _shift == 'All' || s.shift == _shift;
+
                   final isLogged = byStudent.containsKey(s.id);
                   final matchesStatus = _statusFilter == 'All' ||
                       (_statusFilter == 'Logged' && isLogged) ||
                       (_statusFilter == 'Pending' && !isLogged);
 
-                  return matchesSearch && matchesStatus;
+                  return matchesSearch && matchesShift && matchesStatus;
                 }).toList();
 
                 // Pagination
@@ -406,13 +409,14 @@ class _TeacherHifzViewState extends ConsumerState<_TeacherHifzView> {
                                     ),
                                   ),
                                 ),
-                                if (_searchQuery.isNotEmpty || _class != 'All' || _statusFilter != 'All') ...[
+                                if (_searchQuery.isNotEmpty || _class != 'All' || _shift != 'All' || _statusFilter != 'All') ...[
                                   const Gap(8),
                                   TextButton.icon(
                                     onPressed: () {
                                       setState(() {
                                         _searchQuery = '';
                                         _class = 'All';
+                                        _shift = 'All';
                                         _statusFilter = 'All';
                                         _page = 1;
                                       });
@@ -461,6 +465,23 @@ class _TeacherHifzViewState extends ConsumerState<_TeacherHifzView> {
                                         });
                                       }
                                     },
+                                  ),
+                                ),
+                                // Shift filter — splits a two-batch class (e.g. Evening / Morning)
+                                SegmentedButton<String>(
+                                  segments: const [
+                                    ButtonSegment(value: 'All', label: Text('All Shifts', style: TextStyle(fontSize: 11))),
+                                    ButtonSegment(value: 'Shift-1', label: Text('Shift-1', style: TextStyle(fontSize: 11))),
+                                    ButtonSegment(value: 'Shift-2', label: Text('Shift-2', style: TextStyle(fontSize: 11))),
+                                  ],
+                                  selected: {_shift},
+                                  onSelectionChanged: (set) => setState(() {
+                                    _shift = set.first;
+                                    _page = 1;
+                                  }),
+                                  style: const ButtonStyle(
+                                    visualDensity: VisualDensity.compact,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   ),
                                 ),
                                 // Segmented Status Button

@@ -697,13 +697,16 @@ class _AddStructureDialogState extends ConsumerState<_AddStructureDialog> {
 
     final lineItems = <AccountLineItem>[];
     // Admission is one-time (charged once per student, ever) — no month billing.
-    if (admissionFee > 0) lineItems.add(AccountLineItem(title: 'Admission Fee', amount: admissionFee));
+    // Only Monthly Tuition auto-bills. Admission / exam / arts / sports / tour are
+    // OPTIONAL — kept here for their amount, but added per student at collection
+    // time (tap-to-add), never forced onto the monthly bill.
+    if (admissionFee > 0) lineItems.add(AccountLineItem(title: 'Admission Fee', amount: admissionFee, optional: true));
     if (monthlyFee > 0) lineItems.add(AccountLineItem(title: 'Monthly Tuition Fee', amount: monthlyFee, months: _months['monthly']!));
-    if (sportsFee > 0) lineItems.add(AccountLineItem(title: 'Sports Fee', amount: sportsFee, months: _months['sports']!));
-    if (artsFee > 0) lineItems.add(AccountLineItem(title: 'Arts Fee', amount: artsFee, months: _months['arts']!));
-    if (exam1Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-1 Fee', amount: exam1Fee, months: _months['exam1']!));
-    if (exam2Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-2 Fee', amount: exam2Fee, months: _months['exam2']!));
-    if (tourFee > 0) lineItems.add(AccountLineItem(title: 'Tour Fee', amount: tourFee, months: _months['tour']!));
+    if (sportsFee > 0) lineItems.add(AccountLineItem(title: 'Sports Fee', amount: sportsFee, months: _months['sports']!, optional: true));
+    if (artsFee > 0) lineItems.add(AccountLineItem(title: 'Arts Fee', amount: artsFee, months: _months['arts']!, optional: true));
+    if (exam1Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-1 Fee', amount: exam1Fee, months: _months['exam1']!, optional: true));
+    if (exam2Fee > 0) lineItems.add(AccountLineItem(title: 'Exam-2 Fee', amount: exam2Fee, months: _months['exam2']!, optional: true));
+    if (tourFee > 0) lineItems.add(AccountLineItem(title: 'Tour Fee', amount: tourFee, months: _months['tour']!, optional: true));
 
     final totalAmount = lineItems.fold(0.0, (sum, item) => sum + item.amount);
 

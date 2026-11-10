@@ -63,12 +63,55 @@ class StudentCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const Gap(2),
-                  Text(
-                    '${student.admissionNumber} • ${student.classroom}',
-                    style: typography.bodySmall.copyWith(color: colors.textSecondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  const Gap(4),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: colors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          student.classroom.isNotEmpty ? student.classroom : 'No Class',
+                          style: typography.caption.copyWith(
+                            color: colors.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      const Gap(6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (student.shift?.toLowerCase().contains('2') ?? false)
+                              ? const Color(0xFF0D9488).withValues(alpha: 0.1)
+                              : const Color(0xFFD97706).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          student.shift?.isNotEmpty == true ? student.shift! : 'No Shift',
+                          style: typography.caption.copyWith(
+                            color: (student.shift?.toLowerCase().contains('2') ?? false)
+                                ? const Color(0xFF0F766E)
+                                : const Color(0xFFB45309),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      if (student.admissionNumber.isNotEmpty) ...[
+                        const Gap(6),
+                        Flexible(
+                          child: Text(
+                            '#${student.admissionNumber}',
+                            style: typography.caption.copyWith(color: colors.textSecondary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

@@ -48,6 +48,7 @@ class AccountLineItem {
     required this.title,
     required this.amount,
     this.months = const [],
+    this.optional = false,
   });
 
   final String title;
@@ -58,18 +59,24 @@ class AccountLineItem {
   /// only in these months (and still charged even during vacation).
   final List<int> months;
 
+  /// Optional items never auto-bill — they're offered as tap-to-add options at
+  /// collection time (quick-add chips), keeping the monthly bill lean.
+  final bool optional;
+
   bool get isRecurring => months.isEmpty;
 
-  AccountLineItem copyWith({String? title, double? amount, List<int>? months}) =>
+  AccountLineItem copyWith({String? title, double? amount, List<int>? months, bool? optional}) =>
       AccountLineItem(
         title: title ?? this.title,
         amount: amount ?? this.amount,
         months: months ?? this.months,
+        optional: optional ?? this.optional,
       );
 
   factory AccountLineItem.fromJson(Map<String, dynamic> json) => AccountLineItem(
         title: json['title'] as String,
         amount: (json['amount'] as num).toDouble(),
+        optional: json['optional'] == true,
         months: ((json['months'] as List?) ?? [])
             .map((m) => (m as num).toInt())
             .toList(),
@@ -523,7 +530,7 @@ class FeeStructureModel {
         'grade': grade,
         'totalAmount': totalAmount,
         'lineItems': lineItems
-            .map((e) => {'title': e.title, 'amount': e.amount, 'months': e.months})
+            .map((e) => {'title': e.title, 'amount': e.amount, 'months': e.months, 'optional': e.optional})
             .toList(),
       };
 }

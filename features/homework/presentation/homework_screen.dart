@@ -31,6 +31,7 @@ class HomeworkScreen extends ConsumerStatefulWidget {
 class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
   final ScrollController _scrollController = ScrollController();
   String _classFilter = 'All';
+  String _shiftFilter = 'All'; // 'All', 'Shift-1', 'Shift-2' — split two-batch classes
   String _searchQuery = '';
   String _statusFilter = 'All'; // 'All', 'Active', 'Overdue'
   int _page = 1;
@@ -61,7 +62,7 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
     final canManage = _canManage(user?.role);
     // Students always see their own class (backend scopes it); staff can filter.
     final listKey = isStudent ? '' : _classFilter;
-    final hwQuery = HomeworkQuery(classroom: listKey, page: _page, instituteId: ref.watch(selectedInstituteProvider).id);
+    final hwQuery = HomeworkQuery(classroom: listKey, shift: isStudent ? null : _shiftFilter, page: _page, instituteId: ref.watch(selectedInstituteProvider).id);
     final hwAsync = ref.watch(homeworkPageProvider(hwQuery));
 
     final classesAsync = ref.watch(classroomControllerProvider);
@@ -246,13 +247,14 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
                                       ),
                                     ),
                                   ),
-                                  if (_searchQuery.isNotEmpty || _classFilter != 'All' || _statusFilter != 'All') ...[
+                                  if (_searchQuery.isNotEmpty || _classFilter != 'All' || _shiftFilter != 'All' || _statusFilter != 'All') ...[
                                     const Gap(8),
                                     TextButton.icon(
                                       onPressed: () {
                                         setState(() {
                                           _searchQuery = '';
                                           _classFilter = 'All';
+                                          _shiftFilter = 'All';
                                           _statusFilter = 'All';
                                           _page = 1;
                                         });
@@ -301,6 +303,23 @@ class _HomeworkScreenState extends ConsumerState<HomeworkScreen> {
                                             });
                                           }
                                         },
+                                      ),
+                                    ),
+                                  if (canManage)
+                                    SegmentedButton<String>(
+                                      segments: const [
+                                        ButtonSegment(value: 'All', label: Text('All Shifts', style: TextStyle(fontSize: 11))),
+                                        ButtonSegment(value: 'Shift-1', label: Text('Shift-1', style: TextStyle(fontSize: 11))),
+                                        ButtonSegment(value: 'Shift-2', label: Text('Shift-2', style: TextStyle(fontSize: 11))),
+                                      ],
+                                      selected: {_shiftFilter},
+                                      onSelectionChanged: (set) => setState(() {
+                                        _shiftFilter = set.first;
+                                        _page = 1;
+                                      }),
+                                      style: const ButtonStyle(
+                                        visualDensity: VisualDensity.compact,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       ),
                                     ),
                                   SegmentedButton<String>(
@@ -567,6 +586,10 @@ class _HomeworkCard extends StatelessWidget {
                           const Gap(6),
                         ],
                         _Tag(text: hw.classroom, color: colors.secondary),
+                        if (hw.shift.isNotEmpty && hw.shift != 'All') ...[
+                          const Gap(6),
+                          _Tag(text: hw.shift, color: colors.primary),
+                        ],
                       ],
                     ),
                     const Gap(8),
@@ -733,6 +756,7 @@ class _HomeworkFormState extends ConsumerState<_HomeworkForm> {
   late final TextEditingController _subject = TextEditingController(text: widget.existing?.subject ?? '');
   late final TextEditingController _desc = TextEditingController(text: widget.existing?.description ?? '');
   late String? _classroom = widget.existing?.classroom;
+  late String _shift = widget.existing?.shift ?? 'All'; // target batch
   late DateTime? _dueDate = widget.existing?.dueDate;
   Uint8List? _imageBytes;
   String _imageName = '';
@@ -774,6 +798,7 @@ class _HomeworkFormState extends ConsumerState<_HomeworkForm> {
         }
         await repo.create(
           classroom: _classroom!,
+          shift: _shift,
           title: _title.text.trim(),
           subject: _subject.text.trim(),
           description: _desc.text.trim(),
@@ -785,6 +810,7 @@ class _HomeworkFormState extends ConsumerState<_HomeworkForm> {
         await repo.update(
           widget.existing!.id,
           classroom: _classroom,
+          shift: _shift,
           title: _title.text.trim(),
           subject: _subject.text.trim(),
           description: _desc.text.trim(),
@@ -826,6 +852,17 @@ class _HomeworkFormState extends ConsumerState<_HomeworkForm> {
               decoration: const InputDecoration(labelText: 'Class', border: OutlineInputBorder()),
               items: widget.classes.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
               onChanged: (v) => setState(() => _classroom = v),
+            ),
+            const Gap(12),
+            DropdownButtonFormField<String>(
+              initialValue: _shift,
+              decoration: const InputDecoration(labelText: 'For (batch / shift)', border: OutlineInputBorder()),
+              items: const [
+                DropdownMenuItem(value: 'All', child: Text('Whole class (all shifts)')),
+                DropdownMenuItem(value: 'Shift-1', child: Text('Shift-1 only')),
+                DropdownMenuItem(value: 'Shift-2', child: Text('Shift-2 only')),
+              ],
+              onChanged: (v) => setState(() => _shift = v ?? 'All'),
             ),
             const Gap(12),
             ABMTextField(label: 'Title', hint: 'e.g. Read Surah Al-Mulk', controller: _title),

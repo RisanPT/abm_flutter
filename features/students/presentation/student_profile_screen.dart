@@ -58,7 +58,7 @@ class _StudentProfileBody extends ConsumerWidget {
           children: [
             ABMPageHeader(
               title: student.fullName,
-              subtitle: 'Class: ${student.classroom}',
+              subtitle: 'Class: ${student.classroom.isNotEmpty ? student.classroom : 'N/A'} • Shift: ${student.shift?.isNotEmpty == true ? student.shift! : 'Not Assigned'}',
               height: context.isMobile ? 320 : 360,
               actions: [
                 IconButton(
@@ -152,6 +152,7 @@ class _StudentProfileBody extends ConsumerWidget {
           children: [
             InfoRow(label: 'Admission No.', value: student.admissionNumber),
             InfoRow(label: 'Class', value: student.classroom.isNotEmpty ? student.classroom : 'N/A'),
+            InfoRow(label: 'Shift', value: student.shift?.isNotEmpty == true ? student.shift! : 'Not Assigned'),
             InfoRow(label: 'Date of Birth', value: DateFormat('dd MMM yyyy').format(student.dateOfBirth)),
             InfoRow(label: 'Gender', value: student.gender.name.toUpperCase()),
             InfoRow(label: 'Blood Group', value: student.bloodGroup ?? 'N/A'),
@@ -247,6 +248,7 @@ class _StudentProfileBody extends ConsumerWidget {
                 _idRow('Name', student.fullName),
                 _idRow('Student ID', student.admissionNumber),
                 _idRow('Class', student.classroom),
+                _idRow('Shift', student.shift?.isNotEmpty == true ? student.shift! : 'Not Assigned'),
                 _idRow('Guardian Contact', student.guardianContact),
               ],
             ),

@@ -7,8 +7,9 @@ final homeworkRepositoryProvider =
     Provider<HomeworkRepository>((ref) => HomeworkRepository(ref.watch(dioProvider)));
 
 class HomeworkQuery {
-  const HomeworkQuery({this.classroom, this.page = 1, this.mine = false, this.instituteId});
+  const HomeworkQuery({this.classroom, this.shift, this.page = 1, this.mine = false, this.instituteId});
   final String? classroom;
+  final String? shift; // staff filter: 'Shift-1' | 'Shift-2' (null/'All' = no filter)
   final int page;
   final bool mine;
   final String? instituteId;
@@ -17,12 +18,13 @@ class HomeworkQuery {
   bool operator ==(Object other) =>
       other is HomeworkQuery &&
       classroom == other.classroom &&
+      shift == other.shift &&
       page == other.page &&
       mine == other.mine &&
       instituteId == other.instituteId;
 
   @override
-  int get hashCode => Object.hash(classroom, page, mine, instituteId);
+  int get hashCode => Object.hash(classroom, shift, page, mine, instituteId);
 }
 
 /// Paginated homework list, keyed by classroom & page.
@@ -30,6 +32,7 @@ final homeworkPageProvider =
     FutureProvider.autoDispose.family<PagedResult<Homework>, HomeworkQuery>((ref, q) {
   return ref.read(homeworkRepositoryProvider).getHomeworkPage(
         classroom: (q.classroom?.isEmpty ?? true) ? null : q.classroom,
+        shift: (q.shift == null || q.shift == 'All') ? null : q.shift,
         page: q.page,
         mine: q.mine,
         instituteId: q.instituteId,
@@ -46,6 +49,7 @@ class Homework {
   const Homework({
     required this.id,
     required this.classroom,
+    this.shift = 'All',
     required this.subject,
     required this.title,
     required this.description,
@@ -60,6 +64,7 @@ class Homework {
 
   final String id;
   final String classroom;
+  final String shift; // 'All' | 'Shift-1' | 'Shift-2' — which batch it targets
   final String subject;
   final String title;
   final String description;
@@ -76,6 +81,7 @@ class Homework {
   factory Homework.fromJson(Map<String, dynamic> j) => Homework(
         id: (j['id'] ?? j['_id'] ?? '').toString(),
         classroom: (j['classroom'] ?? '').toString(),
+        shift: (j['shift'] ?? 'All').toString(),
         subject: (j['subject'] ?? '').toString(),
         title: (j['title'] ?? '').toString(),
         description: (j['description'] ?? '').toString(),
@@ -104,6 +110,7 @@ class HomeworkRepository {
 
   Future<PagedResult<Homework>> getHomeworkPage({
     String? classroom,
+    String? shift,
     bool mine = false,
     required int page,
     int limit = 20,
@@ -111,6 +118,7 @@ class HomeworkRepository {
   }) async {
     final r = await _dio.get('/homework', queryParameters: {
       if (classroom != null && classroom.isNotEmpty) 'classroom': classroom,
+      if (shift != null && shift.isNotEmpty) 'shift': shift,
       if (mine) 'mine': 'true',
       'instituteId': ?instituteId,
       'page': page,
@@ -125,6 +133,7 @@ class HomeworkRepository {
   Future<void> create({
     required String classroom,
     required String title,
+    String shift = 'All',
     String subject = '',
     String description = '',
     DateTime? dueDate,
@@ -133,6 +142,7 @@ class HomeworkRepository {
   }) async {
     await _dio.post('/homework', data: {
       'classroom': classroom,
+      'shift': shift,
       'title': title,
       'subject': subject,
       'description': description,
@@ -145,6 +155,7 @@ class HomeworkRepository {
   Future<void> update(
     String id, {
     String? classroom,
+    String? shift,
     String? title,
     String? subject,
     String? description,
@@ -152,6 +163,7 @@ class HomeworkRepository {
   }) async {
     await _dio.patch('/homework/$id', data: {
       'classroom': ?classroom,
+      'shift': ?shift,
       'title': ?title,
       'subject': ?subject,
       'description': ?description,
