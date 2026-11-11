@@ -14,6 +14,7 @@ import 'package:abm_madrasa/features/accounts/presentation/finance_controller.da
 import 'package:abm_madrasa/features/students/presentation/classroom_controller.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -1445,57 +1446,150 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
             ),
           ),
 
-          // Month Selection Chips
+          // Month Selection Chips with Left/Right Scroll Controls & Mouse Drag Support
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Select / Toggle Months  ·  ← arrears · upcoming → (scroll)',
-                  style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11),
+                Row(
+                  children: [
+                    Text(
+                      'Select / Toggle Months',
+                      style: typography.bodySmall.copyWith(color: colors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                    const Gap(8),
+                    Text(
+                      '·  arrears ← | → upcoming',
+                      style: typography.caption.copyWith(color: colors.textSecondary.withValues(alpha: 0.7), fontSize: 10),
+                    ),
+                    const Spacer(),
+                    // Quick jump to current month button
+                    InkWell(
+                      onTap: _centerCurrentMonth,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.calendar, size: 12, color: colors.primary),
+                            const Gap(4),
+                            Text(
+                              'Current Month',
+                              style: typography.caption.copyWith(color: colors.primary, fontWeight: FontWeight.w600, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const Gap(8),
-                SizedBox(
-                  height: 38,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    controller: _monthScrollController,
-                    itemCount: _monthOptions.length,
-                    separatorBuilder: (_, index) => const Gap(8),
-                    itemBuilder: (ctx, idx) {
-                      final m = _monthOptions[idx];
-                      final isSelected = _selectedMonths.contains(m);
-                      final isCurrent = m == details.monthLabel;
-                      final isPast = DateFormat('MMMM yyyy').parse(m).isBefore(
-                            DateFormat('MMMM yyyy').parse(details.monthLabel),
-                          );
+                Row(
+                  children: [
+                    // Scroll Left Button (Arrears)
+                    _ScrollArrowButton(
+                      icon: LucideIcons.chevronLeft,
+                      tooltip: 'Scroll to earlier / arrears months',
+                      onPressed: () {
+                        if (!_monthScrollController.hasClients) return;
+                        final target = (_monthScrollController.offset - 220.0)
+                            .clamp(0.0, _monthScrollController.position.maxScrollExtent);
+                        _monthScrollController.animateTo(
+                          target,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOutCubic,
+                        );
+                      },
+                    ),
+                    const Gap(6),
+                    // Horizontal Months List with Mouse Drag & Wheel Support
+                    Expanded(
+                      child: SizedBox(
+                        height: 38,
+                        child: Listener(
+                          onPointerSignal: (pointerSignal) {
+                            if (pointerSignal is PointerScrollEvent && _monthScrollController.hasClients) {
+                              final delta = pointerSignal.scrollDelta.dx != 0
+                                  ? pointerSignal.scrollDelta.dx
+                                  : pointerSignal.scrollDelta.dy;
+                              if (delta != 0) {
+                                final target = (_monthScrollController.offset + delta)
+                                    .clamp(0.0, _monthScrollController.position.maxScrollExtent);
+                                _monthScrollController.jumpTo(target);
+                              }
+                            }
+                          },
+                          child: ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(context).copyWith(
+                              dragDevices: {
+                                PointerDeviceKind.touch,
+                                PointerDeviceKind.mouse,
+                                PointerDeviceKind.trackpad,
+                                PointerDeviceKind.stylus,
+                              },
+                            ),
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              controller: _monthScrollController,
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              itemCount: _monthOptions.length,
+                              separatorBuilder: (_, index) => const Gap(8),
+                              itemBuilder: (ctx, idx) {
+                                final m = _monthOptions[idx];
+                                final isSelected = _selectedMonths.contains(m);
+                                final isCurrent = m == details.monthLabel;
+                                final isPast = DateFormat('MMMM yyyy').parse(m).isBefore(
+                                      DateFormat('MMMM yyyy').parse(details.monthLabel),
+                                    );
 
-                      return ChoiceChip(
-                        key: isCurrent ? _currentMonthKey : null,
-                        selected: isSelected,
-                        onSelected: (_) => _toggleMonth(m),
-                        selectedColor: colors.primary,
-                        backgroundColor: colors.background,
-                        side: BorderSide(
-                          color: isSelected
-                              ? colors.primary
-                              : (isCurrent ? colors.primary.withValues(alpha: 0.5) : colors.border),
-                        ),
-                        avatar: isSelected
-                            ? const Icon(LucideIcons.check, size: 14, color: Colors.white)
-                            : null,
-                        label: Text(
-                          m + (isCurrent ? ' (Current)' : (isPast ? ' (Arrears)' : ' (Upcoming)')),
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : colors.textPrimary,
-                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                            fontSize: 12,
+                                return ChoiceChip(
+                                  key: isCurrent ? _currentMonthKey : null,
+                                  selected: isSelected,
+                                  onSelected: (_) => _toggleMonth(m),
+                                  selectedColor: colors.primary,
+                                  backgroundColor: colors.background,
+                                  side: BorderSide(
+                                    color: isSelected
+                                        ? colors.primary
+                                        : (isCurrent ? colors.primary.withValues(alpha: 0.5) : colors.border),
+                                  ),
+                                  avatar: isSelected
+                                      ? const Icon(LucideIcons.check, size: 14, color: Colors.white)
+                                      : null,
+                                  label: Text(
+                                    m + (isCurrent ? ' (Current)' : (isPast ? ' (Arrears)' : ' (Upcoming)')),
+                                    style: TextStyle(
+                                      color: isSelected ? Colors.white : colors.textPrimary,
+                                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                    const Gap(6),
+                    // Scroll Right Button (Upcoming)
+                    _ScrollArrowButton(
+                      icon: LucideIcons.chevronRight,
+                      tooltip: 'Scroll to upcoming months',
+                      onPressed: () {
+                        if (!_monthScrollController.hasClients) return;
+                        final target = (_monthScrollController.offset + 220.0)
+                            .clamp(0.0, _monthScrollController.position.maxScrollExtent);
+                        _monthScrollController.animateTo(
+                          target,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOutCubic,
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1926,8 +2020,49 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
   }
 }
 
+class _ScrollArrowButton extends StatelessWidget {
+  const _ScrollArrowButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
 
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
 
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: colors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Icon(icon, size: 16, color: colors.primary),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 // ─── Payment History Card ──────────────────────────────────────────────────────
 

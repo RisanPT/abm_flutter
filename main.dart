@@ -4,6 +4,7 @@ import 'package:abm_madrasa/core/network/connectivity_provider.dart';
 import 'package:abm_madrasa/core/router/app_router.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/core/utils/size_config.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -15,6 +16,18 @@ void main() {
       child: ABMMadrasaApp(),
     ),
   );
+}
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
 }
 
 class ABMMadrasaApp extends ConsumerWidget {
@@ -31,6 +44,7 @@ class ABMMadrasaApp extends ConsumerWidget {
       darkTheme: darkAppTheme,
       themeMode: ThemeMode.light,
       routerConfig: router,
+      scrollBehavior: const AppScrollBehavior(),
       builder: (context, child) {
         // Initialize SizeConfig
         SizeConfig().init(context);
@@ -111,7 +125,7 @@ class _ConnectivityBannerState extends ConsumerState<_ConnectivityBanner> {
             duration: const Duration(milliseconds: 250),
             transitionBuilder: (child, anim) => SizeTransition(
               sizeFactor: anim,
-              axisAlignment: -1,
+              alignment: Alignment.topCenter,
               child: child,
             ),
             child: bar ?? const SizedBox(width: double.infinity),
