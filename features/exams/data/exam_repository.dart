@@ -259,4 +259,24 @@ class ExamRepository {
     final r = await _dio.get('/exams/results/student/$studentId');
     return (r.data as List).map((e) => ExamResult.fromJson(Map<String, dynamic>.from(e as Map))).toList();
   }
+
+  /// Distinct subjects for a class WITH their timetable-assigned teacher, to
+  /// prefill exam creation from the real timetable.
+  Future<List<({String subject, String teacher})>> getTimetableSubjects({
+    required String classroom,
+    String? shift,
+  }) async {
+    final r = await _dio.get('/exams/timetable-subjects', queryParameters: {
+      'classroom': classroom,
+      if (shift != null && shift.isNotEmpty && shift != 'All') 'shift': shift,
+    });
+    final list = ((r.data as Map)['subjects'] as List?) ?? [];
+    return list
+        .map((e) => (
+              subject: (e['subject'] ?? '').toString(),
+              teacher: (e['teacher'] ?? '').toString(),
+            ))
+        .where((e) => e.subject.isNotEmpty)
+        .toList();
+  }
 }

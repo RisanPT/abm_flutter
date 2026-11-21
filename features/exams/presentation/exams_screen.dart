@@ -1508,11 +1508,51 @@ class _CreateExamSheetState extends ConsumerState<_CreateExamSheet> {
     (name: TextEditingController(), max: TextEditingController(text: '100'), teacher: TextEditingController()),
   ];
   bool _saving = false;
+  bool _pulling = false;
 
   @override
   void initState() {
     super.initState();
     _name = TextEditingController(text: widget.defaultExamName ?? 'Class Test 1');
+  }
+
+  // Pull the class's actual subjects AND their assigned teachers from the
+  // timetable (ScheduledClass) and populate the subject rows.
+  Future<void> _pullFromTimetable() async {
+    final cls = _class;
+    final messenger = ScaffoldMessenger.of(context);
+    if (cls == null || cls.isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('Select a class first.')));
+      return;
+    }
+    setState(() => _pulling = true);
+    try {
+      final rows = await ref.read(examRepositoryProvider).getTimetableSubjects(classroom: cls, shift: _shift);
+      if (!mounted) return;
+      if (rows.isEmpty) {
+        messenger.showSnackBar(const SnackBar(content: Text('No timetable subjects found for this class and shift.')));
+        return;
+      }
+      setState(() {
+        for (final s in _subjects) {
+          s.name.dispose();
+          s.max.dispose();
+          s.teacher.dispose();
+        }
+        _subjects
+          ..clear()
+          ..addAll(rows.map((r) => (
+                name: TextEditingController(text: r.subject),
+                max: TextEditingController(text: '100'),
+                teacher: TextEditingController(text: r.teacher),
+              )));
+      });
+      messenger.showSnackBar(SnackBar(content: Text('Loaded ${rows.length} subject(s) from the timetable.')));
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _pulling = false);
+    }
   }
 
   ClassroomModel? get _selectedClassroom =>
@@ -1789,8 +1829,15 @@ class _CreateExamSheetState extends ConsumerState<_CreateExamSheet> {
             // Subjects list
             Row(
               children: [
-                Text('Subjects & Respective Teachers', style: context.typography.bodyMediumSemiBold),
+                Flexible(child: Text('Subjects & Respective Teachers', style: context.typography.bodyMediumSemiBold)),
                 const Spacer(),
+                TextButton.icon(
+                  onPressed: _pulling ? null : _pullFromTimetable,
+                  icon: _pulling
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(LucideIcons.calendarClock, size: 16),
+                  label: const Text('From timetable'),
+                ),
                 TextButton.icon(
                   onPressed: () => setState(() => _subjects.add((
                         name: TextEditingController(),

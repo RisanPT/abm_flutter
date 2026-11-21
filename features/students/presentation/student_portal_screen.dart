@@ -1241,7 +1241,7 @@ void showStudentIdCard(BuildContext context, PortalProfile p) {
             Text('STUDENT ID CARD', style: context.typography.bodySmall.copyWith(color: _goldLight, letterSpacing: 2, fontWeight: FontWeight.w700)),
             const Gap(10),
             Text(p.fullName, style: context.typography.h4.copyWith(color: Colors.white), textAlign: TextAlign.center),
-            Text('${p.grade}${p.admissionNumber.isNotEmpty ? '  ·  ${p.admissionNumber}' : ''}', style: context.typography.bodySmall.copyWith(color: Colors.white70)),
+            Text('${p.grade}${(p.shift ?? '').isNotEmpty ? '  ·  ${p.shift}' : ''}${p.admissionNumber.isNotEmpty ? '  ·  ${p.admissionNumber}' : ''}', style: context.typography.bodySmall.copyWith(color: Colors.white70)),
             const Gap(18),
             Container(
               padding: const EdgeInsets.all(14),

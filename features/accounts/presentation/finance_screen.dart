@@ -1785,7 +1785,7 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                 // Quick-add: the grade's configured optional fees (Admission /
                 // Exam / Book / Arts / Sports …) that aren't already on this
                 // month's bill, one tap to add at their set amount.
-                if (!isPaid && _optionalFees.isNotEmpty)
+                if (_optionalFees.isNotEmpty)
                   Builder(builder: (context) {
                     final onBill = details.lineItems.map((e) => e.title).toSet();
                     final avail = _optionalFees.where((f) => !onBill.contains(f.title)).toList();
@@ -1796,9 +1796,11 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Add an optional fee',
+                            // A book/exam fee can be added even after the monthly fee
+                            // is paid — it reopens the bill for just the extra amount.
+                            isPaid ? 'Add a book / exam fee (reopens this paid bill)' : 'Add an optional fee',
                             style: typography.bodySmall
-                                .copyWith(color: colors.textSecondary, fontSize: 11),
+                                .copyWith(color: isPaid ? Colors.orange.shade800 : colors.textSecondary, fontSize: 11),
                           ),
                           const Gap(8),
                           Wrap(
@@ -1819,19 +1821,18 @@ class _FeeBreakdownCardState extends ConsumerState<_FeeBreakdownCard> {
 
                 // Manual / ad-hoc charge (a custom amount or a fee not in the
                 // template) for the selected month(s), added on top of the above.
-                if (!isPaid)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: processingPayment ? null : _openAddCharge,
-                      icon: const Icon(LucideIcons.plus, size: 16),
-                      label: const Text('Other / custom charge'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: colors.primary,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: processingPayment ? null : _openAddCharge,
+                    icon: const Icon(LucideIcons.plus, size: 16),
+                    label: Text(isPaid ? 'Add another charge (reopens bill)' : 'Other / custom charge'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     ),
                   ),
+                ),
 
                 const Gap(12),
                 // Total Balance row

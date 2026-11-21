@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'package:abm_madrasa/core/network/dio_client.dart';
 import 'package:abm_madrasa/core/error/error_utils.dart';
+import 'package:abm_madrasa/core/whatsapp/whatsapp_service.dart';
 import 'package:abm_madrasa/core/providers/institute_provider.dart';
 import 'package:abm_madrasa/core/theme/app_theme.dart';
 import 'package:abm_madrasa/shared/widgets/abm_ui.dart';
@@ -74,27 +76,33 @@ final _attendanceReportProvider = FutureProvider.autoDispose.family<Map<String, 
 
 // Per-teacher day-by-day rows for the drill-down.
 class _TeacherDaysParams {
-  const _TeacherDaysParams({required this.teacherId, required this.month, required this.instituteId});
+  const _TeacherDaysParams({required this.teacherId, required this.month, required this.instituteId, this.shift});
   final String teacherId;
   final String month;
   final String instituteId;
+  final String? shift;
   @override
   bool operator ==(Object other) =>
       other is _TeacherDaysParams &&
       teacherId == other.teacherId &&
       month == other.month &&
-      instituteId == other.instituteId;
+      instituteId == other.instituteId &&
+      shift == other.shift;
   @override
-  int get hashCode => Object.hash(teacherId, month, instituteId);
+  int get hashCode => Object.hash(teacherId, month, instituteId, shift);
 }
 
 final _teacherDaysProvider = FutureProvider.autoDispose.family<List<Map<String, dynamic>>, _TeacherDaysParams>(
   (ref, p) async {
     final dio = ref.watch(dioProvider);
-    final res = await dio.get('/attendance/teacher-report/${p.teacherId}', queryParameters: {
+    final qp = <String, dynamic>{
       'month': p.month,
       'instituteId': p.instituteId,
-    });
+    };
+    if (p.shift != null && p.shift!.isNotEmpty && p.shift != 'All') {
+      qp['shift'] = p.shift;
+    }
+    final res = await dio.get('/attendance/teacher-report/${p.teacherId}', queryParameters: qp);
     final days = ((res.data as Map)['days'] as List?) ?? [];
     return days.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   },
@@ -207,7 +215,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
     }
   }
 
-  Future<void> _exportAttendancePdf() async {
+  Future<void> _exportAttendancePdf([String? overrideShift]) async {
     final box = context.findRenderObject() as RenderBox?;
     final origin = (box != null && box.hasSize)
         ? box.localToGlobal(Offset.zero) & box.size
@@ -221,14 +229,17 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
       final isStudentTab = _reportType == 'student';
       final type = isStudentTab ? 'student' : 'teacher';
       final isDayWise = _viewMode == 'day';
-      final shiftLabel = _selectedShift == 'All' ? 'All Shifts' : _selectedShift;
+      final effectiveShift = (overrideShift != null && overrideShift.isNotEmpty && overrideShift != 'All')
+          ? (overrideShift == 'Shift 1' ? 'Shift-1' : (overrideShift == 'Shift 2' ? 'Shift-2' : overrideShift))
+          : (overrideShift == 'All' ? 'All' : _selectedShift);
+      final shiftLabel = effectiveShift == 'All' ? 'All Shifts' : effectiveShift;
       final generatedAt = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
       final params = _ReportParams(
         month: _monthKey,
         date: isDayWise ? _dayKey : null,
         instituteId: institute.id,
         type: type,
-        shift: _selectedShift,
+        shift: effectiveShift,
         refreshKey: _refreshKey,
       );
 
@@ -257,19 +268,31 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           int lCount = 0;
           int aCount = 0;
           int lvCount = 0;
+          int ncCount = 0;
+          int nsCount = 0;
           for (final row in teachers) {
-            final st = (row['status']?.toString() ?? '').toLowerCase();
-            if (st == 'present') {
-              pCount++;
-            } else if (st == 'late') {
-              lCount++;
-            } else if (st == 'leave' || row['leaveDetails'] != null) {
-              lvCount++;
-            } else {
-              aCount++;
+            switch (_stateOf(Map<String, dynamic>.from(row as Map))) {
+              case 'present':
+                pCount++;
+                break;
+              case 'late':
+                lCount++;
+                break;
+              case 'leave':
+                lvCount++;
+                break;
+              case 'absent':
+                aCount++;
+                break;
+              case 'not_scheduled':
+                nsCount++;
+                break;
+              default:
+                ncCount++;
             }
           }
-          final staffRate = teachers.isNotEmpty ? (((pCount + lCount) / teachers.length) * 100).round() : 0;
+          final schedCount = pCount + lCount + lvCount + aCount + ncCount;
+          final staffRate = schedCount > 0 ? (((pCount + lCount) / schedCount) * 100).round() : 0;
 
           final pdf = pw.Document();
           pdf.addPage(
@@ -308,8 +331,13 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                       pw.Divider(color: PdfColors.grey300),
                       pw.SizedBox(height: 4),
                       pw.Text(
-                        'Total Staff: ${teachers.length}   |   Present: $pCount   |   Late: $lCount   |   Absent: $aCount   |   Leave: $lvCount   |   Rate: $staffRate%',
+                        '$schedCount scheduled today   |   Checked in: ${pCount + lCount} ($staffRate%)   |   Not checked in: $ncCount   |   On Leave: $lvCount${aCount > 0 ? '   |   Absent: $aCount' : ''}   |   Not scheduled: $nsCount',
                         style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+                      ),
+                      pw.SizedBox(height: 3),
+                      pw.Text(
+                        'Note: "Not checked in" means a scheduled teacher has no check-in yet — not a confirmed absence. "Not scheduled" teachers had no class today.',
+                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
                       ),
                     ],
                   ),
@@ -341,7 +369,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                       r['employeeId']?.toString() ?? '',
                       r['fullName']?.toString() ?? '',
                       rowShift,
-                      r['status']?.toString() ?? '',
+                      _stateVisual(_stateOf(r)).label,
                       checkIn,
                       r['verificationMethod']?.toString() ?? '—',
                       (r['remarks']?.toString().isNotEmpty == true) ? r['remarks'] : (leaveInfo.isNotEmpty ? leaveInfo : '—'),
@@ -671,6 +699,8 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                     children: [
                       pw.Text('Evaluation Period: ${DateFormat('MMMM yyyy').format(_selectedDate)}', style: const pw.TextStyle(fontSize: 10)),
                       pw.Text('Shift: $shiftLabel', style: const pw.TextStyle(fontSize: 10)),
+                      if (data['instituteWorkingDays'] != null || data['totalWorkingDays'] != null)
+                        pw.Text('Madrasa Working Days: ${data['instituteWorkingDays'] ?? data['totalWorkingDays']}', style:  pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
                       pw.Text('Generated: $generatedAt', style: const pw.TextStyle(fontSize: 10)),
                     ],
                   ),
@@ -680,6 +710,12 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                   pw.Text(
                     'Total Teachers: $totalTeachers   |   Scheduled Days: $totalScheduled   |   Present Days: $totalPresent   |   Absent Days: $totalAbsent   |   On Leave: $totalLeave   |   Late Days: $totalLate   |   Overall Attendance Rate: $overallRate%',
                     style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+                  ),
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    'Note: "Scheduled Days" = the madrasa\'s planned working days for the month (the same base for every teacher); Present/Absent are counted against it.'
+                    '${effectiveShift == 'Shift-1' || effectiveShift == 'Shift-2' ? ' This report counts $effectiveShift working days only; a dual-shift teacher\'s other-shift days are excluded.' : ''}',
+                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
                   ),
                 ],
               ),
@@ -693,10 +729,15 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
               data: summary.map((row) {
                 final r = row as Map<String, dynamic>;
                 final sl = r['shifts'];
-                final rowShift = (sl is List && sl.isNotEmpty)
+                final isDual = r['isDualShift'] == true;
+                final rawShift = r['displayShift']?.toString() ?? ((sl is List && sl.isNotEmpty)
                     ? sl.join(', ')
-                    : (_selectedShift != 'All' ? _selectedShift : '—');
-                final classes = (r['classes'] as List?)?.map((e) => e.toString()).join(', ') ?? '—';
+                    : (effectiveShift != 'All' ? effectiveShift : '—'));
+                final rowShift = (effectiveShift != 'All' && isDual && !rawShift.contains('Dual'))
+                    ? '$effectiveShift (Dual)'
+                    : rawShift;
+                final rawClasses = (r['classes'] as List?)?.map((e) => e.toString().trim()).where((c) => c.isNotEmpty).toList() ?? [];
+                final classes = rawClasses.isNotEmpty ? rawClasses.join(', ') : '—';
                 final scheduled = (r['scheduledDays'] as num?)?.toInt() ?? (r['total'] as num?)?.toInt() ?? 0;
                 final pres = (r['present'] as num?)?.toInt() ?? 0;
                 final abs = (r['absent'] as num?)?.toInt() ?? 0;
@@ -708,7 +749,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                   r['employeeId']?.toString() ?? '',
                   r['fullName']?.toString() ?? '',
                   rowShift,
-                  classes.isNotEmpty ? classes : '—',
+                  classes,
                   '$scheduled',
                   '$pres',
                   '$abs',
@@ -738,7 +779,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
     }
   }
 
-  Future<void> _exportAttendanceExcel() async {
+  Future<void> _exportAttendanceExcel([String? overrideShift]) async {
     final box = context.findRenderObject() as RenderBox?;
     final origin = (box != null && box.hasSize)
         ? box.localToGlobal(Offset.zero) & box.size
@@ -752,7 +793,10 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
       final isStudentTab = _reportType == 'student';
       final type = isStudentTab ? 'student' : 'teacher';
       final isDayWise = _viewMode == 'day';
-      final shiftLabel = _selectedShift == 'All' ? 'All Shifts' : _selectedShift;
+      final effectiveShift = (overrideShift != null && overrideShift.isNotEmpty && overrideShift != 'All')
+          ? (overrideShift == 'Shift 1' ? 'Shift-1' : (overrideShift == 'Shift 2' ? 'Shift-2' : overrideShift))
+          : (overrideShift == 'All' ? 'All' : _selectedShift);
+      final shiftLabel = effectiveShift == 'All' ? 'All Shifts' : effectiveShift;
       final periodLabel = isDayWise ? _dayLabel : DateFormat('MMMM yyyy').format(_selectedDate);
       final generatedAt = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
 
@@ -761,7 +805,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         date: isDayWise ? _dayKey : null,
         instituteId: institute.id,
         type: type,
-        shift: _selectedShift,
+        shift: effectiveShift,
         refreshKey: _refreshKey,
       );
 
@@ -837,19 +881,31 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           int lCount = 0;
           int aCount = 0;
           int lvCount = 0;
+          int ncCount = 0;
+          int nsCount = 0;
           for (final r in rows) {
-            final st = (r['status']?.toString() ?? '').toLowerCase();
-            if (st == 'present') {
-              pCount++;
-            } else if (st == 'late') {
-              lCount++;
-            } else if (st == 'leave' || r['leaveDetails'] != null) {
-              lvCount++;
-            } else {
-              aCount++;
+            switch (_stateOf(Map<String, dynamic>.from(r as Map))) {
+              case 'present':
+                pCount++;
+                break;
+              case 'late':
+                lCount++;
+                break;
+              case 'leave':
+                lvCount++;
+                break;
+              case 'absent':
+                aCount++;
+                break;
+              case 'not_scheduled':
+                nsCount++;
+                break;
+              default:
+                ncCount++;
             }
           }
-          final staffRate = rows.isNotEmpty ? (((pCount + lCount) / rows.length) * 100).round() : 0;
+          final schedCount = pCount + lCount + lvCount + aCount + ncCount;
+          final staffRate = schedCount > 0 ? (((pCount + lCount) / schedCount) * 100).round() : 0;
 
           // Set explicit generous column widths (7 columns: 0 to 6)
           sheet.setColumnWidth(0, 16.0); // Employee ID
@@ -885,11 +941,17 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           sheet.merge(
             CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3),
             CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 3),
-            customValue: TextCellValue('Total Staff: ${rows.length}   |   Present: $pCount   |   Late: $lCount   |   Absent: $aCount   |   Leave: $lvCount   |   Rate: $staffRate%'),
+            customValue: TextCellValue('$schedCount scheduled today   |   Checked in: ${pCount + lCount} ($staffRate%)   |   Not checked in: $ncCount   |   On Leave: $lvCount${aCount > 0 ? '   |   Absent: $aCount' : ''}   |   Not scheduled: $nsCount'),
           );
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3)).cellStyle = bannerStyle;
 
-          // Row 5 (rowIndex 4) is blank spacer
+          // Row 5 (rowIndex 4): clarity note
+          sheet.merge(
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 4),
+            CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 4),
+            customValue: TextCellValue('"Not checked in" = a scheduled teacher with no check-in yet (not a confirmed absence). "Not scheduled" = no class today.'),
+          );
+
           // Row 6 (rowIndex 5): Column Headers
           final headers = [
             'Employee ID',
@@ -943,7 +1005,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
             c2.cellStyle = centerStyle;
 
             final c3 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: currentRow));
-            c3.value = TextCellValue(r['status']?.toString() ?? '');
+            c3.value = TextCellValue(_stateVisual(_stateOf(r)).label);
             c3.cellStyle = centerStyle;
 
             final c4 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: currentRow));
@@ -1287,10 +1349,13 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         );
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).cellStyle = subTitleStyle;
 
+        final instituteWorkingDays = (data['instituteWorkingDays'] as num?)?.toInt() ?? (data['totalWorkingDays'] as num?)?.toInt() ?? 0;
+        final workingDaysInfo = instituteWorkingDays > 0 ? '   |   Madrasa Working Days: $instituteWorkingDays' : '';
+
         sheet.merge(
           CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2),
           CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: 2),
-          customValue: TextCellValue('Evaluation Period: $periodLabel   |   Shift: $shiftLabel   |   Generated: $generatedAt'),
+          customValue: TextCellValue('Evaluation Period: $periodLabel   |   Shift: $shiftLabel$workingDaysInfo   |   Generated: $generatedAt'),
         );
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).cellStyle = bannerStyle;
 
@@ -1301,7 +1366,15 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         );
         sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 3)).cellStyle = bannerStyle;
 
-        // Row 5 (rowIndex 4) is blank spacer
+        // Row 5 (rowIndex 4): clarity note on Scheduled Days
+        final schedNote = '“Scheduled Days” = the madrasa\'s planned working days for the month (the same base for every teacher); Present/Absent are counted against it.'
+            '${effectiveShift == 'Shift-1' || effectiveShift == 'Shift-2' ? ' This report counts $effectiveShift working days only; a dual-shift teacher\'s other-shift days are excluded.' : ''}';
+        sheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 4),
+          CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: 4),
+          customValue: TextCellValue(schedNote),
+        );
+
         // Row 6 (rowIndex 5): Column Headers with dark navy background & bold white text
         final headers = [
           'Employee ID',
@@ -1328,10 +1401,15 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           final currentRow = 6 + rIdx;
 
           final sl = r['shifts'];
-          final rowShift = (sl is List && sl.isNotEmpty)
+          final isDual = r['isDualShift'] == true;
+          final rawShift = r['displayShift']?.toString() ?? ((sl is List && sl.isNotEmpty)
               ? sl.join(', ')
-              : (_selectedShift != 'All' ? _selectedShift : '—');
-          final classes = (r['classes'] as List?)?.map((e) => e.toString()).join(', ') ?? '—';
+              : (effectiveShift != 'All' ? effectiveShift : '—'));
+          final rowShift = (effectiveShift != 'All' && isDual && !rawShift.contains('Dual'))
+              ? '$effectiveShift (Dual)'
+              : rawShift;
+          final rawClasses = (r['classes'] as List?)?.map((e) => e.toString().trim()).where((c) => c.isNotEmpty).toList() ?? [];
+          final classes = rawClasses.isNotEmpty ? rawClasses.join(', ') : '—';
           final scheduled = (r['scheduledDays'] as num?)?.toInt() ?? (r['total'] as num?)?.toInt() ?? 0;
           final pres = (r['present'] as num?)?.toInt() ?? 0;
           final abs = (r['absent'] as num?)?.toInt() ?? 0;
@@ -1431,12 +1509,24 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
     }
   }
 
-  void _showDownloadOptions(BuildContext context) {
+  void _showDownloadOptions(BuildContext context, {String? presetShift}) {
     final colors = context.colors;
     final typography = context.typography;
     final isStudent = _reportType == 'student';
     final isDayWise = _viewMode == 'day';
     final periodText = isDayWise ? _dayLabel : _monthLabel;
+
+    // What the file will cover. Defaults to the shift already selected on screen
+    // (or an explicit preset from an inline button), but the client can change it
+    // right here so it's unambiguous which shift the download includes.
+    String norm(String? s) {
+      if (s == 'Shift 1' || s == 'Shift-1') return 'Shift-1';
+      if (s == 'Shift 2' || s == 'Shift-2') return 'Shift-2';
+      if (s == 'All' || s == 'All Shifts' || s == null || s.isEmpty) return 'All';
+      return 'All';
+    }
+
+    String downloadShift = norm(presetShift ?? _selectedShift);
 
     showModalBottomSheet(
       context: context,
@@ -1444,137 +1534,172 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Gap(16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: colors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(LucideIcons.downloadCloud, color: colors.primary, size: 22),
+                    ),
+                    const Gap(12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Download report', style: typography.h4),
+                          Text(
+                            '${isStudent ? 'Student' : 'Teacher'} attendance • ${isDayWise ? 'Day' : 'Month'}: $periodText',
+                            style: typography.caption.copyWith(color: colors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Gap(18),
+                // 1) Which shift to include
+                Text('Which shift to include', style: typography.caption.copyWith(color: colors.textSecondary, fontWeight: FontWeight.w600)),
+                const Gap(8),
+                Row(
+                  children: [
+                    for (final opt in const [('All', 'All shifts'), ('Shift-1', 'Shift 1'), ('Shift-2', 'Shift 2')]) ...[
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setSheet(() => downloadShift = opt.$1),
+                          child: Container(
+                            margin: EdgeInsets.only(right: opt.$1 == 'Shift-2' ? 0 : 8),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: downloadShift == opt.$1 ? colors.primary : colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: downloadShift == opt.$1 ? colors.primary : colors.border,
+                                width: downloadShift == opt.$1 ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Text(
+                              opt.$2,
+                              style: TextStyle(
+                                color: downloadShift == opt.$1 ? Colors.white : colors.textPrimary,
+                                fontSize: 13,
+                                fontWeight: downloadShift == opt.$1 ? FontWeight.w700 : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const Gap(8),
+                Text(
+                  downloadShift == 'All'
+                      ? 'The file will include every shift.'
+                      : 'The file will include ${downloadShift == 'Shift-1' ? 'Shift 1' : 'Shift 2'} only.',
+                  style: typography.caption.copyWith(color: colors.textSecondary),
+                ),
+                const Gap(18),
+                // 2) Choose a format
+                Text('Choose a format', style: typography.caption.copyWith(color: colors.textSecondary, fontWeight: FontWeight.w600)),
+                const Gap(8),
+                _downloadFormatTile(
+                  context,
+                  icon: LucideIcons.fileText,
+                  iconColor: Colors.red,
+                  title: 'PDF document',
+                  subtitle: 'Formatted report to share or print',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _exportAttendancePdf(downloadShift);
+                  },
+                ),
+                const Gap(12),
+                _downloadFormatTile(
+                  context,
+                  icon: LucideIcons.table,
+                  iconColor: Colors.green,
+                  title: 'Excel spreadsheet (.xlsx)',
+                  subtitle: 'Full breakdown for your own calculations',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _exportAttendanceExcel(downloadShift);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _downloadFormatTile(
+    BuildContext context, {
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final colors = context.colors;
+    final typography = context.typography;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colors.border),
+          ),
+          child: Row(
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: colors.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const Gap(14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: typography.bodyMediumSemiBold),
+                    const Gap(2),
+                    Text(subtitle, style: typography.caption.copyWith(color: colors.textSecondary)),
+                  ],
                 ),
               ),
-              const Gap(16),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: colors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(LucideIcons.downloadCloud, color: colors.primary, size: 22),
-                  ),
-                  const Gap(12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Download Attendance Report', style: typography.h4),
-                        Text(
-                          '${isStudent ? 'Student' : 'Teacher'} attendance for $periodText',
-                          style: typography.caption.copyWith(color: colors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const Gap(20),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _exportAttendancePdf();
-                  },
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: colors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(LucideIcons.fileText, color: Colors.red, size: 22),
-                        ),
-                        const Gap(14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Export PDF Document', style: typography.bodyMediumSemiBold),
-                              const Gap(2),
-                              Text('Share or print official formatted report with summary & tables',
-                                  style: typography.caption.copyWith(color: colors.textSecondary)),
-                            ],
-                          ),
-                        ),
-                        const Icon(LucideIcons.chevronRight, size: 18, color: Colors.grey),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const Gap(12),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _exportAttendanceExcel();
-                  },
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: colors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(LucideIcons.table, color: Colors.green, size: 22),
-                        ),
-                        const Gap(14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Export Excel Spreadsheet (.xlsx)', style: typography.bodyMediumSemiBold),
-                              const Gap(2),
-                              Text('Download .xlsx file with full breakdown and calculations',
-                                  style: typography.caption.copyWith(color: colors.textSecondary)),
-                            ],
-                          ),
-                        ),
-                        const Icon(LucideIcons.chevronRight, size: 18, color: Colors.grey),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              const Icon(LucideIcons.chevronRight, size: 18, color: Colors.grey),
             ],
           ),
         ),
@@ -1781,6 +1906,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                     refreshKey: _refreshKey,
                     onExportPdf: _exportAttendancePdf,
                     onExportExcel: _exportAttendanceExcel,
+                    onDownload: () => _showDownloadOptions(context),
                   )
                 : (_viewMode == 'day'
                     ? _TeacherDayReportTab(
@@ -1791,6 +1917,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                         refreshKey: _refreshKey,
                         onExportPdf: _exportAttendancePdf,
                         onExportExcel: _exportAttendanceExcel,
+                        onDownload: ([String? shift]) => _showDownloadOptions(context, presetShift: shift),
                       )
                     : _TeacherReportTab(
                         month: _monthKey,
@@ -1799,6 +1926,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                         refreshKey: _refreshKey,
                         onExportPdf: _exportAttendancePdf,
                         onExportExcel: _exportAttendanceExcel,
+                        onDownload: ([String? shift]) => _showDownloadOptions(context, presetShift: shift),
                       )),
           ),
         ],
@@ -1877,6 +2005,7 @@ class _StudentReportTab extends ConsumerStatefulWidget {
     this.refreshKey = 0,
     this.onExportPdf,
     this.onExportExcel,
+    this.onDownload,
   });
 
   final String month;
@@ -1888,6 +2017,7 @@ class _StudentReportTab extends ConsumerStatefulWidget {
   final int refreshKey;
   final VoidCallback? onExportPdf;
   final VoidCallback? onExportExcel;
+  final VoidCallback? onDownload;
 
   @override
   ConsumerState<_StudentReportTab> createState() => _StudentReportTabState();
@@ -2105,24 +2235,33 @@ class _StudentReportTabState extends ConsumerState<_StudentReportTab> {
                   ],
                 ),
                 const Spacer(),
-                if (widget.onExportPdf != null) ...[
+                if (widget.onDownload != null)
                   _ExportQuickButton(
-                    label: 'PDF',
-                    icon: LucideIcons.fileText,
-                    color: Colors.red.shade700,
-                    tooltip: 'Download PDF Report',
-                    onTap: widget.onExportPdf!,
-                  ),
-                  const Gap(6),
-                ],
-                if (widget.onExportExcel != null) ...[
-                  _ExportQuickButton(
-                    label: 'Excel',
-                    icon: LucideIcons.table,
-                    color: Colors.green.shade800,
-                    tooltip: 'Download Excel Sheet',
-                    onTap: widget.onExportExcel!,
-                  ),
+                    label: 'Download',
+                    icon: LucideIcons.download,
+                    color: context.colors.primary,
+                    tooltip: 'Download report (choose shift & format)',
+                    onTap: widget.onDownload!,
+                  )
+                else ...[
+                  if (widget.onExportPdf != null) ...[
+                    _ExportQuickButton(
+                      label: 'PDF',
+                      icon: LucideIcons.fileText,
+                      color: Colors.red.shade700,
+                      tooltip: 'Download PDF Report',
+                      onTap: widget.onExportPdf!,
+                    ),
+                    const Gap(6),
+                  ],
+                  if (widget.onExportExcel != null)
+                    _ExportQuickButton(
+                      label: 'Excel',
+                      icon: LucideIcons.table,
+                      color: Colors.green.shade800,
+                      tooltip: 'Download Excel Sheet',
+                      onTap: widget.onExportExcel!,
+                    ),
                 ],
               ],
             ),
@@ -3834,6 +3973,7 @@ class _TeacherHeroCard extends StatelessWidget {
     this.lateLabel = 'Late Days',
     this.absentLabel = 'Absent Days',
     this.staffLabel = 'Staff Count',
+    this.rateLabel = 'Attendance',
   });
 
   final String title;
@@ -3847,6 +3987,7 @@ class _TeacherHeroCard extends StatelessWidget {
   final String lateLabel;
   final String absentLabel;
   final String staffLabel;
+  final String rateLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -3914,7 +4055,7 @@ class _TeacherHeroCard extends StatelessWidget {
                     ),
                     const Gap(6),
                     Text(
-                      '$rate% Attendance',
+                      '$rate% $rateLabel',
                       style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -3997,13 +4138,15 @@ class _TeacherReportTab extends ConsumerStatefulWidget {
     this.refreshKey = 0,
     this.onExportPdf,
     this.onExportExcel,
+    this.onDownload,
   });
   final String month;
   final String instituteId;
   final String? shift;
   final int refreshKey;
-  final VoidCallback? onExportPdf;
-  final VoidCallback? onExportExcel;
+  final void Function([String? shift])? onExportPdf;
+  final void Function([String? shift])? onExportExcel;
+  final void Function([String? shift])? onDownload;
 
   @override
   ConsumerState<_TeacherReportTab> createState() => _TeacherReportTabState();
@@ -4016,18 +4159,57 @@ class _TeacherReportTabState extends ConsumerState<_TeacherReportTab> {
   String _selectedRateFilter = 'All';
 
   @override
+  void initState() {
+    super.initState();
+    _syncShift(widget.shift);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TeacherReportTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.shift != widget.shift) {
+      _syncShift(widget.shift);
+    }
+  }
+
+  void _syncShift(String? s) {
+    if (s == 'Shift-1' || s == 'Shift 1') {
+      _selectedShift = 'Shift 1';
+    } else if (s == 'Shift-2' || s == 'Shift 2') {
+      _selectedShift = 'Shift 2';
+    } else if (s == 'Dual Shift') {
+      _selectedShift = 'Dual Shift';
+    } else {
+      _selectedShift = 'All';
+    }
+  }
+
+  @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
   }
 
+  // Backend-format shift ('Shift-1'/'Shift-2') to scope a teacher's drill-down to,
+  // taken from the active single-shift filter. Null for 'All'/'Dual Shift'
+  // (dual-shift teachers keep both shifts' days in the detail view).
+  String? get _drillShift {
+    if (_selectedShift == 'Shift 1') return 'Shift-1';
+    if (_selectedShift == 'Shift 2') return 'Shift-2';
+    return null;
+  }
+
   bool _matchesShift(Map<String, dynamic> r, String shiftFilter) {
     if (shiftFilter == 'All') return true;
     final shifts = (r['shifts'] as List?)?.map((e) => e.toString()).toList() ?? [];
-    final isDual = r['isDualShift'] == true || shifts.length > 1;
+    final isDual = r['isDualShift'] == true || shifts.any((s) => s.contains('Dual')) || shifts.length > 1;
     if (shiftFilter == 'Dual Shift') return isDual;
-    if (shiftFilter == 'Shift 1') return shifts.contains('Shift-1') || shifts.contains('Shift 1');
-    if (shiftFilter == 'Shift 2') return shifts.contains('Shift-2') || shifts.contains('Shift 2');
+    if (shiftFilter == 'Shift 1' || shiftFilter == 'Shift-1') {
+      return shifts.any((s) => s.contains('Shift-1') || s.contains('Shift 1'));
+    }
+    if (shiftFilter == 'Shift 2' || shiftFilter == 'Shift-2') {
+      return shifts.any((s) => s.contains('Shift-2') || s.contains('Shift 2'));
+    }
     return true;
   }
 
@@ -4124,7 +4306,8 @@ class _TeacherReportTabState extends ConsumerState<_TeacherReportTab> {
               staffLabel: 'Total Staff',
               presentLabel: 'Present Days',
               lateLabel: 'Late Days',
-              absentLabel: 'Absent Days',
+              absentLabel: 'Not recorded',
+              rateLabel: 'checked in',
             ),
             const Gap(16),
 
@@ -4225,6 +4408,35 @@ class _TeacherReportTabState extends ConsumerState<_TeacherReportTab> {
             ),
             const Gap(16),
 
+            // Clarity note: Scheduled = the month's planned working days (uniform base)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0284C7).withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(LucideIcons.info, size: 16, color: Color(0xFF0284C7)),
+                  const Gap(8),
+                  Expanded(
+                    child: Text(
+                      _selectedShift == 'Shift 1' || _selectedShift == 'Shift 2'
+                          ? '“Scheduled Days” = the madrasa’s planned working days for ${_selectedShift == 'Shift 1' ? 'Shift-1' : 'Shift-2'} this month — the same base for every teacher. '
+                              'Present/Absent are counted against it; a teacher assigned to fewer of those days will show more absents. '
+                              '“Not recorded” = a working day with no check-in, not a confirmed absence.'
+                          : '“Scheduled Days” = the madrasa’s planned working days this month — the same base for every teacher — and Present/Absent are counted against it. '
+                              'Pick a single shift for a clean per-shift total (recommended); “All Shifts” combines both shifts’ working days.',
+                      style: typography.caption.copyWith(color: colors.textSecondary, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Gap(12),
+
             // Header for Teacher Roster list with Download Actions
             Row(
               children: [
@@ -4242,24 +4454,33 @@ class _TeacherReportTabState extends ConsumerState<_TeacherReportTab> {
                   ],
                 ),
                 const Spacer(),
-                if (widget.onExportPdf != null) ...[
+                if (widget.onDownload != null)
                   _ExportQuickButton(
-                    label: 'PDF',
-                    icon: LucideIcons.fileText,
-                    color: Colors.red.shade700,
-                    tooltip: 'Download PDF Report',
-                    onTap: widget.onExportPdf!,
-                  ),
-                  const Gap(6),
-                ],
-                if (widget.onExportExcel != null) ...[
-                  _ExportQuickButton(
-                    label: 'Excel',
-                    icon: LucideIcons.table,
-                    color: Colors.green.shade800,
-                    tooltip: 'Download Excel Sheet',
-                    onTap: widget.onExportExcel!,
-                  ),
+                    label: 'Download',
+                    icon: LucideIcons.download,
+                    color: context.colors.primary,
+                    tooltip: 'Download report (choose shift & format)',
+                    onTap: () => widget.onDownload!(_selectedShift),
+                  )
+                else ...[
+                  if (widget.onExportPdf != null) ...[
+                    _ExportQuickButton(
+                      label: 'PDF',
+                      icon: LucideIcons.fileText,
+                      color: Colors.red.shade700,
+                      tooltip: 'Download PDF Report',
+                      onTap: () => widget.onExportPdf!(_selectedShift),
+                    ),
+                    const Gap(6),
+                  ],
+                  if (widget.onExportExcel != null)
+                    _ExportQuickButton(
+                      label: 'Excel',
+                      icon: LucideIcons.table,
+                      color: Colors.green.shade800,
+                      tooltip: 'Download Excel Sheet',
+                      onTap: () => widget.onExportExcel!(_selectedShift),
+                    ),
                 ],
               ],
             ),
@@ -4280,6 +4501,7 @@ class _TeacherReportTabState extends ConsumerState<_TeacherReportTab> {
                     row: row,
                     month: widget.month,
                     instituteId: widget.instituteId,
+                    shift: _drillShift,
                   )),
           ],
         );
@@ -4346,6 +4568,7 @@ class _TeacherDayReportTab extends ConsumerStatefulWidget {
     this.refreshKey = 0,
     this.onExportPdf,
     this.onExportExcel,
+    this.onDownload,
   });
 
   final String date;
@@ -4353,8 +4576,9 @@ class _TeacherDayReportTab extends ConsumerStatefulWidget {
   final String instituteId;
   final String? shift;
   final int refreshKey;
-  final VoidCallback? onExportPdf;
-  final VoidCallback? onExportExcel;
+  final void Function([String? shift])? onExportPdf;
+  final void Function([String? shift])? onExportExcel;
+  final void Function([String? shift])? onDownload;
 
   @override
   ConsumerState<_TeacherDayReportTab> createState() => _TeacherDayReportTabState();
@@ -4366,6 +4590,32 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _syncShift(widget.shift);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TeacherDayReportTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.shift != widget.shift) {
+      _syncShift(widget.shift);
+    }
+  }
+
+  void _syncShift(String? s) {
+    if (s == 'Shift-1' || s == 'Shift 1') {
+      _selectedShiftFilter = 'Shift 1';
+    } else if (s == 'Shift-2' || s == 'Shift 2') {
+      _selectedShiftFilter = 'Shift 2';
+    } else if (s == 'Dual Shift') {
+      _selectedShiftFilter = 'Dual Shift';
+    } else {
+      _selectedShiftFilter = 'All';
+    }
+  }
 
   @override
   void dispose() {
@@ -4424,25 +4674,32 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
         // Shift filtered pool
         final teachersInShift = teachers.where((t) => _matchesDayShift(t, _selectedShiftFilter)).toList();
 
-        int present = 0, late = 0, absent = 0, onLeave = 0;
+        int present = 0, late = 0, absent = 0, onLeave = 0, notCheckedIn = 0, notScheduled = 0;
         for (final t in teachersInShift) {
-          switch (t['status']?.toString()) {
-            case 'Present':
+          switch (_stateOf(t)) {
+            case 'present':
               present++;
               break;
-            case 'Late':
+            case 'late':
               late++;
               break;
-            case 'On Leave':
+            case 'leave':
               onLeave++;
               break;
-            default:
+            case 'absent':
               absent++;
+              break;
+            case 'not_scheduled':
+              notScheduled++;
+              break;
+            case 'not_checked_in':
+            default:
+              notCheckedIn++;
           }
         }
 
         final filtered = teachersInShift.where((t) {
-          if (_selectedFilter != 'All' && (t['status']?.toString() ?? '') != _selectedFilter) {
+          if (_selectedFilter != 'All' && _stateOf(t) != _selectedFilter) {
             return false;
           }
 
@@ -4462,19 +4719,25 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
           return true;
         }).toList();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return Scrollbar(
+          controller: _scrollController,
+          thumbVisibility: true,
+          child: ListView(
+          controller: _scrollController,
+          padding: const EdgeInsets.only(bottom: 28),
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _DaySummaryCard(
+              child: _DayOverviewCard(
                 dateLabel: widget.dateLabel,
                 shiftContext: _selectedShiftFilter == 'All' ? 'All Shifts' : _selectedShiftFilter,
-                total: teachersInShift.length,
+                totalStaff: teachersInShift.length,
                 present: present,
                 late: late,
-                absent: absent,
                 onLeave: onLeave,
+                absent: absent,
+                notCheckedIn: notCheckedIn,
+                notScheduled: notScheduled,
               ),
             ),
             const Gap(12),
@@ -4559,7 +4822,7 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
             ),
             const Gap(8),
 
-            // Status filter chips.
+            // Status filter chips (by honest attendance state).
             SizedBox(
               height: 34,
               child: ListView(
@@ -4575,30 +4838,48 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
                   const Gap(6),
                   _FilterChip(
                     label: 'Present ($present)',
-                    isSelected: _selectedFilter == 'Present',
-                    color: Colors.green,
-                    onTap: () => setState(() => _selectedFilter = 'Present'),
+                    isSelected: _selectedFilter == 'present',
+                    color: _cPresent,
+                    onTap: () => setState(() => _selectedFilter = 'present'),
                   ),
+                  if (late > 0) ...[
+                    const Gap(6),
+                    _FilterChip(
+                      label: 'Late ($late)',
+                      isSelected: _selectedFilter == 'late',
+                      color: _cLate,
+                      onTap: () => setState(() => _selectedFilter = 'late'),
+                    ),
+                  ],
                   const Gap(6),
                   _FilterChip(
-                    label: 'Late ($late)',
-                    isSelected: _selectedFilter == 'Late',
-                    color: Colors.orange,
-                    onTap: () => setState(() => _selectedFilter = 'Late'),
-                  ),
-                  const Gap(6),
-                  _FilterChip(
-                    label: 'Absent ($absent)',
-                    isSelected: _selectedFilter == 'Absent',
-                    color: Colors.red,
-                    onTap: () => setState(() => _selectedFilter = 'Absent'),
+                    label: 'Not checked in ($notCheckedIn)',
+                    isSelected: _selectedFilter == 'not_checked_in',
+                    color: _cNotChecked,
+                    onTap: () => setState(() => _selectedFilter = 'not_checked_in'),
                   ),
                   const Gap(6),
                   _FilterChip(
                     label: 'On Leave ($onLeave)',
-                    isSelected: _selectedFilter == 'On Leave',
-                    color: Colors.purple,
-                    onTap: () => setState(() => _selectedFilter = 'On Leave'),
+                    isSelected: _selectedFilter == 'leave',
+                    color: _cLeave,
+                    onTap: () => setState(() => _selectedFilter = 'leave'),
+                  ),
+                  if (absent > 0) ...[
+                    const Gap(6),
+                    _FilterChip(
+                      label: 'Absent ($absent)',
+                      isSelected: _selectedFilter == 'absent',
+                      color: _cAbsent,
+                      onTap: () => setState(() => _selectedFilter = 'absent'),
+                    ),
+                  ],
+                  const Gap(6),
+                  _FilterChip(
+                    label: 'Not scheduled ($notScheduled)',
+                    isSelected: _selectedFilter == 'not_scheduled',
+                    color: _cNotSched,
+                    onTap: () => setState(() => _selectedFilter = 'not_scheduled'),
                   ),
                 ],
               ),
@@ -4613,7 +4894,7 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _selectedFilter == 'All' ? 'All Staff (${filtered.length})' : '$_selectedFilter (${filtered.length})',
+                          _selectedFilter == 'All' ? 'All Staff (${filtered.length})' : '${_stateVisual(_selectedFilter).label} (${filtered.length})',
                           style: typography.bodyMediumSemiBold,
                         ),
                         Text('Grouped by shift • Tap for logs & details',
@@ -4621,53 +4902,60 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
                       ],
                     ),
                   ),
-                  if (widget.onExportPdf != null) ...[
+                  if (widget.onDownload != null)
                     _ExportQuickButton(
-                      label: 'PDF',
-                      icon: LucideIcons.fileText,
-                      color: Colors.red.shade700,
-                      tooltip: 'Download PDF Report',
-                      onTap: widget.onExportPdf!,
-                    ),
-                    const Gap(6),
+                      label: 'Download',
+                      icon: LucideIcons.download,
+                      color: context.colors.primary,
+                      tooltip: 'Download report (choose shift & format)',
+                      onTap: () => widget.onDownload!(_selectedShiftFilter),
+                    )
+                  else ...[
+                    if (widget.onExportPdf != null) ...[
+                      _ExportQuickButton(
+                        label: 'PDF',
+                        icon: LucideIcons.fileText,
+                        color: Colors.red.shade700,
+                        tooltip: 'Download PDF Report',
+                        onTap: () => widget.onExportPdf!(_selectedShiftFilter),
+                      ),
+                      const Gap(6),
+                    ],
+                    if (widget.onExportExcel != null)
+                      _ExportQuickButton(
+                        label: 'Excel',
+                        icon: LucideIcons.table,
+                        color: Colors.green.shade800,
+                        tooltip: 'Download Excel Sheet',
+                        onTap: () => widget.onExportExcel!(_selectedShiftFilter),
+                      ),
                   ],
-                  if (widget.onExportExcel != null)
-                    _ExportQuickButton(
-                      label: 'Excel',
-                      icon: LucideIcons.table,
-                      color: Colors.green.shade800,
-                      tooltip: 'Download Excel Sheet',
-                      onTap: widget.onExportExcel!,
-                    ),
                 ],
               ),
             ),
             const Gap(10),
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No staff members match the selected filters.',
-                        style: typography.bodyMedium.copyWith(color: colors.textSecondary),
-                      ),
-                    )
-                  : Scrollbar(
-                      controller: _scrollController,
-                      thumbVisibility: true,
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        primary: false,
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-                        itemCount: filtered.length,
-                        itemBuilder: (context, i) => _DayTeacherCard(
-                          teacher: filtered[i],
-                          dateLabel: widget.dateLabel,
-                          onTap: () => _showTeacherDetailSheet(context, filtered[i], widget.dateLabel),
-                        ),
-                      ),
+            if (filtered.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
+                child: Center(
+                  child: Text(
+                    'No staff members match the selected filters.',
+                    style: typography.bodyMedium.copyWith(color: colors.textSecondary),
+                  ),
+                ),
+              )
+            else
+              ...filtered.map((t) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _DayTeacherCard(
+                      teacher: t,
+                      dateLabel: widget.dateLabel,
+                      onTap: () => _showTeacherDetailSheet(context, t, widget.dateLabel),
+                      onRemind: () => _remindTeacher(context, t),
                     ),
-            ),
+                  )),
           ],
+          ),
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -4689,110 +4977,307 @@ class _TeacherDayReportTabState extends ConsumerState<_TeacherDayReportTab> {
       ),
     );
   }
+
+  // Nudge a scheduled-but-not-checked-in teacher over WhatsApp (no API/cost —
+  // opens a pre-filled chat the admin sends).
+  Future<void> _remindTeacher(BuildContext context, Map<String, dynamic> teacher) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final phone = teacher['phone']?.toString() ?? '';
+    final name = teacher['fullName']?.toString() ?? 'Ustad';
+    if (phone.trim().isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('No phone number on file for this teacher.')));
+      return;
+    }
+    final msg = 'Assalamu alaikum $name,\n\nThis is a reminder to mark your attendance / check in for '
+        '${widget.dateLabel}. Please check in as soon as you can.\n\nJazakAllah khair.';
+    final ok = await WhatsAppService.send(phone, msg);
+    if (!ok) {
+      messenger.showSnackBar(const SnackBar(content: Text('Could not open WhatsApp for this number.')));
+    }
+  }
 }
 
-class _DaySummaryCard extends StatelessWidget {
-  const _DaySummaryCard({
+// ── Attendance state → colour / label / icon ─────────────────────────────────
+// A teacher's day resolves to one of these honest states. "Not checked in" is an
+// operational gap (scheduled, no record yet) and is deliberately NOT the same as
+// a confirmed "Absent"; "Not scheduled" means they had no class today.
+const Color _cPresent = Color(0xFF16A34A);
+const Color _cLate = Color(0xFFF97316);
+const Color _cNotChecked = Color(0xFFD97706);
+const Color _cLeave = Color(0xFF9333EA);
+const Color _cAbsent = Color(0xFFDC2626);
+const Color _cNotSched = Color(0xFF94A3B8);
+
+typedef _StateVisual = ({String label, Color color, IconData icon});
+
+_StateVisual _stateVisual(String state) {
+  switch (state) {
+    case 'present':
+      return (label: 'Present', color: _cPresent, icon: LucideIcons.checkCircle2);
+    case 'late':
+      return (label: 'Late', color: _cLate, icon: LucideIcons.clock);
+    case 'leave':
+      return (label: 'On Leave', color: _cLeave, icon: LucideIcons.calendarOff);
+    case 'absent':
+      return (label: 'Absent', color: _cAbsent, icon: LucideIcons.xCircle);
+    case 'not_scheduled':
+      return (label: 'Not scheduled', color: _cNotSched, icon: LucideIcons.minusCircle);
+    case 'not_checked_in':
+    default:
+      return (label: 'Not checked in', color: _cNotChecked, icon: LucideIcons.clock);
+  }
+}
+
+// Resolve a teacher row to its state, falling back to the legacy status string
+// for older payloads that predate `attendanceState`.
+String _stateOf(Map<String, dynamic> t) {
+  final s = t['attendanceState']?.toString();
+  if (s != null && s.isNotEmpty) return s;
+  switch (t['status']?.toString()) {
+    case 'Present':
+      return 'present';
+    case 'Late':
+      return 'late';
+    case 'On Leave':
+      return 'leave';
+    default:
+      return (t['isScheduled'] == true) ? 'not_checked_in' : 'not_scheduled';
+  }
+}
+
+// A dependency-free donut (no chart package). Segments with value 0 are skipped.
+class _AttendanceDonut extends StatelessWidget {
+  const _AttendanceDonut({required this.segments, required this.child, this.size = 120});
+  final List<({double value, Color color})> segments;
+  final Widget child;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _DonutPainter(segments, size * 0.15, context.colors.border),
+        child: Center(child: child),
+      ),
+    );
+  }
+}
+
+class _DonutPainter extends CustomPainter {
+  _DonutPainter(this.segments, this.thickness, this.trackColor);
+  final List<({double value, Color color})> segments;
+  final double thickness;
+  final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = (size.width - thickness) / 2;
+    final total = segments.fold<double>(0, (a, s) => a + s.value);
+    final track = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = thickness
+      ..color = trackColor.withValues(alpha: 0.4);
+    canvas.drawCircle(center, radius, track);
+    if (total <= 0) return;
+
+    const gap = 0.04; // radians of gap between slices
+    double start = -math.pi / 2;
+    final nonZero = segments.where((s) => s.value > 0).toList();
+    for (final s in nonZero) {
+      final sweep = (s.value / total) * (2 * math.pi) - (nonZero.length > 1 ? gap : 0);
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = thickness
+        ..strokeCap = StrokeCap.round
+        ..color = s.color;
+      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start, sweep < 0 ? 0 : sweep, false, paint);
+      start += (s.value / total) * (2 * math.pi);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter old) =>
+      old.segments != segments || old.thickness != thickness || old.trackColor != trackColor;
+}
+
+// Honest daily overview: a check-in rate against who was actually scheduled,
+// with "not checked in" and "not scheduled" split out from "absent".
+class _DayOverviewCard extends StatelessWidget {
+  const _DayOverviewCard({
     required this.dateLabel,
     this.shiftContext = 'All Shifts',
-    required this.total,
+    required this.totalStaff,
     required this.present,
     required this.late,
-    required this.absent,
     required this.onLeave,
+    required this.absent,
+    required this.notCheckedIn,
+    required this.notScheduled,
   });
 
   final String dateLabel;
   final String shiftContext;
-  final int total;
+  final int totalStaff;
   final int present;
   final int late;
-  final int absent;
   final int onLeave;
+  final int absent;
+  final int notCheckedIn;
+  final int notScheduled;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
 
+    final checkedIn = present + late;
+    final scheduled = present + late + onLeave + absent + notCheckedIn;
+    final rate = scheduled > 0 ? ((checkedIn / scheduled) * 100).round() : 0;
+
+    final legend = <Widget>[
+      _legendItem('Present', present, _cPresent),
+      if (late > 0) _legendItem('Late', late, _cLate),
+      _legendItem('Not checked in', notCheckedIn, _cNotChecked),
+      _legendItem('On leave', onLeave, _cLeave),
+      if (absent > 0) _legendItem('Absent', absent, _cAbsent),
+      _legendItem('Not scheduled', notScheduled, _cNotSched, muted: true),
+    ];
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.primary, const Color(0xFF0F4A3A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: colors.primary.withValues(alpha: 0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(LucideIcons.calendarCheck, color: Colors.white, size: 24),
-              ),
-              const Gap(12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Teacher Daily Attendance', style: typography.bodySmall.copyWith(color: Colors.white70)),
-                    Text('$dateLabel • $shiftContext', style: typography.bodyLargeSemiBold.copyWith(color: Colors.white)),
+                    Text('Teacher daily attendance', style: typography.bodyMediumSemiBold),
+                    Text('$dateLabel • $shiftContext',
+                        style: typography.caption.copyWith(color: colors.textSecondary)),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: colors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text('$total Staff', style: typography.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+                child: Text('$totalStaff staff',
+                    style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
-          const Gap(18),
+          const Gap(14),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _metric('Present', present, Colors.greenAccent),
-              _metric('Late', late, Colors.amberAccent),
-              _metric('Absent', absent, const Color(0xFFFF8A80)),
-              _metric('On Leave', onLeave, const Color(0xFFCE93D8)),
+              _AttendanceDonut(
+                size: 118,
+                segments: [
+                  (value: present.toDouble(), color: _cPresent),
+                  (value: late.toDouble(), color: _cLate),
+                  (value: notCheckedIn.toDouble(), color: _cNotChecked),
+                  (value: onLeave.toDouble(), color: _cLeave),
+                  (value: absent.toDouble(), color: _cAbsent),
+                  (value: notScheduled.toDouble(), color: _cNotSched),
+                ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$rate%',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: colors.textPrimary)),
+                    Text('checked in', style: TextStyle(fontSize: 10, color: colors.textSecondary)),
+                  ],
+                ),
+              ),
+              const Gap(16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text('$scheduled scheduled today · ',
+                            style: typography.caption.copyWith(color: colors.textSecondary)),
+                        Text('$checkedIn checked in',
+                            style: typography.caption.copyWith(color: colors.textPrimary, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                    const Gap(10),
+                    Wrap(spacing: 14, runSpacing: 8, children: legend),
+                  ],
+                ),
+              ),
             ],
           ),
+          if (notCheckedIn > 0) ...[
+            const Gap(12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: _cNotChecked.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _cNotChecked.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(LucideIcons.info, size: 14, color: _cNotChecked),
+                  const Gap(8),
+                  Expanded(
+                    child: Text(
+                      '$notCheckedIn scheduled ${notCheckedIn == 1 ? 'teacher has' : 'teachers have'} no check-in yet — not the same as confirmed absent.',
+                      style: typography.caption.copyWith(color: colors.textSecondary, height: 1.35),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _metric(String label, int value, Color color) {
-    return Column(
-      children: [
-        Text(
-          value.toString(),
-          style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const Gap(4),
-        Text(
-          label,
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 11, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
+  Widget _legendItem(String label, int value, Color color, {bool muted = false}) {
+    return Builder(builder: (context) {
+      final colors = context.colors;
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+          ),
+          const Gap(6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: muted ? colors.textSecondary : colors.textPrimary,
+            ),
+          ),
+          const Gap(5),
+          Text('$value', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+        ],
+      );
+    });
   }
 }
 
@@ -4852,11 +5337,13 @@ class _DayTeacherCard extends StatelessWidget {
     required this.teacher,
     required this.dateLabel,
     required this.onTap,
+    this.onRemind,
   });
 
   final Map<String, dynamic> teacher;
   final String dateLabel;
   final VoidCallback onTap;
+  final VoidCallback? onRemind;
 
   @override
   Widget build(BuildContext context) {
@@ -4865,12 +5352,13 @@ class _DayTeacherCard extends StatelessWidget {
 
     final name = teacher['fullName'] as String? ?? 'Unknown';
     final employeeId = teacher['employeeId'] as String? ?? '';
-    final status = teacher['status'] as String? ?? 'Absent';
+    final state = _stateOf(teacher);
     final checkInAt = teacher['checkInAt'] as String?;
     final isScheduled = teacher['isScheduled'] as bool? ?? false;
     final leave = teacher['leaveDetails'] as Map<String, dynamic>?;
     final classes = (teacher['classes'] as List?)?.map((e) => e.toString()).toList() ?? [];
     final subjects = (teacher['subjects'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final hasPhone = (teacher['phone']?.toString().trim().isNotEmpty) ?? false;
 
     String? checkInFormatted;
     if (checkInAt != null) {
@@ -4880,27 +5368,10 @@ class _DayTeacherCard extends StatelessWidget {
       } catch (_) {}
     }
 
-    final Color statusColor;
-    final IconData statusIcon;
-    switch (status) {
-      case 'Present':
-        statusColor = Colors.green;
-        statusIcon = LucideIcons.checkCircle2;
-        break;
-      case 'Late':
-        statusColor = Colors.orange;
-        statusIcon = LucideIcons.clock;
-        break;
-      case 'On Leave':
-        statusColor = Colors.purple;
-        statusIcon = LucideIcons.calendarOff;
-        break;
-      case 'Absent':
-      default:
-        statusColor = Colors.red;
-        statusIcon = LucideIcons.xCircle;
-        break;
-    }
+    final visual = _stateVisual(state);
+    final Color statusColor = visual.color;
+    final IconData statusIcon = visual.icon;
+    final String statusLabel = visual.label;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -5037,10 +5508,10 @@ class _DayTeacherCard extends StatelessWidget {
                         ),
                       ],
                       const Gap(4),
-                      if (status == 'On Leave' && leave != null)
+                      if (state == 'leave' && leave != null)
                         Text(
                           'Leave: ${leave['leaveType'] ?? 'Leave'}',
-                          style: const TextStyle(color: Colors.purple, fontSize: 11, fontWeight: FontWeight.w500),
+                          style: const TextStyle(color: _cLeave, fontSize: 11, fontWeight: FontWeight.w500),
                         )
                       else if (checkInFormatted != null)
                         Row(
@@ -5055,7 +5526,7 @@ class _DayTeacherCard extends StatelessWidget {
                         )
                       else
                         Text(
-                          'No check-in record',
+                          state == 'not_scheduled' ? 'No class scheduled today' : 'No check-in record',
                           style: typography.caption.copyWith(color: colors.textSecondary.withValues(alpha: 0.7)),
                         ),
                     ],
@@ -5077,7 +5548,7 @@ class _DayTeacherCard extends StatelessWidget {
                           Icon(statusIcon, size: 12, color: statusColor),
                           const Gap(4),
                           Text(
-                            status,
+                            statusLabel,
                             style: TextStyle(
                               color: statusColor,
                               fontWeight: FontWeight.bold,
@@ -5087,8 +5558,33 @@ class _DayTeacherCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const Gap(6),
-                    Icon(LucideIcons.chevronRight, size: 16, color: colors.textSecondary.withValues(alpha: 0.5)),
+                    if (state == 'not_checked_in' && onRemind != null && hasPhone) ...[
+                      const Gap(6),
+                      GestureDetector(
+                        onTap: onRemind,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _cNotChecked.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: _cNotChecked.withValues(alpha: 0.4)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(LucideIcons.messageCircle, size: 11, color: _cNotChecked),
+                              Gap(4),
+                              Text('Remind',
+                                  style: TextStyle(color: _cNotChecked, fontSize: 11, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      const Gap(6),
+                      Icon(LucideIcons.chevronRight, size: 16, color: colors.textSecondary.withValues(alpha: 0.5)),
+                    ],
                   ],
                 ),
               ],
@@ -5117,7 +5613,7 @@ class _TeacherDetailPopup extends StatelessWidget {
     final name = teacher['fullName'] as String? ?? 'Teacher';
     final employeeId = teacher['employeeId'] as String? ?? '';
     final phone = teacher['phone'] as String?;
-    final status = teacher['status'] as String? ?? 'Absent';
+    final state = _stateOf(teacher);
     final isScheduled = teacher['isScheduled'] as bool? ?? false;
     final checkInAt = teacher['checkInAt'] as String?;
     final verificationMethod = teacher['verificationMethod'] as String? ?? 'Not Specified';
@@ -5134,27 +5630,10 @@ class _TeacherDetailPopup extends StatelessWidget {
       }
     }
 
-    final Color statusColor;
-    final IconData statusIcon;
-    switch (status) {
-      case 'Present':
-        statusColor = Colors.green;
-        statusIcon = LucideIcons.checkCircle2;
-        break;
-      case 'Late':
-        statusColor = Colors.orange;
-        statusIcon = LucideIcons.clock;
-        break;
-      case 'On Leave':
-        statusColor = Colors.purple;
-        statusIcon = LucideIcons.calendarOff;
-        break;
-      case 'Absent':
-      default:
-        statusColor = Colors.red;
-        statusIcon = LucideIcons.xCircle;
-        break;
-    }
+    final visual = _stateVisual(state);
+    final Color statusColor = visual.color;
+    final IconData statusIcon = visual.icon;
+    final String status = visual.label;
 
     return DraggableScrollableSheet(
       expand: false,
@@ -5369,10 +5848,11 @@ class _TeacherDetailPopup extends StatelessWidget {
 // ── Widgets ───────────────────────────────────────────────────────────────────
 
 class _TeacherReportRow extends StatelessWidget {
-  const _TeacherReportRow({required this.row, required this.month, required this.instituteId});
+  const _TeacherReportRow({required this.row, required this.month, required this.instituteId, this.shift});
   final Map<String, dynamic> row;
   final String month;
   final String instituteId;
+  final String? shift;
 
   @override
   Widget build(BuildContext context) {
@@ -5406,6 +5886,7 @@ class _TeacherReportRow extends StatelessWidget {
                   teacherName: name,
                   month: month,
                   instituteId: instituteId,
+                  shift: shift,
                 ),
               ),
       borderRadius: BorderRadius.circular(16),
@@ -5526,16 +6007,36 @@ class _TeacherReportRow extends StatelessWidget {
                   () {
                     final sb = row['shiftBreakdown'] as Map<String, dynamic>;
                     if (sb.isEmpty) return const SizedBox.shrink();
+                    // Only show a shift's chip when it has activity in this view, and
+                    // when a single shift is selected show only that shift's chip —
+                    // so a Shift-1 report never prints an empty "Shift 2: 0/0".
+                    final chips = sb.entries.where((entry) {
+                      final sKey = entry.key;
+                      if (shift != null && shift!.isNotEmpty && shift != 'All' && sKey != shift) {
+                        return false;
+                      }
+                      final sData = entry.value as Map<String, dynamic>;
+                      final p = (sData['present'] as num?)?.toInt() ?? 0;
+                      final t = (sData['total'] as num?)?.toInt() ?? 0;
+                      final l = (sData['late'] as num?)?.toInt() ?? 0;
+                      final a = (sData['absent'] as num?)?.toInt() ?? 0;
+                      return (p + t + l + a) > 0;
+                    }).toList();
+                    if (chips.isEmpty) return const SizedBox.shrink();
                     return Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Wrap(
                         spacing: 6,
                         runSpacing: 4,
-                        children: sb.entries.map((entry) {
+                        children: chips.map((entry) {
                           final sKey = entry.key;
                           final sData = entry.value as Map<String, dynamic>;
                           final sLabel = sKey == 'Shift-1' ? 'Shift 1' : (sKey == 'Shift-2' ? 'Shift 2' : sKey);
                           final sColor = sKey == 'Shift-1' ? const Color(0xFF1D4ED8) : const Color(0xFF6D28D9);
+                          final sPresent = (sData['present'] as num?)?.toInt() ?? 0;
+                          final sTotal = (sData['total'] as num?)?.toInt() ?? 0;
+                          // Backend omits a per-shift rate — derive it from present/total.
+                          final sRate = sTotal > 0 ? ((sPresent / sTotal) * 100).round() : 0;
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
@@ -5544,7 +6045,7 @@ class _TeacherReportRow extends StatelessWidget {
                               border: Border.all(color: sColor.withValues(alpha: 0.2)),
                             ),
                             child: Text(
-                              '$sLabel: Present ${sData['present'] ?? 0}/${sData['total'] ?? 0} (${sData['rate'] ?? 0}%)',
+                              '$sLabel: Present $sPresent/$sTotal ($sRate%)',
                               style: TextStyle(color: sColor, fontSize: 10, fontWeight: FontWeight.w600),
                             ),
                           );
@@ -5587,18 +6088,20 @@ class _TeacherDaysSheet extends ConsumerWidget {
     required this.teacherName,
     required this.month,
     required this.instituteId,
+    this.shift,
   });
   final String teacherId;
   final String teacherName;
   final String month;
   final String instituteId;
+  final String? shift;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final typography = context.typography;
     final async = ref.watch(_teacherDaysProvider(
-      _TeacherDaysParams(teacherId: teacherId, month: month, instituteId: instituteId),
+      _TeacherDaysParams(teacherId: teacherId, month: month, instituteId: instituteId, shift: shift),
     ));
     return DraggableScrollableSheet(
       expand: false,
@@ -5610,7 +6113,12 @@ class _TeacherDaysSheet extends ConsumerWidget {
           Container(width: 40, height: 4, decoration: BoxDecoration(color: colors.border, borderRadius: BorderRadius.circular(2))),
           const Gap(12),
           Text(teacherName, style: typography.h4),
-          Text('Attendance — $month', style: typography.bodySmall.copyWith(color: colors.textSecondary)),
+          Text(
+            (shift != null && shift!.isNotEmpty && shift != 'All')
+                ? 'Attendance — $month • $shift only'
+                : 'Attendance — $month',
+            style: typography.bodySmall.copyWith(color: colors.textSecondary),
+          ),
           const Gap(12),
           Expanded(
             child: async.when(
